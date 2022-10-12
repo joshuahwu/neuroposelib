@@ -1,0 +1,39 @@
+# Windows thumbnail cache files
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+./CAPTURE_analysis/
+./CAPTURE_data/
+
+*.mat
+*.sh
+*.out
+*.p
+# Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+*.csv
+*.txt
+*.mat
+
+*.mp4
+*.yaml
+*.png
+*.pyc
+*/__pycache__/
+
+# Windows shortcuts
+*.lnk
+
+# =========================
+# Operating System Files
+# =========================
