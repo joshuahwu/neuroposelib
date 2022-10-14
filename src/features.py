@@ -7,6 +7,7 @@ from sklearn.decomposition import IncrementalPCA
 from typing import Optional, Union, List, Tuple
 import pandas as pd
 from tqdm import tqdm
+import h5py
 
 def align_floor(pose: np.array,
                 exp_id: Union[List, np.array],
@@ -14,14 +15,14 @@ def align_floor(pose: np.array,
                 head_id: Optional[int] = 0,
                 plot_folder: Optional[str] = None):
     '''
-    Due to calibration, predictions may be rotated on different axes
-    Rotates floor to same x-y plane per video
-    IN:
-        pose: 3d matrix of (#frames x #joints x #coords)
-        exp_id: Video ids per frame
-        foot_id: ID of foot to find floor
-    OUT:
-        pose_rot: Floor aligned poses (#frames x #joints x #coords)
+        Due to calibration, predictions may be rotated on different axes
+        Rotates floor to same x-y plane per video
+        IN:
+            pose: 3d matrix of (#frames x #joints x #coords)
+            exp_id: Video ids per frame
+            foot_id: ID of foot to find floor
+        OUT:
+            pose_rot: Floor aligned poses (#frames x #joints x #coords)
     '''
     pose_rot = pose
     print("Fitting and rotating the floor for each video to alignment ... ")
@@ -88,13 +89,13 @@ def rotate_spine(pose,
                  joint_idx = [4,3],
                  lock_to_x = False):
     '''
-    Centers mid spine to (0,0,0) and aligns spine_m -> spine_f to x-z plane
-    IN:
-        pose: 3d matrix of (#frames x #joints x #coords)
-        joint_idx: List [spine_m idx, spine_f idx]
-        lock_to_x: Also rotates so that spine_m -> spine_f is locked to the x-axis
-    OUT:
-        pose_rot: Centered and rotated pose (#frames x #joints x #coords)
+        Centers mid spine to (0,0,0) and aligns spine_m -> spine_f to x-z plane
+        IN:
+            pose: 3d matrix of (#frames x #joints x #coords)
+            joint_idx: List [spine_m idx, spine_f idx]
+            lock_to_x: Also rotates so that spine_m -> spine_f is locked to the x-axis
+        OUT:
+            pose_rot: Centered and rotated pose (#frames x #joints x #coords)
     '''
     num_joints = pose.shape[1]
     yaw = -np.arctan2(pose[:,joint_idx[1],1],pose[:,joint_idx[1],0]) # Find angle to rotate to axis
@@ -122,7 +123,7 @@ def rotate_spine(pose,
 def get_lengths(pose,
                 linkages):
     '''
-    Get lengths of all linkages
+        Get lengths of all linkages
     '''
     print("Calculating length of all linkages ... ")
     linkages = np.array(linkages)
@@ -133,8 +134,8 @@ def get_lengths(pose,
 def rolling_window(data, 
                    window):
     '''
-    Returns a view of data windowed (data.shape, window)
-    Pads the ends with the edge values
+        Returns a view of data windowed (data.shape, window)
+        Pads the ends with the edge values
     '''
     try:
         assert(window%2 == 1)
@@ -156,16 +157,16 @@ def get_velocities(pose,
                    widths=[5,11,51],
                    sample_freq=90):
     '''
-    Returns absolute velocity, as well as x, y, and z velocities over varying widths
-    Also returns the standard deviation of these velocities over varying widths
-    IN:
-        pose: Non-centered and and optional rotated pose (#frames, #joints, #xyz)
-        exp_id: Video ids per frame
-        joints: joints to calculate absolute velocities
-        widths: Number of frames to average velocity over (must be odd)
-        sample_freq: Sampling frequency of the videos
-    OUT:
-        vel: velocity features (#frames x #joints*#widths)
+        Returns absolute velocity, as well as x, y, and z velocities over varying widths
+        Also returns the standard deviation of these velocities over varying widths
+        IN:
+            pose: Non-centered and and optional rotated pose (#frames, #joints, #xyz)
+            exp_id: Video ids per frame
+            joints: joints to calculate absolute velocities
+            widths: Number of frames to average velocity over (must be odd)
+            sample_freq: Sampling frequency of the videos
+        OUT:
+            vel: velocity features (#frames x #joints*#widths)
     '''
     if np.any(np.sum(pose, axis=(0,2))==0):
         print("Detected centered pose input - calculating relative velocities ... ")
@@ -199,13 +200,13 @@ def get_velocities(pose,
                 vel_labels+= ['_'.join([tag,'vel',ax,joint_names[joint],str(width)]) for joint in joints for ax in ax_labels]
                 std_labels+= ['_'.join([tag,'vel_std',ax,joint_names[joint],str(width)]) for joint in joints for ax in ax_labels]
     
-    vel_feats = pd.DataFrame(np.hstack((vel,vel_stds)), columns=vel_labels+std_labels)
-    return vel_feats
+    # vel_feats = pd.DataFrame(np.hstack((vel,vel_stds)), columns=vel_labels+std_labels)
+    return np.hstack((vel,vel_stds)), vel_labels+std_labels
 
 def get_ego_pose(pose,
                  joint_names):
     '''
-    Takes centered spine rotated pose - reshapes and converts to pandas dataframe
+        Takes centered spine rotated pose - reshapes and converts to pandas dataframe
     '''
     print("Reformatting pose to egocentric pose features ... ")
     is_centered = np.any(np.sum(pose, axis=(0,2))==0)
@@ -216,19 +217,21 @@ def get_ego_pose(pose,
     pose = np.reshape(pose, (pose.shape[0],pose.shape[1]*pose.shape[2]))
     axis = ['x','y','z']
     labels = ['_'.join(['ego_euc',joint,ax]) for joint in joint_names for ax in axis]
-    pose_df = pd.DataFrame(pose,columns=labels)
-    return pose_df
+    # pose_df = pd.DataFrame(pose,columns=labels)
+    return pose, labels
 
 def get_angles(pose,
                link_pairs):
     '''
-    Calculates 3 angles for pairs of linkage vectors
-    Angles calculated are those between projections of each vector onto the 3 xyz planes
-    IN:
-        pose: Centered and rotated pose (#frames, #joints, #xyz)
-        link_pairs: List of tuples with 3 points between which to calculate angles
-    OUT:
-        angles: returns 3 angles between link pairs
+        Calculates 3 angles for pairs of linkage vectors
+        Angles calculated are those between projections of each vector onto the 3 xyz planes
+        IN:
+            pose: Centered and rotated pose (#frames, #joints, #xyz)
+            link_pairs: List of tuples with 3 points between which to calculate angles
+        OUT:
+            angles: returns 3 angles between link pairs
+
+        ** Currently doing unsigned
     '''
     print("Calculating joint angles ... ")
     angles = np.zeros((pose.shape[0],len(link_pairs),3))
@@ -240,33 +243,43 @@ def get_angles(pose,
         v1 = pose[:,pair[0],:]-pose[:,pair[1],:] #Calculate vectors
         v2 = pose[:,pair[2],:]-pose[:,pair[1],:]
         for j,key in enumerate(plane_dict):
-            angles[:,i,j] = np.arctan2(v1[:,plane_dict[key][0]],v1[:,plane_dict[key][1]]) - \
-                            np.arctan2(v2[:,plane_dict[key][0]],v2[:,plane_dict[key][1]])
+            # This is for signed angle
+            # angles[:,i,j] = np.arctan2(v1[:,plane_dict[key][0]],v1[:,plane_dict[key][1]]) - \
+            #                 np.arctan2(v2[:,plane_dict[key][0]],v2[:,plane_dict[key][1]])
+
+            # This is for unsigned angle
+            v1_u = v1[:,plane_dict[key]]/np.expand_dims(np.linalg.norm(v1[:,plane_dict[key]],axis=1),axis=1)
+            v2_u = v2[:,plane_dict[key]]/np.expand_dims(np.linalg.norm(v2[:,plane_dict[key]],axis=1),axis=1)
+            angles[:,i,j] = np.arccos(np.clip(np.sum(v1_u*v2_u,axis=1),-1, 1))
+
             feat_labels += ['_'.join(['ang'] + [str(i) for i in pair] + [key])]
-    
+
     # Fix all negative angles so that final is between 0 and 2pi
-    angles = np.where(angles>0, angles, angles+2*np.pi)
+    # round_offset = 1e-4
+    # angles = np.clip(angles, -2*np.pi+round_offset, 2*np.pi-round_offset)
+    # angles = np.where(angles>0, angles, angles+2*np.pi)
+
     angles = np.reshape(angles,(angles.shape[0],angles.shape[1]*angles.shape[2]))
-    angles = pd.DataFrame(angles, columns=feat_labels)
-    return angles
+    # angles = pd.DataFrame(angles, columns=feat_labels)
+    return angles, feat_labels
 
 def get_angular_vel(angles,
+                    angle_labels,
                     exp_id,
                     widths=[5,11,51],
                     sample_freq = 90):
     '''
-    Calculates angular velocity of previously defined angles
-    IN:
-        angles: Pandas dataframe of angles ()
+        Calculates angular velocity of previously defined angles
+        IN:
+            angles: Pandas dataframe of angles ()
     '''
     print("Calculating velocities of angles ... ")
-    ang = angles.to_numpy()
     num_ang = angles.shape[1]
     avel = np.zeros((angles.shape[0],num_ang*len(widths)))
     avel_stds = np.zeros(avel.shape)
     avel_labels, std_labels = [], []
     for _,i in enumerate(tqdm(np.unique(exp_id))):
-        ang_exp = ang[exp_id==i,:]
+        ang_exp = angles[exp_id==i,:]
         prev_ang = np.append(np.expand_dims(ang_exp[0,:],axis=0),ang_exp[:-1,:],axis=0)
         dtheta = (ang_exp - prev_ang)*sample_freq
         for j,width in enumerate(widths):
@@ -275,21 +288,21 @@ def get_angular_vel(angles,
             avel_stds[exp_id==j,j*num_ang:(j+1)*num_ang] = np.std(rolling_window(dtheta, width),axis=-1)
 
             if i == np.unique(exp_id)[0]:
-                avel_labels+=['_'.join([label.replace("ang","avel"),str(width)]) for label in angles.columns.to_list()]
-                std_labels+=['_'.join([label.replace("ang","avel_std"),str(width)]) for label in angles.columns.to_list()]
+                avel_labels+=['_'.join([label.replace("ang","avel"),str(width)]) for label in angle_labels]
+                std_labels+=['_'.join([label.replace("ang","avel_std"),str(width)]) for label in angle_labels]
 
-    avel_feats = pd.DataFrame(np.hstack((avel,avel_stds)), columns=avel_labels+std_labels)
+    # avel_feats = pd.DataFrame(np.hstack((avel,avel_stds)), columns=avel_labels+std_labels)
 
-    return avel_feats
+    return np.hstack((avel,avel_stds)), avel_labels+std_labels
 
 def get_head_angular(pose,
                      exp_id,
                      widths=[5,10,50],
                      link = [0,3,4]):
     '''
-    Getting x-y angular velocity of head
-    IN:
-        pose: Non-centered, optional rotated pose
+        Getting x-y angular velocity of head
+        IN:
+            pose: Non-centered, optional rotated pose
     '''
     v1 = pose[:,link[0],:2]-pose[:,link[1],:2]
     v2 = pose[:,link[2],:2]-pose[:,link[1],:2]
@@ -308,33 +321,43 @@ def get_head_angular(pose,
     return angular_vel
 
 def wavelet(features,
+            labels,
+            exp_id,
             sample_freq = 90,
-            freq = np.linspace(1,25),
-            w0 = 5,):
+            freq = np.linspace(1,25,25),
+            w0 = 5):
     # scp.signal.morlet2(500, )
     print("Calculating wavelets ... ")
     widths = w0*sample_freq/(2*freq*np.pi)
-    freq_transform = np.zeros((features.shape[0],len(freq)*features.shape[1]))
-    for i in range(features.shape[1]):
-        import pdb; pdb.set_trace()
-        freq_transform[:,(i-1)*len(freq):i*len(freq)] = scp.signal.cwt(features[:,i],scp.signal.morlet2, widths, w=w0)
-    
-    return freq_transform
+    wlet_feats = np.zeros((features.shape[0],len(freq)*features.shape[1]))
+
+    wlet_labels = ['_'.join(['wlet',label,str(f)]) for label in labels for f in freq]
+
+    for i in np.unique(exp_id):
+        print("Calculating wavelets for video " + str(i))
+        for j in tqdm(range(features.shape[1])):
+            wlet_feats[exp_id==i,j*len(freq):(j+1)*len(freq)] = np.abs(scp.signal.cwt(features[exp_id==i,j],
+                                                                                      scp.signal.morlet2, 
+                                                                                      widths,
+                                                                                      w=w0).T)
+    return wlet_feats, wlet_labels
 
 def pca(features,
-        keys = ['vel','ego_euc','ang','avel'],
+        labels,
+        categories = ['vel','ego_euc','ang','avel'],
         n_pcs = 10,
         method = 'ipca'):
+    print("Calculating principal components ... ")
     import time
     # Initializing the PCA method
     if method.startswith('torch'):
         import torch
-        pca_feats = torch.zeros(features.shape[0], len(keys)*n_pcs)
-        feat_t = torch.tensor(features.to_numpy())
+        pca_feats = torch.zeros(features.shape[0], len(categories)*n_pcs)
+        features = torch.tensor(features)
     else:
         # Centering the features if not torch (pytorch does it itself)
         features = features - features.mean(axis=0)
-        pca_feats = np.zeros((features.shape[0], len(keys)*n_pcs))
+        pca_feats = np.zeros((features.shape[0], len(categories)*n_pcs))
 
     if method == 'ipca':
         from sklearn.decomposition import IncrementalPCA
@@ -343,42 +366,65 @@ def pca(features,
         import fbpca
 
     num_cols = 0
-    for i, key in enumerate(tqdm(keys)): # Iterate through each feature category
-        key += '_'
-        cols_idx = [features.columns.get_loc(col) for col in features.columns if (col.startswith(key) or ('_'+key in col))]
+    for i, cat in enumerate(tqdm(categories)): # Iterate through each feature category
+        cat += '_'
+        cols_idx = [i for i, col in enumerate(labels) if (col.startswith(cat) or ('_'+cat in col))]
         num_cols += len(cols_idx)
         
         if method=='ipca' or method=='sklearn_pca':
             # import pdb; pdb.set_trace()
-            pca_feats[:, i*n_pcs:(i+1)*n_pcs] = pca.fit_transform(features.iloc[:,cols_idx].to_numpy())
+            pca_feats[:, i*n_pcs:(i+1)*n_pcs] = pca.fit_transform(features[:,cols_idx])
 
         elif method.startswith('torch'):
-            feat_key = feat_t[:,cols_idx]
+            feat_cat = features[:,cols_idx]
             if method.endswith('_gpu'):
-                feat_key = feat_key.cuda()
+                feat_cat = feat_cat.cuda()
 
             if 'pca' in method:
-                (_,_,V) = torch.pca_lowrank(feat_key)
+                (_,_,V) = torch.pca_lowrank(feat_cat)
             elif 'svd' in method:
-                feat_key -= feat_key.mean()
-                (_,_,V) = torch.linalg.svd(feat_key)
+                feat_cat -= feat_cat.mean()
+                (_,_,V) = torch.linalg.svd(feat_cat)
 
             if method.endswith('_gpu'):
-                pca_feats[:, i*n_pcs:(i+1)*n_pcs] = torch.matmul(feat_key, V[:,:n_pcs]).detach().cpu()
-                feat_key.detach().cpu()
+                pca_feats[:, i*n_pcs:(i+1)*n_pcs] = torch.matmul(feat_cat, V[:,:n_pcs]).detach().cpu()
+                feat_cat.detach().cpu()
                 V.detach().cpu()
             else:
-                pca_feats[:, i*n_pcs:(i+1)*n_pcs] = torch.matmul(feat_key, V[:,:n_pcs])
+                pca_feats[:, i*n_pcs:(i+1)*n_pcs] = torch.matmul(feat_cat, V[:,:n_pcs])
 
         elif method == 'fbpca':
-            feat_key = features.iloc[:, cols_idx].to_numpy()
-            (_,_,V) = fbpca.pca(features.iloc[:, cols_idx].to_numpy(), k = n_pcs)
-            pca_feats[:, i*n_pcs:(i+1)*n_pcs] = np.matmul(feat_key, V[:,:n_pcs])
+            (_,_,V) = fbpca.pca(features[:, cols_idx], k = n_pcs)
+            pca_feats[:, i*n_pcs:(i+1)*n_pcs] = np.matmul(features[:, cols_idx], V.T)
 
-    
     if method.startswith('torch_pca'):
         pca_feats = pca_feats.numpy()
     
-    # assert num_cols == features.shape[1]
+    assert num_cols == features.shape[1]
 
-    return 0
+    pc_labels = ['_'.join([cat,'pc'+str(i)]) for cat in categories for i in range(n_pcs)]
+
+    return pca_feats, pc_labels
+
+def save_h5(features,
+            labels,
+            path):
+    '''
+        Writes to h5 file
+    '''
+    hf = h5py.File(path, 'w')
+    hf.create_dataset('features', data=features)
+    str_dtype = h5py.special_dtype(vlen=str)
+    hf.create_dataset('labels', data=labels, dtype=str_dtype)
+    hf.close()
+    return
+
+def read_h5(path):
+    '''
+        Reads h5 file
+    '''
+    hf = h5py.File(path,'r')
+    features = np.array(hf.get('features'))
+    labels = np.array(hf.get('labels'), dtype=str).tolist()
+    hf.close()
+    return features, labels

@@ -9,21 +9,21 @@ import numpy as np
 from typing import Optional, Union, List, Tuple
 import yaml
 
-def read_params_config(params_config: str):
+def read_params_config(config_path: str):
     '''
     Reads in params_config
     '''
-    with open(params_config) as f:
+    with open(config_path) as f:
         config_dict = yaml.safe_load(f)
 
     return config_dict
 
 
-def params_process(params_config: str):
+def params_process(config_path: str):
     '''
     Loads in and processes params to fill in blanks
     '''
-    params = read_params_config(params_config)
+    params = read_params_config(config_path)
 
     if 'pca_features' not in params:
         params['pca_features'] = False
@@ -32,7 +32,6 @@ def params_process(params_config: str):
     print(params)
     
     return params
-
 
 def load_data(paths_config,
               pca_features: bool = False,
@@ -63,14 +62,15 @@ def filter_still_frames(dstruct:DataStruct):
 
 
 def run_analysis(params_config: str,
-                 paths_config: str):
+                 ds: DataStruct):#,
+                #  paths_config: str):
 
     params = params_process(params_config)
 
-    ds = load_data(paths_config,
-                   filter_still=params['filter_still'],
-                   pca_features=params['pca_features'],
-                   downsample=params['downsample'])
+    # ds = load_data(paths_config,
+    #                filter_still=params['filter_still'],
+    #                pca_features=params['pca_features'],
+    #                downsample=params['downsample'])
 
     ds.out_path = ''.join([ds.out_path,'/',params['label'],'/'])
 
@@ -102,14 +102,14 @@ def run_analysis(params_config: str,
                            plots_label = "final",
                            save_ws = True)
     
-    vis.scatter_on_watershed(data=ds, watershed=ds.ws, column='Cluster')
+    # vis.scatter_on_watershed(data=ds, watershed=ds.ws, column='Cluster')
 
     ds.write_pickle()
     if params['skeleton_vids']:
-        ds.pose_path = '/home/exx/Desktop/GitHub/CAPTURE_demo/CAPTURE_data/48_tadross_data/markers_preproc_rotated.mat'
-        ds.load_connectivity()
-        ds.load_pose()
+        # ds.pose_path = '/home/exx/Desktop/GitHub/CAPTURE_demo/CAPTURE_data/48_tadross_data/markers_preproc_rotated.mat'
         vis.skeleton_vid3D_cat(ds, 'Cluster', n_skeletons=10)
+
+    return ds
 
 
 def embed_pipe(dstruct: DataStruct,
@@ -163,7 +163,6 @@ def embed_pipe(dstruct: DataStruct,
 
     return dstruct, embedder
 
-
 def watershed_cluster(dstruct: DataStruct,
                       sigma: int = 15,
                       column: Union[str,List[str]] = ['Condition'],
@@ -189,30 +188,5 @@ def watershed_cluster(dstruct: DataStruct,
                         filepath = ''.join([dstruct.out_path,plots_label,'_density_',cat,'.png']))
 
     return dstruct
-
-# run_analysis(params_config = '../configs/param_configs/fitsne_48.yaml',
-#              paths_config = '../configs/path_configs/embedding_analysis_ws_48.yaml')
-
-# run_analysis(params_config = '../configs/param_configs/batch_fitsne_48.yaml',
-#              paths_config = '../configs/path_configs/embedding_analysis_ws_48.yaml')
-
-# run_analysis(params_config = '../configs/param_configs/tsne_cuda_48.yaml',
-#              paths_config = '../configs/path_configs/embedding_analysis_ws_48.yaml')
-
-# run_analysis(params_config = '../configs/param_configs/batch_tsne_cuda_48.yaml',
-#              paths_config = '../configs/path_configs/embedding_analysis_ws_48.yaml')
-
-# run_analysis(params_config = '../configs/param_configs/batch_umap_48.yaml',
-#              paths_config = '../configs/path_configs/embedding_analysis_ws_48.yaml')
-
-
-# run_analysis(params_config = '../configs/param_configs/fitsne_exp_embed_48.yaml',
-#              paths_config = '../configs/path_configs/embedding_analysis_ws_48.yaml')
-
-# run_analysis(params_config = '../configs/param_configs/batch_fitsne_exp_embed_48.yaml',
-#              paths_config = '../configs/path_configs/embedding_analysis_ws_48.yaml')
-
-run_analysis(params_config = '../configs/param_configs/batch_umap_exp_embed_48.yaml',
-             paths_config = '../configs/path_configs/embedding_analysis_ws_48.yaml')
 
 

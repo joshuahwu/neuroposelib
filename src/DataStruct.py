@@ -52,7 +52,7 @@ class DataStruct:
         self.meta = meta
         self.full_data = full_data
         self.connectivity = connectivity
-        #self.meta_columns = [List of column names] TODO: Xuliang
+        self.exp_ids_full = None
 
     def __getitem__(self, idx):
         if not isinstance(idx, tuple):
@@ -151,7 +151,6 @@ class DataStruct:
         freq = freq/np.expand_dims(frame_totals,axis=1)
 
         self.freq = freq
-        import pdb; pdb.set_trace()
 
         return freq
 
@@ -234,14 +233,15 @@ class DataStruct:
         except:
             frames_with_good_tracking = np.squeeze(analysisstruct['frames_with_good_tracking'][0][1].astype(int))-1
 
-        exp_ids_full = np.squeeze(hdf5storage.loadmat(self.pose_path, variable_names=[self.exp_key])[self.exp_key].astype(int))
+        if self.exp_ids_full is None:
+            exp_ids_full = np.squeeze(hdf5storage.loadmat(self.pose_path, variable_names=[self.exp_key])[self.exp_key].astype(int))
 
-        if np.min(exp_ids_full)!=0:
-            exp_ids_full -= np.min(exp_ids_full)
+            if np.min(exp_ids_full)!=0:
+                exp_ids_full -= np.min(exp_ids_full)
 
-        self.exp_ids_full = exp_ids_full
+            self.exp_ids_full = exp_ids_full
 
-        exp_id = exp_ids_full[frames_with_good_tracking] # Indexing out batch IDs
+        exp_id = self.exp_ids_full[frames_with_good_tracking] # Indexing out batch IDs
 
         print("Size of dataset: ", np.shape(features))
 
@@ -277,6 +277,15 @@ class DataStruct:
             f = hdf5storage.loadmat(self.pose_path, variable_names=['predictions'])['predictions']
             mat_v7 = False
             total_frames = max(np.shape(f[0][0][0]))
+
+            if self.exp_ids_full is None:
+                exp_ids_full = np.squeeze(hdf5storage.loadmat(self.pose_path, variable_names=[self.exp_key])[self.exp_key].astype(int))
+
+                if np.min(exp_ids_full)!=0:
+                    exp_ids_full -= np.min(exp_ids_full)
+
+                self.exp_ids_full = exp_ids_full
+            
 
         pose_3d = np.empty((total_frames, 0, 3))
         for key in self.connectivity.joint_names:
