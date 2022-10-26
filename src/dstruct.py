@@ -1,4 +1,3 @@
-import pandas as pd
 import numpy as np
 import h5py
 import hdf5storage
@@ -28,9 +27,8 @@ class DataStruct:
     ]
 
     def __init__(self,
-                 data: pd.DataFrame = pd.DataFrame(),
-                 meta: pd.DataFrame = pd.DataFrame(),
-                 full_data: pd.DataFrame = pd.DataFrame(),
+                 data: np.ndarray,
+                 meta: List,
                  connectivity = None,
                  out_path: Optional[str] = None,
                  downsample: Optional[int] = None,

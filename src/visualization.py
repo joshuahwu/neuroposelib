@@ -46,7 +46,7 @@ def scatter(data: Union[np.ndarray,ds.DataStruct],
 
     f = plt.figure()
     plt.scatter(x, y, marker='.', s=marker_size, linewidths=0,
-                c=color,cmap='viridis_r', alpha=0.75, **kwargs)
+                c=color,cmap='YlOrRd', alpha=0.75, **kwargs)
     plt.xlabel('t-SNE 1')
     plt.ylabel('t-SNE 2')
     if color is not None:
@@ -144,7 +144,7 @@ def density_feat(data: ds.DataStruct,
             if np.all(bin_idx==False):
                 density_feat[i,j] = min_feat
             else:
-                density_feat[i,j] = np.sum(feat_key[bin_idx])
+                density_feat[i,j] = np.mean(feat_key[bin_idx])
 
     density(density_feat,
             ws_borders = watershed.borders,
@@ -317,7 +317,7 @@ def skeleton_vid3D_expanded(data: Union[ds.DataStruct, np.ndarray],
                             frames: List = [3000,100000,5000000], 
                             N_FRAMES: int = 150,
                             fps: int = 90,
-                            dpi: int = 200,
+                            dpi: int = 100,
                             VID_NAME: str = '0.mp4',
                             SAVE_ROOT: str = './test/skeleton_vids/'):
     
@@ -587,13 +587,6 @@ def skeleton_vid3D_features(pose,
     
     plt.close()
     return 0
-
-def show_vid_jupyter(vid_path: str):
-    from base64 import b64encode
-    video = open(vid_path, "rb").read()
-    video_encoded = b64encode(video).decode('ascii')
-    video_tag = '<video controls alt="test" src="data:video/x-m4v;base64,{0}">'.format(video_encoded)
-    return video_tag
 
 
 # def draw_tSNE_interactive(self, df_tSNE, color='animalID', marker_size=3):

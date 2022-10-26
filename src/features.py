@@ -28,7 +28,7 @@ def align_floor(pose: np.array,
     print("Fitting and rotating the floor for each video to alignment ... ")
     for _,i in enumerate(tqdm(np.unique(exp_id))): # Separately for each video
         pose_exp = pose[exp_id == i,:,:]
-        pose_exp = scp.ndimage.median_filter(pose_exp,(4,1,1)) # Median filter 5 frames repeat the ends of video
+        pose_exp = scp.ndimage.median_filter(pose_exp,(5,1,1)) # Median filter 5 frames repeat the ends of video
 
         # Initial calculation of plane to find outlier values
         [xy,z] = [pose_exp[:,foot_id,:2],pose_exp[:,foot_id,2]]
@@ -80,29 +80,29 @@ def align_floor(pose: np.array,
     return pose_rot
 
 def center_spine(pose,
-                 joint_idx = 4):
+                 keypt_idx = 4):
     print("Centering poses to mid spine ...")
     # Center spine_m to (0,0,0)
-    return pose - np.expand_dims(pose[:,joint_idx,:],axis=1)
+    return pose - np.expand_dims(pose[:,keypt_idx,:],axis=1)
 
 def rotate_spine(pose,
-                 joint_idx = [4,3],
+                 keypt_idx = [4,3],
                  lock_to_x = False):
     '''
         Centers mid spine to (0,0,0) and aligns spine_m -> spine_f to x-z plane
         IN:
             pose: 3d matrix of (#frames x #joints x #coords)
-            joint_idx: List [spine_m idx, spine_f idx]
+            keypt_idx: List [spine_m idx, spine_f idx]
             lock_to_x: Also rotates so that spine_m -> spine_f is locked to the x-axis
         OUT:
             pose_rot: Centered and rotated pose (#frames x #joints x #coords)
     '''
     num_joints = pose.shape[1]
-    yaw = -np.arctan2(pose[:,joint_idx[1],1],pose[:,joint_idx[1],0]) # Find angle to rotate to axis
+    yaw = -np.arctan2(pose[:,keypt_idx[1],1],pose[:,keypt_idx[1],0]) # Find angle to rotate to axis
 
     if lock_to_x:
         print("Rotating spine to x axis ... ")
-        pitch = -np.arctan2(pose[:,joint_idx[1],2],pose[:,joint_idx[1],0])
+        pitch = -np.arctan2(pose[:,keypt_idx[1],2],pose[:,keypt_idx[1],0])
     else:
         print("Rotating spine to xz plane ... ")
         pitch = np.zeros(yaw.shape)
@@ -114,9 +114,9 @@ def rotate_spine(pose,
     pose_rot = np.einsum("jki,ik->ij", rot_mat, np.reshape(pose,(-1,3))).reshape(pose.shape)
 
     # Making sure Y value of spine f doesn't deviate much from 0
-    assert pose_rot[:,joint_idx[1],1].max()<1e-5 and pose_rot[:,joint_idx[1],1].min()>-1e-5
+    assert pose_rot[:,keypt_idx[1],1].max()<1e-5 and pose_rot[:,keypt_idx[1],1].min()>-1e-5
     if lock_to_x: # Making sure Z value of spine f doesn't deviate much from 0
-        assert pose_rot[:,joint_idx[1],2].max()<1e-5 and pose_rot[:,joint_idx[1],2].min()>-1e-5
+        assert pose_rot[:,keypt_idx[1],2].max()<1e-5 and pose_rot[:,keypt_idx[1],2].min()>-1e-5
 
     return pose_rot
 
@@ -154,7 +154,8 @@ def get_velocities(pose,
                    exp_id,
                    joint_names,
                    joints=[0,3,5],
-                   widths=[5,11,51],
+                   widths=[3,31,89],
+                   abs_val=False,
                    sample_freq=90):
     '''
         Returns absolute velocity, as well as x, y, and z velocities over varying widths
@@ -175,7 +176,7 @@ def get_velocities(pose,
         print("Calculating absolute velocities ... ")
         tag = 'abs'
 
-    ax_labels = ['vec','x','y','z']
+    ax_labels = ['norm','x','y','z']
     vel = np.zeros((pose.shape[0],len(joints)*len(widths)*len(ax_labels)))
     vel_stds = np.zeros(vel.shape)
     vel_labels, std_labels = [], []
@@ -184,12 +185,14 @@ def get_velocities(pose,
         pose_exp = pose[exp_id==i,:,:][:,joints,:]
 
         # Calculate distance beetween  times t - (t-1)
+        import pdb; pdb.set_trace()
         temp_pose = np.append(np.expand_dims(pose_exp[0,:,:],axis=0),pose_exp[:-1,:,:],axis=0)
         dxyz = np.reshape(pose_exp-temp_pose, (pose_exp.shape[0],-1)) # distance for each axis
 
         # Appending Euclidean vector magnitude of distance and multiplying by sample_freq to get final velocities
         dv = np.append(np.sqrt(np.sum(np.square(pose_exp-temp_pose),axis=2)),dxyz,axis=-1)*sample_freq
-
+        if abs_val:
+            dv = np.abs(dv)
         # Calculate average velocity and velocity stds over the windows
         for j,width in enumerate(widths):
             kernel = np.ones((width,1))/width
@@ -266,7 +269,7 @@ def get_angles(pose,
 def get_angular_vel(angles,
                     angle_labels,
                     exp_id,
-                    widths=[5,11,51],
+                    widths=[3,31,89],
                     sample_freq = 90):
     '''
         Calculates angular velocity of previously defined angles
@@ -400,11 +403,21 @@ def pca(features,
     if method.startswith('torch_pca'):
         pca_feats = pca_feats.numpy()
     
-    assert num_cols == features.shape[1]
+    # assert num_cols == features.shape[1]
 
     pc_labels = ['_'.join([cat,'pc'+str(i)]) for cat in categories for i in range(n_pcs)]
 
     return pca_feats, pc_labels
+
+def standard_scale(features,
+                   labels):
+    features -= features.mean(axis=0)
+    feat_std = np.std(features,axis=0)
+    features = features[:,feat_std!=0]
+    features = features/feat_std[feat_std!=0]
+    labels = [label for i, label in enumerate(labels) if feat_std[i]!=0]
+
+    return features, labels
 
 def save_h5(features,
             labels,
