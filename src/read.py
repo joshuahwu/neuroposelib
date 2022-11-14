@@ -5,6 +5,7 @@ from typing import Optional, Union, List, Tuple
 import pandas as pd
 import numpy as np
 from DataStruct import Connectivity
+from tqdm import tqdm
 
 def config(path,
            config_params: Optional[List[str]] = None):
@@ -187,12 +188,11 @@ def pose_from_meta(path,
     meta = pd.read_csv(path)
     merged_pose = np.empty((0, len(connectivity.joint_names), 3))
     id = np.empty((0))
-    for i, row in meta.iterrows():
-        pose_path = row['cluster_directory']
+    for i, row in tqdm(meta.iterrows()):
+        pose_path = row['ClusterDirectory']
         meta_pose = pose(pose_path, connectivity, exp_key=None)
-        import pdb; pdb.set_trace()
-        merged_pose.append(meta_pose, axis=0)
-        id.append(i*np.ones((meta_pose.shape[0])))
+        merged_pose = np.append(merged_pose, meta_pose, axis=0)
+        id = np.append(id,i*np.ones((meta_pose.shape[0])))
 
     meta_by_frame = meta.iloc[id].reset_index().rename(columns={'index':'id'})
         
