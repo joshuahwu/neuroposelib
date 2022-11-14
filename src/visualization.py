@@ -5,6 +5,7 @@ import scipy as scp
 import imageio
 import tqdm
 import hdf5storage
+import pandas as pd
 
 import matplotlib
 matplotlib.use("Agg")
@@ -24,6 +25,7 @@ palette = [(1,0.5,0),(0.5,0.5,0.85),(0,1,0),(1,0,0),(0,0,0.9),(0,1,1),
 def scatter(data: Union[np.ndarray,ds.DataStruct],
             color: Optional[Union[List,np.ndarray]] = None,
             marker_size: int = 3,
+            ax_label: str = 't-SNE',
             filepath: str = './plot_folder/scatter.png',
             show: bool = False,
             **kwargs):
@@ -47,12 +49,12 @@ def scatter(data: Union[np.ndarray,ds.DataStruct],
     f = plt.figure()
     plt.scatter(x, y, marker='.', s=marker_size, linewidths=0,
                 c=color,cmap='YlOrRd', alpha=0.75, **kwargs)
-    plt.xlabel('t-SNE 1')
-    plt.ylabel('t-SNE 2')
+    plt.xlabel(ax_label+' 1')
+    plt.ylabel(ax_label+' 2')
     if color is not None:
         plt.colorbar()
     if filepath:
-        plt.savefig(filepath,dpi=400)
+        plt.savefig(filepath,dpi=200)
 
     if show:
         plt.show()
@@ -81,9 +83,9 @@ def watershed(ws_map: np.ndarray,
     ax = f.add_subplot(111)
     ax.imshow(ws_map)
     ax.set_aspect('auto')
-    if ws_borders:
-        ax.plot(ws_borders[:,0],ws_borders[:,1],'.r',markersize=0.05)
-    plt.savefig(''.join([filepath,'_watershed.png']),dpi=400)
+    if ws_borders is not None:
+        ax.plot(ws_borders[:,0],ws_borders[:,1],'.k',markersize=0.05)
+    plt.savefig(''.join([filepath,'_watershed.png']),dpi=200)
     plt.close()
 
 def scatter_on_watershed(data: ds.DataStruct,
@@ -106,7 +108,7 @@ def scatter_on_watershed(data: ds.DataStruct,
     ax.set_yticks([])
     ax.set_aspect('auto')
     filename = ''.join([data.out_path,'points_by_cluster/all.png'])
-    plt.savefig(filename,dpi=400)
+    plt.savefig(filename,dpi=200)
     plt.close()
 
     print("Plotting scatter on watershed for each ", column)
@@ -148,7 +150,7 @@ def density_feat(data: ds.DataStruct,
 
     density(density_feat,
             ws_borders = watershed.borders,
-            filepath = ''.join([data.out_path,'density_feat_',key,'.png']),
+            filepath = ''.join([file_path,'density_feat_',key,'.png']),
             show=True)
 
 def density(density: np.ndarray,
@@ -164,7 +166,7 @@ def density(density: np.ndarray,
     ax.set_yticks([])
     ax.set_aspect('auto')
     if filepath:
-        plt.savefig(filepath, dpi=400)
+        plt.savefig(filepath, dpi=200)
     if show:
         plt.show()
     plt.close()
@@ -215,7 +217,63 @@ def density_cat(data: ds.DataStruct,
             ax_arr[int(i/n_col),i%n_col].set_xticks([])
             ax_arr[int(i/n_col),i%n_col].set_yticks([])
     f.tight_layout()
-    plt.savefig(filepath, dpi=400)
+    plt.savefig(filepath, dpi=200)
+    if show:
+        plt.show()
+    plt.close()
+    return
+
+def density_grid(data: ds.DataStruct,
+                cat1: str,
+                cat2: str,
+                watershed: Watershed,
+                filepath: str='./plot_folder/density_by_label.png',
+                show: bool=False):
+    '''
+    Plot densities by a category label
+    '''
+    labels1, labels2 = data.data[cat1].values, data.data[cat2].values
+    n_col = len(np.unique(labels2))
+    n_rows = len(np.unique(labels1))
+    f,ax_arr = plt.subplots(n_rows,n_col,
+                            figsize=((n_col+1)*4,n_rows*4))
+
+    # Loop over unique labels
+    for i,label1 in enumerate(np.unique(labels1)):
+        ax_arr[i,0].set_title(label1)
+        for j, label2 in enumerate(np.unique(labels2)):
+            # import pdb; pdb.set_trace()
+            embed_vals = data.embed_vals[(data.data[cat1]==label1) & (data.data[cat2]==label2)] # Indexing by label
+            density = watershed.fit_density(embed_vals,new=False) # Fit density on old axes
+            if n_rows == 1:
+                ax_arr[j].imshow(density)#scp.special.softmax(density))
+
+                if watershed is not None:
+                    ax_arr[j].plot(watershed.borders[:,0], 
+                                        watershed.borders[:,1],
+                                        '.k', markersize=0.1)
+                ax_arr[j].set_aspect('auto')
+                ax_arr[j].set_title(label1)
+                ax_arr[j].set_xlabel('t-SNE 1')
+                ax_arr[j].set_ylabel('t-SNE 2')
+                ax_arr[j].set_xticks([])
+                ax_arr[j].set_yticks([])
+            else:
+                ax_arr[i,j].imshow(scp.special.softmax(density))
+
+                if watershed is not None:
+                    ax_arr[i,j].plot(watershed.borders[:,0], 
+                                                    watershed.borders[:,1],
+                                                    '.k', markersize=0.1)
+                if i==0:
+                    ax_arr[0,j].set_title(label2)
+                ax_arr[i,j].set_aspect('auto')
+                ax_arr[i,j].set_xlabel('t-SNE 1')
+                ax_arr[i,j].set_ylabel('t-SNE 2')
+                ax_arr[i,j].set_xticks([])
+                ax_arr[i,j].set_yticks([])
+    f.tight_layout()
+    plt.savefig(filepath, dpi=200)
     if show:
         plt.show()
     plt.close()
@@ -263,7 +321,7 @@ def cluster_freq(data: ds.DataStruct,
     ax_arr[len(conditions)-1].set_xlim([-0.25, 60.25])
     f.tight_layout()
     plt.subplots_adjust(hspace=0.05)
-    plt.savefig(''.join([data.out_path,'mean_sd_cluster_freq.png']),dpi=400)
+    plt.savefig(''.join([data.out_path,'mean_sd_cluster_freq.png']),dpi=200)
     if show:
         plt.show()
 
@@ -273,7 +331,8 @@ def cluster_freq(data: ds.DataStruct,
 def skeleton_vid3D_cat(data: ds.DataStruct,
                        column: str,
                        labels: Optional[List] = None,
-                       n_skeletons: int = 9):
+                       n_skeletons: int = 9,
+                       filepath: str = './plot_folder'):
 
     col_vals = data.data[column].values
     index = np.arange(len(col_vals))
@@ -286,7 +345,7 @@ def skeleton_vid3D_cat(data: ds.DataStruct,
             continue
         else:
             num_points = min(len(label_idx),n_skeletons)
-            permuted_points = data.frame_id[np.random.permutation(label_idx)]# b/c moving frames filter
+            permuted_points = data.frame[np.random.permutation(label_idx)]# b/c moving frames filter
             sampled_points = []
             for i in range(len(permuted_points)):
                 # import pdb; pdb.set_trace()
@@ -307,8 +366,9 @@ def skeleton_vid3D_cat(data: ds.DataStruct,
             skeleton_vid3D_expanded(data,
                                     label=label,
                                     frames = sampled_points,
+                                    N_FRAMES = 300,
                                     VID_NAME = ''.join([column,'_',str(label),'.mp4']),
-                                    SAVE_ROOT = ''.join([data.out_path, 'skeleton_vids/']))
+                                    SAVE_ROOT = ''.join([filepath, '/skeleton_vids/']))
 
 
 def skeleton_vid3D_expanded(data: Union[ds.DataStruct, np.ndarray],
@@ -323,15 +383,10 @@ def skeleton_vid3D_expanded(data: Union[ds.DataStruct, np.ndarray],
     
 
     if isinstance(data, ds.DataStruct):
-        preds = data.pose_3d
+        preds = data.pose
         connectivity = data.connectivity
     else:
         preds = data
-
-    if connectivity is None:
-        skeleton_name = 'mouse' + str(preds.shape[1])
-        connectivity = Connectivity().load('../../CAPTURE_data/skeletons.py',
-                                           skeleton_name=skeleton_name)
 
     START_FRAME = np.array(frames) - int(N_FRAMES/2) + 1
     COLOR = connectivity.colors*len(frames)
@@ -377,7 +432,7 @@ def skeleton_vid3D_expanded(data: Union[ds.DataStruct, np.ndarray],
     ax_dens = fig.add_subplot(gs[0,0])
 
     cond_uniq = data.data['Condition'].unique()
-    frames_meta = data.data[data.data['frame_id'].isin(frames)]['Condition'].values
+    frames_meta = data.data[data.data['frame'].isin(frames)]['Condition'].values
 
     ax_dens.imshow(data.ws.watershed_map, zorder=0,
                     extent=extent)
@@ -433,7 +488,7 @@ def skeleton_vid3D(data: Union[ds.DataStruct, np.ndarray],
                    SAVE_ROOT: str = './test/skeleton_vids/'):
 
     if isinstance(data, ds.DataStruct):
-        preds = data.pose_3d
+        preds = data.pose
         connectivity = data.connectivity
     else:
         preds = data
@@ -505,6 +560,16 @@ def skeleton_vid3D(data: Union[ds.DataStruct, np.ndarray],
     plt.close()
     return 0
 
+def feature_hist(feature,
+                 label,
+                 filepath):
+    plt.hist(feature,bins=1000,density=True)
+    plt.xlabel(label)
+    plt.ylabel('Histogram Density')
+    if filepath:
+        plt.savefig(''.join([filepath,label,'.png']))
+    plt.close()
+    return
 
 def skeleton_vid3D_features(pose,
                             feature,
@@ -558,6 +623,7 @@ def skeleton_vid3D_features(pose,
             # grab frames
             curr_frames = curr_frame + np.arange(len(frames))*N_FRAMES
 
+            ax_trace.plot(np.arange(curr_frames+1),feature[:curr_frames[0]+1],linestyle='-',linewidth=1)
             ax_trace.plot(curr_frames,feature[curr_frames],marker='.', markersize=20, color='k')
 
             kpts_3d = np.reshape(pose_3d[curr_frames,:,:], (len(frames)*num_joints, 3))
@@ -588,152 +654,88 @@ def skeleton_vid3D_features(pose,
     plt.close()
     return 0
 
+def heuristics(features, labels, data_obj, heuristics, filepath):
+    filepath = filepath + '/heuristics/'
+    for heur_key in heuristics:
+        print("Plotting heuristics")
+        heur_feats = heuristics[heur_key]
+        high_feat_i = [labels.index(heur_label) for heur_label in heur_feats['high'] if heur_label in labels]
+        low_feat_i = [labels.index(heur_label) for heur_label in heur_feats['low'] if heur_label in labels]
 
-# def draw_tSNE_interactive(self, df_tSNE, color='animalID', marker_size=3):
-#     '''
-#     Draw an interactive 2d tSNE plot from zValues.
+        try:
+            assert len(high_feat_i) == len(heur_feats['high'])
+            assert len(low_feat_i) == len(heur_feats['low'])
+        except:
+            print("Couldn't find some features from the heuristics")
 
-#     input: zValues dataframe, [num of points x 2]
-#     output: a scatter plot
-#     '''
-#     unique_animalID = np.unique(df_tSNE['animalID'])
-#     fig = px.scatter(df_tSNE, x='x', y='y', color=color, hover_data=['idx', 'x', 'y'], width=800, height=800)
-#     fig.update_traces(marker_size=marker_size)
-#     fig.show()
+        high_feats = np.clip(features[:,high_feat_i],-2.5,2.5)
+        low_feats = np.clip(-features[:,low_feat_i],-2.5,2.5)
+        heur_feats = np.mean(np.append(high_feats, low_feats, axis=1),axis=1)
 
-# def draw_3d_skeleton(self, selected_anchor_idx):
-#     '''
-#     input: an index of predictions 3d coordinates
-#     output: a skeleton scatter3d plot of that index
-#     '''
-#     selected_anchor_idx = int(selected_anchor_idx)
-#     temp_list = []
-#     anchors = list(predictions_dict['predictions'][0][0])[:-1] # 'Tail_base_' etc. excluding last matrix 'sampleID'
-#     for i in range(len(anchors)): 
-#         temp_list.append(anchors[i][selected_anchor_idx])
-#     plt.figure()
-#     ax = plt.axes(projection="3d")
-#     for x, y, z in temp_list:
-#         ax.scatter3D(x, y, z)
-#     skeleton_color, colors = None, self.left_or_right_colormap_dict['color'].tolist()
-#     for i, (first, second) in enumerate(self.left_or_right_colormap_dict['joints_idx']):
-#         xx = [anchors[first-1][selected_anchor_idx][0], anchors[second-1][selected_anchor_idx][0]]
-#         yy = [anchors[first-1][selected_anchor_idx][1], anchors[second-1][selected_anchor_idx][1]]
-#         zz = [anchors[first-1][selected_anchor_idx][2], anchors[second-1][selected_anchor_idx][2]]
-#         if colors[i] == [1, 0, 0]:
-#             skeleton_color = 'r' 
-#         elif colors[i] == [0, 1, 0]:
-#             skeleton_color = 'g'
-#         else:
-#             skeleton_color = 'b'
-#         ax.plot(xx, yy, zz, c=skeleton_color)
-#     plt.show()
+        # num_clusters = np.max(np.unique(data_obj.data['Cluster'].values))
+        heur_watershed = data_obj.ws.watershed_map
+        for cluster in np.unique(data_obj.data['Cluster'].values):
+            cluster_mean = np.mean(heur_feats[data_obj.data['Cluster']==cluster])
+            heur_watershed[data_obj.ws.watershed_map == cluster] = cluster_mean
 
-# def draw_3d_skeleton_interactive(self, selected_anchor_idx, marker_size=3):
-#     '''
-#     input: an index of predictions 3d coordinates
-#     output: a skeleton scatter3d plot of that index
-#     '''
-#     selected_anchor_idx = int(selected_anchor_idx)
-#     temp_list = []
-#     anchors = list(predictions_dict['predictions'][0][0])[:-1] # 'Tail_base_' etc. excluding last matrix 'sampleID'
-#     for i in range(len(anchors)): 
-#       temp_list.append(anchors[i][selected_anchor_idx])
-#     df_temp = pd.DataFrame(temp_list)
-#     print(df_temp.head())
-#     fig = px.scatter_3d(temp_list, x=0, y=1, z=2)
-#     skeleton_color, colors = None, self.left_or_right_colormap_dict['color'].tolist()
-#     fig = go.Figure()
-#     for i, (first, second) in enumerate(self.left_or_right_colormap_dict['joints_idx']):
-#         xx = [anchors[first-1][selected_anchor_idx][0], anchors[second-1][selected_anchor_idx][0]]
-#         yy = [anchors[first-1][selected_anchor_idx][1], anchors[second-1][selected_anchor_idx][1]]
-#         zz = [anchors[first-1][selected_anchor_idx][2], anchors[second-1][selected_anchor_idx][2]]
-#         name = self.left_or_right_colormap_dict['joint_names'][0][first-1].tolist()[0]+'-'\
-#                 + self.left_or_right_colormap_dict['joint_names'][0][second-1].tolist()[0]
-#         if colors[i] == [1, 0, 0]:
-#             skeleton_color = 'r' 
-#         elif colors[i] == [0, 1, 0]:
-#             skeleton_color = 'g'
-#         else:
-#             skeleton_color = 'b'
-#         fig.add_scatter3d(x=xx, y=yy, z=zz, name=name)
-#     fig.update_traces(marker_size=marker_size)
-#     fig.show()
+        watershed(ws_map = heur_watershed,
+                  ws_borders = data_obj.ws.borders,
+                  filepath = filepath + heur_key)
 
-# def path_format_switch(self, original_path):
-#     '''
-#     Switches the path from format
-#     '/media/twd/dannce-pd/PDBmirror/2021-07-04-PDb1_0-dopa'
-#     to
-#     '/hpc/group/tdunn/pdb_data/videos/2021_04_07/PDb1_R1_0/videos/'
-#     '''
-#     year, day, month, pdb, _ = original_path.split('/')[5].split('-')
-#     pdb1, pdb2 = pdb[3], pdb[5]
-#     converted_path = self.common_path + '/videos/{}_{}_{}/PDb{}_R1_{}/videos'.format(year, month, day, pdb1, pdb2)
-#     return converted_path
+        # vis.scatter(data_obj.embed_vals, 
+        #             color=heur_feats, 
+        #             filepath=''.join([filepath,'scatter_',heur_key,'_clipped_score.png']))
 
-# def get_relative_frame_idx(self, overall_idx):
-#     '''
-#     Get the index in a certain video from the overall index. 
+        print("Highest " + heur_key + " score frames: ")
+        sorted_idx = np.argsort(heur_feats)
+        print(sorted_idx)
 
-#     input: Overall index.
-#     output: frame_number: relative index in a video. v
-#             id_idx: which video is the frame in. 
-#             amount_of_frames: amount of frames per video (assuming each video has same length)
-#     '''
-#     overall_idx = int(overall_idx)
-#     example_video = cv2.VideoCapture(self.videopaths[1])
-#     amount_of_frames = int(example_video.get(cv2.CAP_PROP_FRAME_COUNT))
-#     print('Frames per video:', amount_of_frames)
-#     frame_number = overall_idx % amount_of_frames
-#     vid_idx = overall_idx // amount_of_frames + 1 # find which vid the frame belongs to. E.g., 3 // 324000 + 1 = 0 + 1 = 1. So frame 3 is in 1st video.
-#     print('The requested frame idx {} is in video number {}, at the {}th frame of that video.'.format(overall_idx, vid_idx, frame_number))
-#     return frame_number, vid_idx, amount_of_frames
+        skeleton_vid3D(data_obj.pose,
+                        data_obj.connectivity,
+                        frames=[sorted_idx[-1]*10],
+                        N_FRAMES = 100,
+                        dpi = 100,
+                        VID_NAME='highest_'+heur_key+'_score.mp4',
+                        SAVE_ROOT=filepath)
 
-#   def frame2time(self, overall_idx):
-#     '''
-#     Convert the overall index of a frame (a point in tSNE) to the time stamp (in second).
 
-#     input: overall_idx, the index of the frame in all videos (0-2M)
-#     output: timestamp of the frame in seconds.
-#     '''
-#     frame_number, vid_idx, amount_of_frames = self.get_relative_frame_idx(overall_idx)
-#     return frame_number / amount_of_frames * self.vid_length # the length of vid is 3600s.
+def labeled_watershed(watershed,
+                      labels_path):
 
-#   def get_frame(self, overall_idx):
-#     '''
-#     Get the frame in the set of videos with a given index.
-#     For example, there are 7 videos, each with 324000 frames,
-#     so there are 324000x7=2268000 frames. You can give
-#     overall_idx = 2000001
+    labels = pd.read_csv(labels_path)
 
-#     input: overall_idx, the index of the frame in all videos (0-2M)
-#     output: an .jpg image of that frame
-#     '''
-#     print('Starts extracting frame...')
-#     frame_number, vid_idx, amount_of_frames = self.get_relative_frame_idx(overall_idx)
-#     video = cv2.VideoCapture(self.videopaths[vid_idx])
-#     video.set(cv2.CAP_PROP_POS_FRAMES, frame_number-1)
-#     is_success, frame = video.read()
-#     frame = cv2.resize(frame, (500, 500))
-#     cv2_imshow(frame)
-#     if is_success:
-#         image_name = "video{}_frame{}.jpg".format(vid_idx, frame_number)
-#         cv2.imwrite(image_name, frame)
-#         print('Frame successfully extracted as', image_name)
+    behavior_cats = set(labels['Label'])
 
-# def generate_video(self, overall_idx, video_length=3000):
-#     '''
-#     Generate a video around the given frame of length video_length (in ms).
+    color_dict = {
+        'Background': [0,0,0],
+        'None': [217/256,217/256,217/256],
+        'Still': [241/256,194/256,50/256],
+        'Groom': [106/256,168/256,79/256],
+        'Rear':	[69/256,129/256,142/256],
+        'Walk': [103/256,78/256,167/256],
+    }
 
-#     input: overall frame index，desired video length (e.g., 3000ms)
-#     output: a video fraction
-#     '''
-#     print('Starts generating video...')
-#     frame_number, vid_idx, amount_of_frames = self.get_relative_frame_idx(overall_idx)
-#     timestamp = self.frame2time(overall_idx)
-#     half_length = video_length / 2000 # in seconds
-#     start, end = max(timestamp - half_length, 0), min(timestamp + half_length, self.vid_length)
-#     video_name = "video{}_time{}m{}s.mp4".format(vid_idx, round(timestamp // 60, 2), round(timestamp % 60, 2))
-#     ffmpeg_extract_subclip(anst.videopaths[vid_idx], start, end, targetname=video_name)
-#     print('Video clip {} generated successfully with length of {} secs.'.format(video_name, round(end - start, 2)))
+    colors = ["tab:gray","tab:green","tab:blue","tab:orange","tab:red",
+              "tab:purple","tab:brown","tab:pink",
+              "tab:olive","tab:cyan","#dc0ab4","#00b7c7"]
+    # for label,clusters in label_dict:
+    #     for cluster in clusters:
+    #         watershed[watershed==cluster] = 
+
+    labeled_map = np.zeros((watershed.shape[0],watershed.shape[1],3))
+    for i in range(watershed.shape[0]):
+        for j in range(watershed.shape[1]):
+            # import pdb; pdb.set_trace()
+            # try:
+            label = labels['Label'].loc[labels['Cluster']==watershed[i,j]].values[0]
+            # except:
+            #     import pdb; pdb.set_trace()
+            labeled_map[i,j,:] = np.array(color_dict[label])
+    
+    fig, ax = plt.subplots()
+    ax.imshow(labeled_map)
+    from matplotlib.lines import Line2D 
+    handles = [Line2D([0], [0], marker='o', color='w', markerfacecolor=v, label=k, markersize=8) for k, v in color_dict.items()]
+    ax.legend(title='color', handles=handles, bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.savefig("./labeled_map.png")
+            

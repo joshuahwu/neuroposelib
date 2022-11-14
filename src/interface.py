@@ -18,7 +18,6 @@ def read_params_config(config_path: str):
 
     return config_dict
 
-
 def params_process(config_path: str):
     '''
     Loads in and processes params to fill in blanks
@@ -184,7 +183,7 @@ def watershed_cluster(dstruct: DataStruct,
     vis.scatter(dstruct.embed_vals, filepath=''.join([dstruct.out_path, plots_label,'_scatter.png']))
 
     for cat in column:
-        vis.density_cat(data=dstruct, column=cat, watershed=ws, n_col=12,
+        vis.density_cat(data=dstruct, column=cat, watershed=ws, n_col=4,
                         filepath = ''.join([dstruct.out_path,plots_label,'_density_',cat,'.png']))
 
     return dstruct

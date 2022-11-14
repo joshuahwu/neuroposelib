@@ -7,10 +7,150 @@ from sklearn.decomposition import IncrementalPCA
 from typing import Optional, Union, List, Tuple
 import pandas as pd
 from tqdm import tqdm
-import h5py
+from scipy.interpolate import CubicSpline, splprep, splev
+import visualization as vis
 
-def align_floor(pose: np.array,
-                exp_id: Union[List, np.array],
+
+def vel_filter(pose, 
+               exp_id,
+               threshold: float=20,
+            #    max_iter: int=10,
+               connectivity = None):
+    print("Completing cubic spline interpolation based on velocity")
+    for _, i in enumerate(tqdm(np.unique(exp_id))):
+        pose_exp = pose[exp_id==i,...]
+
+        counter = 0
+        # while True:
+        dxyz = get_frame_diff(pose_exp, time=1, idx_center=False)
+        avg_vel = np.linalg.norm(np.sum(dxyz,axis=-1),axis=-1)
+        # plt.hist(avg_vel,bins=1000)
+        # plt.savefig('./vel_filter.png')
+        # import pdb; pdb.set_trace()
+
+        # vis.skeleton_vid3D_features(pose_exp,avg_vel,connectivity,frames=[np.argmax(avg_vel)],N_FRAMES=100,fps=90,dpi=100,VID_NAME='pre_vel_filter.mp4',SAVE_ROOT='./')
+
+        if np.any(avg_vel>threshold):
+            print("vel found true")
+            bad_tracking_frames = np.where(avg_vel>threshold)[0]
+            print(bad_tracking_frames)
+            good_tracking_frames = np.where(avg_vel<=threshold)[0]
+            cs = CubicSpline(good_tracking_frames,pose_exp[good_tracking_frames,...])
+            pose_exp[bad_tracking_frames,...] = cs(bad_tracking_frames)
+            #     counter+=1
+            #     if counter>=max_iter:
+            #         break
+            # else:
+            #     break
+        pose[exp_id==i,...] = pose_exp
+
+    return pose
+
+def z_filter(pose, 
+             exp_id,
+             threshold: float=2500,
+             connectivity = None):
+    '''
+        Uses the z value to 
+    '''
+    print("Completing cubic spline interpolation based on z values")
+    for _, i in enumerate(tqdm(np.unique(exp_id))):
+        pose_exp = pose[exp_id==i,...]
+
+        z_trace = np.sum(pose_exp[...,2],axis=-1)
+        # plt.hist(z_trace,bins=1000)
+        # plt.savefig('./z_filter.png')
+        # plt.close()
+        # import pdb; pdb.set_trace()
+
+        if np.any(z_trace>threshold):
+            bad_tracking_frames = np.where(z_trace>threshold)[0]
+            print(bad_tracking_frames)
+            good_tracking_frames = np.where(z_trace<=threshold)[0]
+            cs = CubicSpline(good_tracking_frames,pose_exp[good_tracking_frames,...])
+            pose_exp[bad_tracking_frames,...] = cs(bad_tracking_frames)
+
+        # z_trace_post = np.sum(pose_exp[...,2],axis=-1)
+        # plt.hist(z_trace_post,bins=1000)
+        # plt.savefig('./z_filter_post.png')
+        # plt.close()
+        # import pdb; pdb.set_trace()
+        pose[exp_id==i,...] = pose_exp
+
+        # vis.skeleton_vid3D_features(pose,z_trace,connectivity,frames=[np.argmax(z_trace)],N_FRAMES=100,fps=90,dpi=100,VID_NAME='prefilter.mp4',SAVE_ROOT='./')
+
+        # vis.skeleton_vid3D_features(pose_exp,z_trace_post,connectivity,frames=[np.argmax(z_trace)],N_FRAMES=100,fps=90,dpi=100,VID_NAME='postfilter.mp4',SAVE_ROOT='./')
+
+    return pose
+
+def median_filter(pose,
+                  exp_id,
+                  filter_len: int = 5):
+    print("Applying Median Filter")
+    for _, i in enumerate(tqdm(np.unique(exp_id))):
+        pose_exp = pose[exp_id == i,:,:]
+        pose[exp_id==i,:,:] = scp.ndimage.median_filter(pose_exp,(filter_len,1,1))
+
+    return pose
+
+
+def anipose_med_filt(pose: np.ndarray,
+                     exp_id: Union[List, np.ndarray],
+                     filter_len: int=6,
+                     threshold: float=5):
+
+    for _, i in enumerate(tqdm(np.unique(exp_id))):
+        pose_exp = pose[exp_id == i,:,:]
+        # dxyz = get_frame_diff(pose_exp, time=1, idx_center=False)
+        # vel = 
+        pose_error = pose_exp - scp.ndimage.median_filter(pose_exp,(filter_len,1,1)) # Median filter 5 frames repeat the ends of video
+        pose_error = np.linalg.norm(pose_error,axis=-1).mean(axis=-1)
+
+        plt.hist(pose_error,bins=1000)
+        plt.savefig('../../results/interp_ensemble/err_hist'+str(i)+'.png')
+        plt.close()
+
+        bad_tracking_frames = np.where(pose_error>threshold)[0]
+        print(bad_tracking_frames.shape)
+        good_tracking_frames = np.where(pose_error<=threshold)[0]
+        for joint in tqdm(np.arange(pose_exp.shape[1])):
+            for ax in np.arange(pose_exp.shape[2]):
+                cs = CubicSpline(good_tracking_frames,pose_exp[good_tracking_frames,joint,ax])
+                pose_exp[bad_tracking_frames,joint,ax] = cs(bad_tracking_frames)
+
+        pose[exp_id==i,:,:] = pose_exp
+
+        pose_error = pose_exp - scp.ndimage.median_filter(pose_exp,(filter_len,1,1)) # Median filter 5 frames repeat the ends of video
+        pose_error = np.linalg.norm(pose_error,axis=-1).mean(axis=-1)
+
+        plt.hist(pose_error,bins=1000)
+        plt.savefig('../../results/interp_ensemble/err_hist_post'+str(i)+'.png')
+        plt.close()
+
+    return pose
+
+
+def get_frame_diff(x: np.ndarray,
+                   time: int,
+                   idx_center: bool=True):
+    '''
+        IN:
+            x: Numpy array where first axis is time
+            time: Size of window to calculate 
+            idx_center: if `True`, calculates diff centered around point (idx+time - idx-time), 
+                        if `False`, calculates diff as time before
+    '''
+    prev_x = np.append(np.repeat(x[None,0,...],time,axis=0),x[:-time,...],axis=0)
+    if idx_center:
+        next_x = np.append(x[time:,...],np.repeat(x[None,-1,...],time,axis=0),axis=0)
+        diff = next_x - prev_x
+    else:
+        diff = x-prev_x
+    
+    return diff
+
+def align_floor(pose: np.ndarray,
+                exp_id: Union[List, np.ndarray],
                 foot_id: Optional[int] = 12,
                 head_id: Optional[int] = 0,
                 plot_folder: Optional[str] = None):
@@ -28,7 +168,7 @@ def align_floor(pose: np.array,
     print("Fitting and rotating the floor for each video to alignment ... ")
     for _,i in enumerate(tqdm(np.unique(exp_id))): # Separately for each video
         pose_exp = pose[exp_id == i,:,:]
-        pose_exp = scp.ndimage.median_filter(pose_exp,(5,1,1)) # Median filter 5 frames repeat the ends of video
+        # scp.ndimage.median_filter(pose_exp,(filter_len,1,1))
 
         # Initial calculation of plane to find outlier values
         [xy,z] = [pose_exp[:,foot_id,:2],pose_exp[:,foot_id,2]]
@@ -183,14 +323,14 @@ def get_velocities(pose,
 
     for _,i in enumerate(tqdm(np.unique(exp_id))): # Separating by video
         pose_exp = pose[exp_id==i,:,:][:,joints,:]
-
+        
         # Calculate distance beetween  times t - (t-1)
-        import pdb; pdb.set_trace()
-        temp_pose = np.append(np.expand_dims(pose_exp[0,:,:],axis=0),pose_exp[:-1,:,:],axis=0)
-        dxyz = np.reshape(pose_exp-temp_pose, (pose_exp.shape[0],-1)) # distance for each axis
+        prev_pose = np.append(pose_exp[None,0,:,:],pose_exp[:-1,:,:],axis=0)
+        dxyz = pose_exp-prev_pose # distance for each axis
 
         # Appending Euclidean vector magnitude of distance and multiplying by sample_freq to get final velocities
-        dv = np.append(np.sqrt(np.sum(np.square(pose_exp-temp_pose),axis=2)),dxyz,axis=-1)*sample_freq
+        dv = np.append(np.linalg.norm(dxyz,axis=-1)[:,:,None],dxyz,axis=-1)*sample_freq
+        dv = np.reshape(dv,(pose_exp.shape[0],-1))
         if abs_val:
             dv = np.abs(dv)
         # Calculate average velocity and velocity stds over the windows
@@ -202,6 +342,65 @@ def get_velocities(pose,
             if i==np.unique(exp_id)[0]:
                 vel_labels+= ['_'.join([tag,'vel',ax,joint_names[joint],str(width)]) for joint in joints for ax in ax_labels]
                 std_labels+= ['_'.join([tag,'vel_std',ax,joint_names[joint],str(width)]) for joint in joints for ax in ax_labels]
+    
+    # vel_feats = pd.DataFrame(np.hstack((vel,vel_stds)), columns=vel_labels+std_labels)
+    return np.hstack((vel,vel_stds)), vel_labels+std_labels
+
+def get_velocities_fast(pose,
+                        exp_id,
+                        joint_names,
+                        joints=[0,3,5],
+                        widths=[1,15,45],
+                        abs_val=False,
+                        sample_freq=90):
+    '''
+        Returns absolute velocity, as well as x, y, and z velocities over varying widths
+        Also returns the standard deviation of these velocities over varying widths
+        IN:
+            pose: Non-centered and and optional rotated pose (#frames, #joints, #xyz)
+            exp_id: Video ids per frame
+            joints: joints to calculate absolute velocities
+            widths: Number of frames to average velocity over (must be odd)
+            sample_freq: Sampling frequency of the videos
+        OUT:
+            vel: velocity features (#frames x #joints*#widths)
+    '''
+    if np.any(np.sum(pose, axis=(0,2))==0):
+        print("Detected centered pose input - calculating relative velocities ... ")
+        tag = 'rel'
+    else:
+        print("Calculating absolute velocities ... ")
+        tag = 'abs'
+
+    ax_labels = ['norm','x','y','z']
+    vel = np.zeros((pose.shape[0],len(joints)*len(widths)*len(ax_labels)))
+    vel_stds = np.zeros(vel.shape)
+    vel_labels, std_labels = [], []
+
+    for _,i in enumerate(tqdm(np.unique(exp_id))): # Separating by video
+        pose_exp = pose[exp_id==i,:,:][:,joints,:]
+
+        # Calculate average velocity and velocity stds over the windows
+        for j,width in enumerate(widths):
+            # Calculate distance beetween  times t - (t-1)
+            dxyz = get_frame_diff(pose_exp,time=width,idx_center=True)
+
+            # Appending Euclidean vector magnitude of distance and multiplying by sample_freq to get final velocities
+            dv = np.append(np.linalg.norm(dxyz,axis=-1)[:,:,None],dxyz,axis=-1)*sample_freq/(width*2+1)
+            dv = np.reshape(dv,(pose_exp.shape[0],-1))
+
+            vel[exp_id==i,j*len(joints)*4:(j+1)*len(joints)*4] = dv
+
+            if i==np.unique(exp_id)[0]:
+                vel_labels+= ['_'.join([tag,'vel',ax,joint_names[joint],str(2*width+1)]) for joint in joints for ax in ax_labels]
+                std_labels+= ['_'.join([tag,'vel_std',ax,joint_names[joint],str(2*width+1)]) for joint in joints for ax in ax_labels]
+
+        dxyz = get_frame_diff(pose_exp,time=1,idx_center=False)
+        # import pdb; pdb.set_trace()
+        dv = np.append(np.linalg.norm(dxyz,axis=-1)[:,:,None],dxyz,axis=-1)*sample_freq
+        dv = np.reshape(dv,(pose_exp.shape[0],-1))
+        for j,width in enumerate(widths):
+            vel_stds[exp_id==j,j*len(joints)*4:(j+1)*len(joints)*4] = np.std(rolling_window(dv, 2*width+1),axis=-1)
     
     # vel_feats = pd.DataFrame(np.hstack((vel,vel_stds)), columns=vel_labels+std_labels)
     return np.hstack((vel,vel_stds)), vel_labels+std_labels
@@ -283,7 +482,7 @@ def get_angular_vel(angles,
     avel_labels, std_labels = [], []
     for _,i in enumerate(tqdm(np.unique(exp_id))):
         ang_exp = angles[exp_id==i,:]
-        prev_ang = np.append(np.expand_dims(ang_exp[0,:],axis=0),ang_exp[:-1,:],axis=0)
+        prev_ang = np.append(ang_exp[None,0,:],ang_exp[:-1,:],axis=0)
         dtheta = (ang_exp - prev_ang)*sample_freq
         for j,width in enumerate(widths):
             kernel = np.ones((width,1))/width
@@ -293,6 +492,40 @@ def get_angular_vel(angles,
             if i == np.unique(exp_id)[0]:
                 avel_labels+=['_'.join([label.replace("ang","avel"),str(width)]) for label in angle_labels]
                 std_labels+=['_'.join([label.replace("ang","avel_std"),str(width)]) for label in angle_labels]
+
+    # avel_feats = pd.DataFrame(np.hstack((avel,avel_stds)), columns=avel_labels+std_labels)
+
+    return np.hstack((avel,avel_stds)), avel_labels+std_labels
+
+
+def get_angular_vel_fast(angles,
+                         angle_labels,
+                         exp_id,
+                         widths=[1,15,45],
+                         sample_freq = 90):
+    '''
+        Calculates angular velocity of previously defined angles
+        IN:
+            angles: Pandas dataframe of angles ()
+    '''
+    print("Calculating velocities of angles ... ")
+    num_ang = angles.shape[1]
+    avel = np.zeros((angles.shape[0],num_ang*len(widths)))
+    avel_stds = np.zeros(avel.shape)
+    avel_labels, std_labels = [], []
+    for _,i in enumerate(tqdm(np.unique(exp_id))):
+        ang_exp = angles[exp_id==i,:]
+        for j,width in enumerate(widths):
+            dtheta = get_frame_diff(ang_exp,time=width,idx_center=True)*sample_freq/(width*2+1)
+            avel[exp_id==i,j*num_ang:(j+1)*num_ang] = dtheta
+
+            if i == np.unique(exp_id)[0]:
+                avel_labels+=['_'.join([label.replace("ang","avel"),str(2*width+1)]) for label in angle_labels]
+                std_labels+=['_'.join([label.replace("ang","avel_std"),str(2*width+1)]) for label in angle_labels]
+
+        dtheta = get_frame_diff(ang_exp,time=1,idx_center=False)*sample_freq
+        for j,width in enumerate(widths):
+            avel_stds[exp_id==j,j*num_ang:(j+1)*num_ang] = np.std(rolling_window(dtheta, 2*width+1),axis=-1)
 
     # avel_feats = pd.DataFrame(np.hstack((avel,avel_stds)), columns=avel_labels+std_labels)
 
@@ -334,7 +567,7 @@ def wavelet(features,
     widths = w0*sample_freq/(2*freq*np.pi)
     wlet_feats = np.zeros((features.shape[0],len(freq)*features.shape[1]))
 
-    wlet_labels = ['_'.join(['wlet',label,str(f)]) for label in labels for f in freq]
+    wlet_labels = ['_'.join(['wlet',label,str(np.round(f,2))]) for label in labels for f in freq]
 
     for i in np.unique(exp_id):
         print("Calculating wavelets for video " + str(i))
@@ -417,27 +650,4 @@ def standard_scale(features,
     features = features/feat_std[feat_std!=0]
     labels = [label for i, label in enumerate(labels) if feat_std[i]!=0]
 
-    return features, labels
-
-def save_h5(features,
-            labels,
-            path):
-    '''
-        Writes to h5 file
-    '''
-    hf = h5py.File(path, 'w')
-    hf.create_dataset('features', data=features)
-    str_dtype = h5py.special_dtype(vlen=str)
-    hf.create_dataset('labels', data=labels, dtype=str_dtype)
-    hf.close()
-    return
-
-def read_h5(path):
-    '''
-        Reads h5 file
-    '''
-    hf = h5py.File(path,'r')
-    features = np.array(hf.get('features'))
-    labels = np.array(hf.get('labels'), dtype=str).tolist()
-    hf.close()
     return features, labels
