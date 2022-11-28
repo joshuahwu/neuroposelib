@@ -9,16 +9,18 @@ from embed import Watershed, Embed
 import pickle
 import analysis
 
-analysis_key = 'ensemble_16'
-paths = read.config('../configs/path_configs/' + analysis_key + '.yaml')
-params = read.config('../configs/param_configs/fitsne.yaml')
-connectivity = read.connectivity(path = paths['skeleton_path'], 
-                                 skeleton_name = paths['skeleton_name'])
+analysis_key = "ensemble_16"
+paths = read.config("../configs/path_configs/" + analysis_key + ".yaml")
+params = read.config("../configs/param_configs/fitsne.yaml")
+connectivity = read.connectivity(
+    path=paths["skeleton_path"], skeleton_name=paths["skeleton_name"]
+)
 
-pose, id, meta, meta_by_frame = read.pose_from_meta(path = paths['meta_path'],
-                                                    connectivity = connectivity)
+pose, id, meta, meta_by_frame = read.pose_from_meta(
+    path=paths["meta_path"], connectivity=connectivity
+)
 
-# pose, vid_id = read.pose(paths['pose_path'], 
+# pose, vid_id = read.pose(paths['pose_path'],
 #                           connectivity,
 #                           paths['exp_key'])
 
@@ -76,8 +78,8 @@ pose, id, meta, meta_by_frame = read.pose_from_meta(path = paths['meta_path'],
 # data_obj.pose, data_obj.id = read.pose_h5(paths['data_path'] + 'pose_fixed_aligned.h5',paths['exp_key'])
 
 # # Calculating velocities and standard deviation of velocites over windows
-# abs_vel, abs_vel_labels  = get_velocities_fast(data_obj.pose, 
-#                                           vid_id, 
+# abs_vel, abs_vel_labels  = get_velocities_fast(data_obj.pose,
+#                                           vid_id,
 #                                           connectivity.joint_names,
 #                                           joints=[0,4,5])
 
@@ -89,7 +91,7 @@ pose, id, meta, meta_by_frame = read.pose_from_meta(path = paths['meta_path'],
 
 # # Getting relative velocities
 # rel_vel, rel_vel_labels = get_velocities_fast(pose,
-#                                          vid_id, 
+#                                          vid_id,
 #                                          connectivity.joint_names,
 #                                          joints=np.delete(np.arange(18),4))
 
@@ -131,8 +133,8 @@ pose, id, meta, meta_by_frame = read.pose_from_meta(path = paths['meta_path'],
 
 # # del features, labels
 
-# wlet_feats, wlet_labels = wavelet(pc_feats, 
-#                                   pc_labels, 
+# wlet_feats, wlet_labels = wavelet(pc_feats,
+#                                   pc_labels,
 #                                   data_obj.id,
 #                                   sample_freq = 90,
 #                                   freq = np.linspace(0.5,25,25),
@@ -174,7 +176,9 @@ pose, id, meta, meta_by_frame = read.pose_from_meta(path = paths['meta_path'],
 
 # print("Writing Data Object to pickle")
 # data_obj.write_pickle(''.join([paths['out_path'],params['label'],'/']))
-data_obj = pickle.load(open(''.join([paths['out_path'],params['label'],'/datastruct.p']),'rb'))
+data_obj = pickle.load(
+    open("".join([paths["out_path"], params["label"], "/datastruct.p"]), "rb")
+)
 
 # vis.density(data_obj.ws.density, data_obj.ws.borders,
 #             filepath = ''.join([paths['out_path'],params['label'],'/density.png']),show=False)
@@ -198,7 +202,10 @@ data_obj = pickle.load(open(''.join([paths['out_path'],params['label'],'/datastr
 # vis.heuristics(features, labels, data_obj, heur.HEURISTICS_DICT[paths['skeleton_name']],
 #                     filepath = paths['out_path']+params['label'])
 
-vis.labeled_watershed(data_obj.ws.watershed_map, paths['out_path']+params['label']+'/behavior_labels.csv')
+vis.labeled_watershed(
+    data_obj.ws.watershed_map,
+    paths["out_path"] + params["label"] + "/behavior_labels.csv",
+)
 
 # import pdb; pdb.set_trace()
 
