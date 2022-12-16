@@ -101,26 +101,26 @@ def elastic_net_cv(freq: np.ndarray, y: np.ndarray, filepath: str):
     pred_y = np.zeros(y.shape)
     # pred_y2 = np.zeros(y.shape)
     for i in tqdm(range(len(y))):
-        regr = ElasticNetCV(n_alphas=100, l1_ratio=[.1, .5, .7, .9, .95, .99, 1],
+        regr = ElasticNetCV(n_alphas=25, l1_ratio=[.1, .5, .7, .9, .95, .99, 1],
                             cv=5)
 
         temp_lesion = np.delete(freq, i, axis=0)
         scaler = StandardScaler().fit(temp_lesion)
 
-        regr.fit(scaler.transform(temp_lesion), np.log2(np.delete(y, i)))
+        regr.fit(scaler.transform(temp_lesion), np.delete(y, i))
         pred_y[i] = regr.predict(scaler.transform(freq[i, :][None, :]))
         # pred_y2[i] = regr.predict(scaler.transform(freq2[i,:][None, :]))
 
-    sns.set(rc={'figure.figsize':(6,5)})
-    f = plt.figure()
-    # import pdb; pdb.set_trace()
-    plt.plot(np.linspace(y.min(), y.max(), 100), np.linspace(y.min(),y.max(),100), markersize=0, color='k', label="y = x")
-    plt.legend(loc="upper center")
-    plt.scatter(y, 2**pred_y, s=30)
-    plt.xlabel("Real Fluorescence")
-    plt.ylabel("Predicted Fluorescence")
-    plt.savefig("".join([filepath, "elastic.png"]))
-    plt.close()
+    # sns.set(rc={'figure.figsize':(6,5)})
+    # f = plt.figure()
+    # # import pdb; pdb.set_trace()
+    # plt.plot(np.linspace(y.min(), y.max(), 100), np.linspace(y.min(),y.max(),100), markersize=0, color='k', label="y = x")
+    # plt.legend(loc="upper center")
+    # plt.scatter(y, pred_y, s=30)
+    # plt.xlabel("Real Fluorescence")
+    # plt.ylabel("Predicted Fluorescence")
+    # plt.savefig("".join([filepath, "elastic.png"]))
+    # plt.close()
 
     # plt.plot(np.linspace(y.min(), y.max(), 100), np.linspace(y.min(),y.max(),100), markersize=0, color='k', label="y = x")
     # plt.legend(loc="upper center")
@@ -130,8 +130,8 @@ def elastic_net_cv(freq: np.ndarray, y: np.ndarray, filepath: str):
     # plt.savefig("".join([filepath, "elastic_healthy_same_coeff.png"]))
     # plt.close()
 
-    print("R2 Score " + str(r2_score(y, 2**pred_y)))
-    return pred_y, 
+    print("R2 Score " + str(r2_score(y, pred_y)))
+    return pred_y, r2_score(y,pred_y)
 
 
 def random_forest(freq: np.ndarray, y: np.ndarray, filepath: str):

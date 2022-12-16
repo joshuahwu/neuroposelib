@@ -236,7 +236,7 @@ def density(
     f = plt.figure()
     ax = f.add_subplot(111)
     if ws_borders is not None:
-        ax.plot(ws_borders[:, 0], ws_borders[:, 1], ".r", markersize=0.1)
+        ax.plot(ws_borders[:, 0], ws_borders[:, 1], ".k", markersize=0.1)
     ax.imshow(density)
     ax.set_xticks([])
     ax.set_yticks([])

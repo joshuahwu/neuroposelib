@@ -1,13 +1,13 @@
-from features import *
-import DataStruct as ds
-import visualization as vis
-import interface as itf
+from ..src.features import *
+import ..src.DataStruct as ds
+import ..src.visualization as vis
+import ..src.interface as itf
 import numpy as np
 import time
-import read, write
-from embed import Watershed, Embed
+import ..src.read, ..src.write
+from ..src.embed import Watershed, Embed
 import pickle
-import analysis
+import ..src.analysis
 
 analysis_key = "histology_no24"
 paths = read.config("../configs/path_configs/" + analysis_key + ".yaml")

@@ -195,7 +195,7 @@ vis.cluster_freq_cond(data_obj, cat1 = 'Condition', cat2 = 'AnimalID', filepath=
 #     plt.savefig("".join([paths["out_path"], params["label"], "/cluster_fluor/cluster_", str(i),".png"]))
 #     plt.close()
 
-# analysis.elastic_net_cv(lesion_freqs, scores, "".join([paths["out_path"], params["label"], "/test_"]))
+analysis.elastic_net_cv(lesion_freqs, scores, "".join([paths["out_path"], params["label"], "/test_"]))
 # analysis.elastic_net(freq[data_obj.meta["Condition"] == "Baseline"], scores, "".join([paths["out_path"], params["label"], "/healthy_log_"]))
 # analysis.elastic_net(lesion_freqs, scores, "".join([paths["out_path"], params["label"], "/healthy_log_"]))
 # print("All Done")
