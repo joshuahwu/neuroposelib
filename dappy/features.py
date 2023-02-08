@@ -460,10 +460,10 @@ def get_velocities_fast(
     widths=[1, 15, 45],
     abs_val=False,
     sample_freq=90,
-    std = True,
+    std=True,
 ):
     """
-    Returns absolute velocity, as well as x, y, and z velocities over varying widths 
+    Returns absolute velocity, as well as x, y, and z velocities over varying widths
     Takes distance at (t+width) from (t-width)
     Also returns the standard deviation of these velocities over varying widths
     IN:
@@ -527,7 +527,7 @@ def get_velocities_fast(
                     exp_id == i, j * len(joints) * 4 : (j + 1) * len(joints) * 4
                 ] = np.std(rolling_window(dv, 2 * width + 1), axis=-1)
 
-                if i==np.unique(exp_id)[0]:
+                if i == np.unique(exp_id)[0]:
                     std_labels += [
                         "_".join(
                             [tag, "vel_std", ax, joint_names[joint], str(2 * width + 1)]
@@ -564,7 +564,7 @@ def get_ego_pose(pose, joint_names):
     return pose, labels
 
 
-def get_angles(pose, link_pairs):
+def get_euler_angles(pose, link_pairs):
     """
     Calculates 3 angles for pairs of linkage vectors
     Angles calculated are those between projections of each vector onto the 3 xyz planes
@@ -576,7 +576,7 @@ def get_angles(pose, link_pairs):
 
     ** Currently doing unsigned
     """
-    print("Calculating joint angles ... ")
+    print("Calculating joint angles - Euler ... ")
     angles = np.zeros((pose.shape[0], len(link_pairs), 3))
     feat_labels = []
     plane_dict = {"xy": [0, 1], "xz": [0, 2], "yz": [1, 2]}
@@ -606,6 +606,23 @@ def get_angles(pose, link_pairs):
 
     angles = np.reshape(angles, (angles.shape[0], angles.shape[1] * angles.shape[2]))
     # angles = pd.DataFrame(angles, columns=feat_labels)
+    return angles, feat_labels
+
+
+def get_angles(pose, link_pairs):
+    angles = np.zeros((pose.shape[0], len(link_pairs)))
+    feat_labels = []
+    print("Calculating joint angles ... ")
+    for i, pair in enumerate(tqdm(link_pairs)):
+        v1 = pose[:, pair[0], :] - pose[:, pair[1], :]  # Calculate vectors
+        v2 = pose[:, pair[2], :] - pose[:, pair[1], :]
+        # import pdb; pdb.set_trace()
+        v1_u = v1 / np.linalg.norm(v1, axis=1)[..., None] # Unit vectors
+        v2_u = v2 / np.linalg.norm(v2, axis=1)[..., None]
+
+        angles[:, i] = np.arccos(np.clip(np.sum(v1_u * v2_u, axis=1), -1, 1))
+
+        feat_labels += ["_".join(["ang"] + [str(i) for i in pair])]
     return angles, feat_labels
 
 
@@ -716,6 +733,7 @@ def get_head_angular(pose, exp_id, widths=[5, 10, 50], link=[0, 3, 4]):
 
     return angular_vel
 
+
 def wavelet(
     features, labels, exp_id, sample_freq=90, freq=np.linspace(1, 25, 25), w0=5
 ):
@@ -822,18 +840,19 @@ def pca(
 
     return pca_feats, pc_labels
 
-def remove_edge_ids(id:np.array, size:int):
+
+def remove_edge_ids(id: np.array, size: int):
     ind = np.arange(len(id))
     unsorted_unique = id[np.sort(np.unique(id, return_index=True)[1])]
 
     for i, label in enumerate(unsorted_unique):
-        if i==0:
-            ind_out = ind[id==label][size:-size]
+        if i == 0:
+            ind_out = ind[id == label][size:-size]
         else:
-            ind_out = np.append(ind_out, ind[id==label][size:-size])
+            ind_out = np.append(ind_out, ind[id == label][size:-size])
 
-    assert len(ind_out) == len(id) - len(unsorted_unique)*2*size
-        
+    assert len(ind_out) == len(id) - len(unsorted_unique) * 2 * size
+
     return ind_out
 
 
@@ -844,7 +863,7 @@ def standard_scale(features, labels, clip=None):
     if clip is None:
         features = features / feat_std[feat_std != 0]
     else:
-        features = np.clip(features/feat_std[feat_std!=0],-clip, clip)
+        features = np.clip(features / feat_std[feat_std != 0], -clip, clip)
     labels = [label for i, label in enumerate(labels) if feat_std[i] != 0]
 
     return features, labels

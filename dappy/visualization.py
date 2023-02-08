@@ -270,38 +270,40 @@ def density_cat(
         density = watershed.fit_density(
             embed_vals, new=False
         )  # Fit density on old axes
+        col_i = i % n_col
+        row_i = int(i/n_col)
         if n_rows == 1:
-            ax_arr[i % n_col].imshow(density)  # scp.special.softmax(density))
+            ax_arr[col_i].imshow(density)  # scp.special.softmax(density))
 
             if watershed is not None:
-                ax_arr[i % n_col].plot(
+                ax_arr[col_i].plot(
                     watershed.borders[:, 0],
                     watershed.borders[:, 1],
                     ".k",
                     markersize=0.1,
                 )
-            ax_arr[i % n_col].set_aspect(0.9)
-            ax_arr[i % n_col].set_title(label)
-            ax_arr[i % n_col].set_xlabel("t-SNE 1")
-            ax_arr[i % n_col].set_ylabel("t-SNE 2")
-            ax_arr[i % n_col].set_xticks([])
-            ax_arr[i % n_col].set_yticks([])
+            ax_arr[col_i].set_aspect(0.9)
+            ax_arr[col_i].set_title(label)
+            ax_arr[col_i].set_xlabel("t-SNE 1")
+            ax_arr[col_i].set_ylabel("t-SNE 2")
+            ax_arr[col_i].set_xticks([])
+            ax_arr[col_i].set_yticks([])
         else:
-            ax_arr[int(i / n_col), i % n_col].imshow(scp.special.softmax(density))
+            ax_arr[int(i / n_col), col_i].imshow(scp.special.softmax(density))
 
             if watershed is not None:
-                ax_arr[int(i / n_col), i % n_col].plot(
+                ax_arr[row_i, col_i].plot(
                     watershed.borders[:, 0],
                     watershed.borders[:, 1],
                     ".k",
                     markersize=0.1,
                 )
-            ax_arr[int(i / n_col), i % n_col].set_aspect(0.9)
-            ax_arr[int(i / n_col), i % n_col].set_title(label)
-            ax_arr[int(i / n_col), i % n_col].set_xlabel("t-SNE 1")
-            ax_arr[int(i / n_col), i % n_col].set_ylabel("t-SNE 2")
-            ax_arr[int(i / n_col), i % n_col].set_xticks([])
-            ax_arr[int(i / n_col), i % n_col].set_yticks([])
+            ax_arr[row_i, col_i].set_aspect(0.9)
+            ax_arr[row_i, col_i].set_title(label)
+            ax_arr[row_i, col_i].set_xlabel("t-SNE 1")
+            ax_arr[row_i, col_i].set_ylabel("t-SNE 2")
+            ax_arr[row_i, col_i].set_xticks([])
+            ax_arr[row_i, col_i].set_yticks([])
     f.tight_layout()
     plt.savefig(filepath, dpi=200)
     if show:
