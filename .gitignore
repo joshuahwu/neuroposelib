@@ -31,10 +31,12 @@ $RECYCLE.BIN/
 *.pyc
 *./dappy/__pycache__/
 
+!/tutorials
+/tutorials/*
+!/tutorials/tutorial.ipynb
+
 !configs/param_configs/fitsne.yaml
 !configs/path_configs/example_path.yaml
-./tutorials/*
-!./tutorials/tutorial.ipynb
 
 # Windows shortcuts
 *.lnk
