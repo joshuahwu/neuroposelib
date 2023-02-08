@@ -9,6 +9,7 @@ from embed import Watershed, Embed
 import pickle
 import analysis
 
+test = 0
 analysis_key = "embedding_analysis_ws_r01"
 paths = read.config("../configs/path_configs/" + analysis_key + ".yaml")
 params = read.config("../configs/param_configs/fitsne.yaml")
