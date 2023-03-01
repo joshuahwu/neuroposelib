@@ -52,7 +52,7 @@ def scatter_by_cat(
     data: np.ndarray,
     cat: np.ndarray,
     label: str,
-    marker_size: int = 3,
+    size = 3,
     color = None,
     filepath: str = "./",
 ):
@@ -62,7 +62,7 @@ def scatter_by_cat(
     if color == None:
         color = palette
     ax = sns.scatterplot(
-        x=data[:, 0], y=data[:, 1], marker=".", hue=cat, palette= color, s=marker_size
+        x=data[:, 0], y=data[:, 1], marker=".", hue=cat, palette= color, s=size,
     )
     ax.set(xlabel="t-SNE 1", ylabel="t-SNE 2")
     ax.set_box_aspect(0.8)
@@ -655,11 +655,11 @@ def skeleton_vid3D_cat(
 
             print(sampled_points)
             # import pdb; pdb.set_trace()
-            skeleton_vid3D_single(
+            skeleton_vid3D(
                 data,
                 # label=label,
                 frames=sampled_points,
-                N_FRAMES=100,
+                N_FRAMES=300,
                 VID_NAME="".join([column, "_", str(label), ".mp4"]),
                 SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
             )

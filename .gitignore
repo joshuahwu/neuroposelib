@@ -35,6 +35,10 @@ $RECYCLE.BIN/
 /tutorials/*
 !/tutorials/tutorial.ipynb
 
+/dappy/wandb/
+/dappy/models/
+/dappy/artifcats/
+
 !configs/param_configs/fitsne.yaml
 !configs/path_configs/example_path.yaml
 

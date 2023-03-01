@@ -108,7 +108,7 @@ def features_mat(
     return features, id, frames_with_good_tracking
 
 
-def pose(path: str, connectivity, exp_key: Optional[str] = None):
+def pose(path: str, connectivity):
 
     try:
         f = h5py.File(path)["predictions"]
@@ -134,17 +134,16 @@ def pose(path: str, connectivity, exp_key: Optional[str] = None):
 
         pose_3d = np.append(pose_3d, joint_preds, axis=1)
 
-    if exp_key:
-        ids = np.squeeze(
-            hdf5storage.loadmat(path, variable_names=[exp_key])[exp_key].astype(int)
+    return pose_3d
+
+def ids(path, key):
+    ids = np.squeeze(
+            hdf5storage.loadmat(path, variable_names=[key])[key].astype(int)
         )
 
-        if np.min(ids) != 0:
-            ids -= np.min(ids)
-
-        return pose_3d, ids
-    else:
-        return pose_3d
+    if np.min(ids) != 0:
+        ids -= np.min(ids)
+    return ids
 
 
 def connectivity(path: str, skeleton_name: str):

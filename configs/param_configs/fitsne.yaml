@@ -5,7 +5,7 @@ analysis: 'embed'
 downsample: 10
 
 column: 'Condition'
-density_by_column: ['Condition','AnimalID']
+density_by_column: ['Condition','id']
 
 filter_still: False
 

@@ -130,6 +130,7 @@ class Embed:
             )
             embed_vals = tsne.fit_transform(features)
         elif method == "fitsne":
+            # https://github.com/KlugerLab/pyFIt-SNE
             print("Running FLtSNE")
             embed_vals = fitsne.FItSNE(
                 features.astype(np.double), perplexity=perplexity, learning_rate=lr
