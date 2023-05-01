@@ -3,7 +3,7 @@ import numpy as np
 import h5py
 import hdf5storage
 import matplotlib.pyplot as plt
-from typing import Optional, Union, List, Tuple
+from typing import Optional, Union, List, Tuple, Type
 import yaml
 
 
@@ -160,36 +160,58 @@ class DataStruct:
 
 class Connectivity:
     """
-    Class for storing joint and linkage settings for dannce pose estimations
+    Class for storing keypoint and linkage settings for 3D pose estimation skeletons
     """
 
     def __init__(
         self,
-        joint_names: Optional[List[str]] = [None],
-        colors: Optional[List[Tuple[float, float, float, float]]] = [None],
-        links: Optional[List[Tuple[int, int]]] = [None],
-        angles: Optional[List[Tuple[int, int, int]]] = [None],
+        joint_names: List[str],
+        colors: Union[np.ndarray, List[Tuple[float, float, float, float]]],
+        links: Union[np.ndarray, List[Tuple[int, int]]],
+        angles: Union[np.ndarray, List[Tuple[int, int, int]]],
     ):
+        """Initializes instance of Connectivity class
+
+        Parameters
+        ----------
+        joint_names : List[str]
+            List of names of all joints/keypoints in skeleton.
+        colors : Union[np.ndarray, List[Tuple[float, float, float, float]]]
+            RGB+A color values by which to plot each linkage.
+        links : Union[np.ndarray, List[Tuple[int, int]]]
+            Identifies skeletal links between joints/keypoints by index within joint_names
+        angles : Union[np.ndarray, List[Tuple[int, int, int]]]
+            Designations of 3 joints between which a vector angle is formed. Middle value indicates
+             common point from which 2 vectors are formed.
+        """
 
         self.joint_names = joint_names
+        self.colors = self._check_type(colors, np.float32)
+        self.links = self._check_type(links, np.uint16)
+        self.angles = self._check_type(angles, np.uint16)
 
-        conn_dict = {"links": links, "colors": colors}
+    def _check_type(
+        self,
+        in_arr: Union[np.ndarray, List[Tuple]],
+        dtype: Type[Union[np.float32, np.uint16]],
+    ):
+        """Checks the type of input and converts to NumPy array of desired data type
 
-        self.conn_df = pd.DataFrame(data=conn_dict)
-        self.angles = angles
+        Parameters
+        ----------
+        in_arr : Union[np.ndarray, List[Tuple]]
+            Input to convert.
+        dtype : Type[Union[np.float32, np.uint16]]
+            Data type to which input should be converted.
 
-    @property
-    def links(self):
-        return list(self.conn_df["links"])
-
-    @links.setter
-    def links(self, links: List[Tuple[int, int]]):
-        self.conn_df["links"] = links
-
-    @property
-    def colors(self):
-        return list(self.conn_df["colors"])
-
-    @colors.setter
-    def colors(self, colors: List[Tuple[float, float, float, float]]):
-        self.conn_df["colors"] = colors
+        Returns
+        -------
+        np.ndarray(dtype=dtype)
+            NumPy array with specified data type.
+        """
+        if isinstance(in_arr, list):
+            return np.array(in_arr, dtype=dtype)
+        elif in_arr.dtype != dtype:
+            return in_arr.astype(dtype)
+        else:
+            return in_arr

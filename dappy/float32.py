@@ -12,32 +12,28 @@ import analysis
 analysis_key = "embedding_analysis_ws_r01"
 paths = read.config("../configs/path_configs/" + analysis_key + ".yaml")
 params = read.config("../configs/param_configs/fitsne.yaml")
-# connectivity = read.connectivity(
-#     path=paths["skeleton_path"], skeleton_name=paths["skeleton_name"]
-# )
+connectivity = read.connectivity(
+    path=paths["skeleton_path"], skeleton_name=paths["skeleton_name"]
+)
 
-# # pose= read.pose(paths['pose_path'],
-# #                 connectivity)
-# vid_id = read.ids(paths['pose_path'], key=paths['exp_key'])
+pose= read.pose_mat(paths['pose_path'],
+                connectivity)
 
-# meta, meta_by_frame = read.meta(paths['meta_path'],
-#                                 id = vid_id)
+vid_id = read.ids(paths['pose_path'], key=paths['exp_key'])
 
-# data_obj = ds.DataStruct(#pose = pose,
-#                          id = vid_id,
-#                          id_full = vid_id,
-#                          meta = meta,
-#                          meta_by_frame = meta_by_frame,
-#                          connectivity = connectivity)
+meta, meta_by_frame = read.meta(paths['meta_path'],
+                                id = vid_id)
 
-# # # Separate videos have rotated floor planes - this rotates them back
-# # data_obj.pose = align_floor(pose, vid_id)
+# Separate videos have rotated floor planes - this rotates them back
+pose_dec = align_floor(pose)
+# pose_orig = align_floor_by_id(pose, vid_id)
+import pdb; pdb.set_trace()
+write.pose_h5(pose,vid_id,paths['data_path'] + 'pose_aligned32.h5')
 
-# # write.pose_h5(pose,vid_id,paths['exp_key'], paths['data_path'] + 'pose_aligned.h5')
+pose, vid_id = read.pose_h5(paths['data_path'] + 'pose_aligned32.h5')
 
-# data_obj.pose, data_obj.id = read.pose_h5(paths['data_path'] + 'pose_aligned.h5',paths['exp_key'])
-
-# # pose = median_filter(pose,vid_id,filter_len=5) # Regular median filter
+pose = median_filter(pose,vid_id,filter_len=5) # Regular median filter
+import pdb; pdb.set_trace()
 # # pose = z_filter(pose, vid_id, threshold=2000)#, connectivity = connectivity)
 # # pose = vel_filter(pose,vid_id,threshold=100)#,max_iter=10, connectivity = connectivity) # Finds location of high velocity, removes, and interpolates value
 

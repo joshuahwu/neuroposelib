@@ -101,14 +101,17 @@ def elastic_net_cv(freq: np.ndarray, y: np.ndarray, filepath: str):
     pred_y = np.zeros(y.shape)
     # pred_y2 = np.zeros(y.shape)
     for i in tqdm(range(len(y))):
-        regr = ElasticNetCV(n_alphas=25, l1_ratio=[.1, .5, .7, .9, .95, .99, 1],
-                            cv=5)
+        # Predict single from the rest
+        regr = ElasticNetCV(n_alphas=50, l1_ratio=[.1, .5, .7, .9, .95, .99, 1],
+                            cv=10)
 
         temp_lesion = np.delete(freq, i, axis=0)
         scaler = StandardScaler().fit(temp_lesion)
 
         regr.fit(scaler.transform(temp_lesion), np.delete(y, i))
         pred_y[i] = regr.predict(scaler.transform(freq[i, :][None, :]))
+         #TODO: Check convergence issue
+         #TODO: Try dropping PDb8 from r^2 calculation
         # pred_y2[i] = regr.predict(scaler.transform(freq2[i,:][None, :]))
 
     # sns.set(rc={'figure.figsize':(6,5)})
@@ -171,7 +174,7 @@ def pairwise_cosine(cluster_freq: np.ndarray, filepath: str):
     sns.set(rc={'figure.figsize':(6,5)})
     cond_1 = paired_cosine[:num_subjects, :num_subjects][tri_ind]
     cond_2 = paired_cosine[num_subjects:, num_subjects:][tri_ind]
-    import pdb; pdb.set_trace()
+
     data = np.append(cond_1, cond_2)
     labels = np.empty(data.shape, dtype=object)
     labels[: len(cond_1)] = "Baseline"

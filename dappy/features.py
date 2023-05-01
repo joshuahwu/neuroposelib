@@ -5,11 +5,30 @@ from scipy.spatial.transform import Rotation as R
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.decomposition import IncrementalPCA
-from typing import Optional, Union, List, Tuple
+from typing import Optional, Union, List, Tuple, Type
 import pandas as pd
 from tqdm import tqdm
 from scipy.interpolate import CubicSpline, splprep, splev
 import visualization as vis
+import functools
+
+def pose_by_id(func):
+    @functools.wraps(func)
+    def wrapper(pose, id, **kwargs):
+        for _, i in enumerate(tqdm(np.unique(id))):
+            pose_exp = pose[id == i,:,:]
+            pose[id == i ,:,:] = func(pose_exp, **kwargs)
+        return pose
+    return wrapper
+
+# @pose_by_id
+# def align_floor_by_id(pose: np.ndarray,
+#     # id:Union[np.ndarray, List],
+#     foot_id: Optional[int] = 12,
+#     head_id: Optional[int] = 0,
+#     dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,):
+#     return align_floor(pose = pose,foot_id = foot_id, head_id=head_id, dtype=dtype)
+
 
 
 def vel_filter(
@@ -60,7 +79,7 @@ def vel_filter(
     return pose
 
 
-def z_filter(pose, exp_id, threshold: float = 2500, connectivity=None):
+def z_filter(pose: np.ndarray, exp_id: Union[np.ndarray, List], threshold: float = 2500, connectivity=None):
     """
     Uses the z value to
     """
@@ -115,11 +134,27 @@ def z_filter(pose, exp_id, threshold: float = 2500, connectivity=None):
     return pose
 
 
-def median_filter(pose, exp_id, filter_len: int = 5):
+def median_filter(pose: np.ndarray, id:Union[np.ndarray, List], filter_len: int = 5):
+    """_summary_
+
+    Parameters
+    ----------
+    pose : np.ndarray
+        _description_
+    id : Union[np.ndarray, List]
+        _description_
+    filter_len : int, optional
+        _description_, by default 5
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
     print("Applying Median Filter")
-    for _, i in enumerate(tqdm(np.unique(exp_id))):
-        pose_exp = pose[exp_id == i, :, :]
-        pose[exp_id == i, :, :] = scp.ndimage.median_filter(
+    for _, i in enumerate(tqdm(np.unique(id))):
+        pose_exp = pose[id == i, :, :]
+        pose[id == i, :, :] = scp.ndimage.median_filter(
             pose_exp, (filter_len, 1, 1)
         )
 
@@ -189,12 +224,81 @@ def get_frame_diff(x: np.ndarray, time: int, idx_center: bool = True):
 
     return diff
 
-
+@pose_by_id
 def align_floor(
+    pose: np.ndarray,
+    foot_id: Optional[int] = 12,
+    head_id: Optional[int] = 0,
+    dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
+):
+    """
+    Due to calibration, predictions may be rotated on different axes
+    Rotates floor to same x-y plane per video
+    IN:
+        pose: 3d matrix of (#frames x #joints x #coords)
+        exp_id: Video ids per frame
+        foot_id: ID of foot to find floor
+    OUT:
+        pose_rot: Floor aligned poses (#frames x #joints x #coords)
+    """
+    print("Fitting and rotating the floor for each video to alignment ... ")
+    # scp.ndimage.median_filter(pose_exp,(filter_len,1,1))
+
+    # Initial calculation of plane to find outlier values
+    [xy, z] = [pose[:, foot_id, :2], pose[:, foot_id, 2]]
+    const = np.ones((pose.shape[0], 1))
+    coeff = np.linalg.lstsq(np.append(xy, const, axis=1), z, rcond=None)[0]
+    z_diff = (
+        pose[:, foot_id, 0] * coeff[0]
+        + pose[:, foot_id, 1] * coeff[1]
+        + coeff[2]
+    ) - pose[:, foot_id, 2]
+    z_mean = np.mean(z_diff)
+    z_range = np.std(z_diff) * np.float32(1.5)
+    mid_foot_vals = np.where(
+        (z_diff > z_mean - z_range) & (z_diff < z_mean + z_range)
+    )[
+        0
+    ]  # Removing outlier values of foot
+
+    # Recalculating plane with outlier values removed
+    [xy, z] = [
+        pose[mid_foot_vals, foot_id, :2],
+        pose[mid_foot_vals, foot_id, 2],
+    ]
+    const = np.ones((xy.shape[0], 1))
+    coeff = np.linalg.lstsq(np.append(xy, const, axis=1), z, rcond=None)[0]
+
+    # Calculating rotation matrices
+    un = np.array([-coeff[0], -coeff[1], 1]) / np.linalg.norm(
+        [-coeff[0], -coeff[1], 1]
+    )
+    vn = np.array([0, 0, 1])
+    theta = np.arccos(np.clip(np.dot(un, vn), -1, 1))
+    rot_vec = np.cross(un, vn) / np.linalg.norm(np.cross(un, vn)) * theta
+    rot_mat = R.from_rotvec(rot_vec).as_matrix().astype(dtype)
+    rot_mat = np.expand_dims(rot_mat, axis=2).repeat(
+        pose.shape[0] * pose.shape[1], axis=2
+    )
+    pose[:, :, 2] -= coeff[2]  # Fixing intercept to zero
+    # Rotating
+    pose_rot = np.einsum(
+        "jki,ik->ij", rot_mat, np.reshape(pose, (-1, 3))
+    ).reshape(pose.shape)
+
+    ## Checking to make sure snout is on average above the feet
+    assert np.mean(pose_rot[:, head_id, 2]) > np.mean(
+        pose_rot[:, foot_id, 2]
+    )  # checking head is above foot
+
+    return pose_rot
+
+def align_floor_by_id(
     pose: np.ndarray,
     exp_id: Union[List, np.ndarray],
     foot_id: Optional[int] = 12,
     head_id: Optional[int] = 0,
+    dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
     plot_folder: Optional[str] = None,
 ):
     """
@@ -223,7 +327,7 @@ def align_floor(
             + coeff[2]
         ) - pose_exp[:, foot_id, 2]
         z_mean = np.mean(z_diff)
-        z_range = np.std(z_diff) * 1.5
+        z_range = np.std(z_diff) * np.float32(1.5)
         mid_foot_vals = np.where(
             (z_diff > z_mean - z_range) & (z_diff < z_mean + z_range)
         )[
@@ -245,12 +349,11 @@ def align_floor(
         vn = np.array([0, 0, 1])
         theta = np.arccos(np.clip(np.dot(un, vn), -1, 1))
         rot_vec = np.cross(un, vn) / np.linalg.norm(np.cross(un, vn)) * theta
-        rot_mat = R.from_rotvec(rot_vec).as_matrix()
+        rot_mat = R.from_rotvec(rot_vec).as_matrix().astype(dtype)
         rot_mat = np.expand_dims(rot_mat, axis=2).repeat(
             pose_exp.shape[0] * pose_exp.shape[1], axis=2
         )
         pose_exp[:, :, 2] -= coeff[2]  # Fixing intercept to zero
-
         # Rotating
         pose_rot[exp_id == i, :, :] = np.einsum(
             "jki,ik->ij", rot_mat, np.reshape(pose_exp, (-1, 3))

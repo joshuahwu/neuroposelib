@@ -1,14 +1,14 @@
 import yaml
 import h5py
 import hdf5storage
-from typing import Optional, Union, List, Tuple
+from typing import Optional, Union, List, Tuple, Type
 import pandas as pd
 import numpy as np
 from DataStruct import Connectivity
 from tqdm import tqdm
 
 
-def config(path, config_params: Optional[List[str]] = None):
+def config(path: str):
     """
     Read configuration file and set instance attributes
     based on key, value pairs in the config file
@@ -18,21 +18,6 @@ def config(path, config_params: Optional[List[str]] = None):
     OUT:
         config_dict - Dict of path variables to data in config file
     """
-    # if config_params == 'paths_config':
-    #     config_params = ['feature_path','pose_path','meta_path','out_path',
-    #                      'skeleton_path','skeleton_name',
-    #                      'exp_key']
-    # elif config_params == 'params_config':
-    #     config_params =
-
-    # with open(filepath) as f:
-    #     config_dict = yaml.safe_load(f)
-
-    # for key in config_params:
-    #     if key not in config_dict:
-    #         config_dict[key]=None
-
-    # return config_dict
 
     with open(path) as f:
         config_dict = yaml.safe_load(f)
@@ -74,7 +59,7 @@ def features_mat(
         analysis_path,
         variable_names=["jt_features", "frames_with_good_tracking", "tsnegranularity"],
     )
-    features = analysisstruct["jt_features"]
+    features = analysisstruct["jt_features"].astype(np.float32)
 
     try:
         frames_with_good_tracking = (
@@ -108,7 +93,28 @@ def features_mat(
     return features, id, frames_with_good_tracking
 
 
-def pose(path: str, connectivity):
+def pose_mat(
+    path: str,
+    connectivity: Connectivity,
+    dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,
+):
+    """Reads 3D pose data from .mat files.
+
+
+    Parameters
+    ----------
+    path : str
+        Path to pose `.mat` file.
+    connectivity : Connectivity
+        Connectivity object containing keypoint/joint/skeleta information.
+    dtype : Optional[Type[Union[np.float64, np.float32]]], optional
+        , by default np.float32
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
 
     try:
         f = h5py.File(path)["predictions"]
@@ -120,26 +126,27 @@ def pose(path: str, connectivity):
         mat_v7 = False
         total_frames = max(np.shape(f[0][0][0]))
 
-    pose_3d = np.empty((total_frames, 0, 3))
+    pose = np.empty((total_frames, 0, 3), dtype=dtype)
     for key in connectivity.joint_names:
         print(key)
         try:
             if mat_v7:
-                joint_preds = np.expand_dims(np.array(f[key]).T, axis=1)
+                joint_preds = np.expand_dims(
+                    np.array(f[key], dtype=dtype).T, axis=1
+                )
             else:
-                joint_preds = np.expand_dims(f[key][0][0], axis=1)
+                joint_preds = np.expand_dims(f[key][0][0].astype(dtype), axis=1)
         except:
             print("Could not find ", key, " in preds")
             continue
 
-        pose_3d = np.append(pose_3d, joint_preds, axis=1)
+        pose = np.append(pose, joint_preds, axis=1)
 
-    return pose_3d
+    return pose
 
-def ids(path, key):
-    ids = np.squeeze(
-            hdf5storage.loadmat(path, variable_names=[key])[key].astype(int)
-        )
+
+def ids(path: str, key: str):
+    ids = np.squeeze(hdf5storage.loadmat(path, variable_names=[key])[key].astype(int))
 
     if np.min(ids) != 0:
         ids -= np.min(ids)
@@ -147,7 +154,20 @@ def ids(path, key):
 
 
 def connectivity(path: str, skeleton_name: str):
+    """_summary_
 
+    Parameters
+    ----------
+    path : str
+        Path to skeleton/connectivity Python file.
+    skeleton_name : str
+        Name of skeleton type to load in.
+
+    Returns
+    -------
+    connectivity: Connectivity object
+        Connectivity class object containing designated skeleton information
+    """
     if path.endswith(".py"):
         import importlib.util
 
@@ -167,27 +187,56 @@ def connectivity(path: str, skeleton_name: str):
     return connectivity
 
 
-def features_h5(path):
-    """
-    Reads h5 file for features and labels
+def features_h5(path,dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32):
+    """ Reads feature array from an `.h5` file.
+
+    Parameters
+    ----------
+    path : str
+        Path to file.
+    dtype : Optional[Type[Union[np.float64, np.float32]]], optional
+        Desired data type of feature array. Can only be `np.float64` or `np.float32`, by default `np.float32`
+
+    Returns
+    -------
+    features: np.ndarray
+        2D array of features (# frames x # features).
+    labels: List[str]
+        List of labels for each column of features.
     """
     hf = h5py.File(path, "r")
-    features = np.array(hf.get("features"))
+    features = np.array(hf.get("features"),dtype=dtype)
     labels = np.array(hf.get("labels"), dtype=str).tolist()
     hf.close()
     print("Features loaded at path " + path)
     return features, labels
 
 
-def pose_h5(path, exp_key):
+def pose_h5(path:str, dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,):
+    """ Reads 3D poses from an `.h5` file.
+
+    Parameters
+    ----------
+    path : str
+        Path to file.
+    dtype : Optional[Type[Union[np.float64, np.float32]]], optional
+        Desired data type of pose array. Can only be `np.float64` or `np.float32`, by default `np.float32`
+
+    Returns
+    -------
+    pose : np.ndarray
+        NumPy array of 3D pose values of shape (# frames x # joints x 3 coordinates).
+    id : np.ndarray
+        Id label for each frame in pose, e.g. video id.
+    """
     hf = h5py.File(path, "r")
-    pose = np.array(hf.get("pose"))
-    id = np.array(hf.get(exp_key))
+    pose = np.array(hf.get("pose"),dtype=dtype)
+    id = np.array(hf.get("id"),dtype=np.int)
     hf.close()
     return pose, id
 
 
-def heuristics(path):
+def heuristics(path:str):
     import importlib.util
 
     mod_spec = importlib.util.spec_from_file_location("heuristics", path)
@@ -195,17 +244,18 @@ def heuristics(path):
     mod_spec.loader.exec_module(heur)
     return heur
 
-def pose_from_meta(path, connectivity):
+
+def pose_from_meta(path: str, connectivity: Connectivity, dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,):
     """
     IN:
         path: path to metadata.csv file
     """
     meta = pd.read_csv(path)
-    merged_pose = np.empty((0, len(connectivity.joint_names), 3))
+    merged_pose = np.empty((0, len(connectivity.joint_names), 3),dtype=dtype)
     id = np.empty((0))
     for i, row in tqdm(meta.iterrows()):
         pose_path = row["ClusterDirectory"]
-        meta_pose = pose(pose_path, connectivity, exp_key=None)
+        meta_pose = pose_mat(pose_path, connectivity, dtype=dtype)
         merged_pose = np.append(merged_pose, meta_pose, axis=0)
         id = np.append(id, i * np.ones((meta_pose.shape[0])))
 

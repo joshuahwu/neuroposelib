@@ -708,15 +708,15 @@ def skeleton_vid3D_expanded(
 
     # compute 3d grid limits
     offset = 50
-    x_lim1, x_lim2 = (
+    x_min, x_max = (
         np.min(pose_3d[:, :, 0]) - offset,
         np.max(pose_3d[:, :, 0]) + offset,
     )
-    y_lim1, y_lim2 = (
+    y_min, y_max = (
         np.min(pose_3d[:, :, 1]) - offset,
         np.max(pose_3d[:, :, 1]) + offset,
     )
-    z_lim1, z_lim2 = (
+    z_min, z_max = (
         np.minimum(0, np.min(pose_3d[:, :, 2])),
         np.max(pose_3d[:, :, 2]) + 10,
     )
@@ -791,8 +791,8 @@ def skeleton_vid3D_expanded(
                 ]
                 ax_3d.plot3D(xs, ys, zs, c=color, lw=2)
 
-            ax_3d.set_xlim(x_lim1, x_lim2)
-            ax_3d.set_ylim(y_lim1, y_lim2)
+            ax_3d.set_xlim(x_min, x_max)
+            ax_3d.set_ylim(y_min, y_max)
             ax_3d.set_zlim(0, 150)
             ax_3d.set_xlabel("x")
             ax_3d.set_ylabel("y")
@@ -811,10 +811,33 @@ def skeleton_vid3D_expanded(
     plt.close()
     return 0
 
+def get_3d_limits(pose: np.ndarray,
+                  offset: int = 50):
+    
+
+    # compute 3d grid limits
+    offset = 50
+    x_min, x_max = (
+        np.min(pose[:, :, 0]) - offset,
+        np.max(pose[:, :, 0]) + offset,
+    )
+    y_min, y_max = (
+        np.min(pose[:, :, 1]) - offset,
+        np.max(pose[:, :, 1]) + offset,
+    )
+
+    limits = np.append(np.min(pose[:,:,:],axis=(0,1))[:,None],
+              np.max(pose[:,:,:],axis=(0,1))[:,None],axis=1)
+    limits[:-1,:] += [-offset,offset] # add offset to xy limits
+    limits[2,0] = np.minimum(0,limits[2,0]) # z-min
+    limits[2,1] += 10 # z-max offset
+
+    return limits
+
 
 def skeleton_vid3D(
-    data: Union[ds.DataStruct, np.ndarray],
-    connectivity: Optional[ds.Connectivity] = None,
+    pose: np.ndarray,
+    connectivity: ds.Connectivity,
     frames: List = [3000, 100000, 500000],
     N_FRAMES: int = 300,
     fps: int = 90,
@@ -823,26 +846,14 @@ def skeleton_vid3D(
     SAVE_ROOT: str = "./test/skeleton_vids/",
 ):
 
-    if isinstance(data, ds.DataStruct):
-        preds = data.pose
-        connectivity = data.connectivity
-    else:
-        preds = data
-
-    if connectivity is None:
-        skeleton_name = "mouse" + str(preds.shape[1])
-        connectivity = Connectivity().load(
-            "../../CAPTURE_data/skeletons.py", skeleton_name=skeleton_name
-        )
 
     START_FRAME = np.array(frames) - int(N_FRAMES / 2) + 1
     COLOR = connectivity.colors * len(frames)
     links = connectivity.links
     links_expand = links
-    # total_frames = N_FRAMES*len(frames)#max(np.shape(f[list(f.keys())[0]]))
 
     ## Expanding connectivity for each frame to be visualized
-    num_joints = max(max(links)) + 1
+    num_joints = np.max(links) + 1
     for i in range(len(frames) - 1):
         next_con = [
             (x + (i + 1) * num_joints, y + (i + 1) * num_joints) for x, y in links
@@ -856,26 +867,14 @@ def skeleton_vid3D(
     # get dannce predictions
     pose_3d = np.empty((0, num_joints, 3))
     for start in START_FRAME:
-        pose_3d = np.append(pose_3d, preds[start : start + N_FRAMES, :, :], axis=0)
-
-    # compute 3d grid limits
-    offset = 50
-    x_lim1, x_lim2 = (
-        np.min(pose_3d[:, :, 0]) - offset,
-        np.max(pose_3d[:, :, 0]) + offset,
-    )
-    y_lim1, y_lim2 = (
-        np.min(pose_3d[:, :, 1]) - offset,
-        np.max(pose_3d[:, :, 1]) + offset,
-    )
-    z_lim1, z_lim2 = (
-        np.minimum(0, np.min(pose_3d[:, :, 2])),
-        np.max(pose_3d[:, :, 2]) + 10,
-    )
+        pose_3d = np.append(pose_3d, pose[start : start + N_FRAMES, :, :], axis=0)
 
     # set up video writer
     # metadata = dict(title='dannce_visualization', artist='Matplotlib')
-    writer = FFMpegWriter(fps=fps)  # , metadata=metadata)
+    writer = FFMpegWriter(fps=fps/4)  # , metadata=metadata)
+
+    limits = get_3d_limits(pose_3d,
+                  offset = 50)
 
     # Setup figure
     fig = plt.figure(figsize=(12, 12))
@@ -904,14 +903,14 @@ def skeleton_vid3D(
                 ]
                 ax_3d.plot3D(xs, ys, zs, c=color, lw=2)
 
-            ax_3d.set_xlim(x_lim1, x_lim2)
-            ax_3d.set_ylim(y_lim1, y_lim2)
-            ax_3d.set_zlim(0, 150)
+            ax_3d.set_xlim(*limits[0,:])
+            ax_3d.set_ylim(*limits[1,:])
+            ax_3d.set_zlim(* limits[2,:])
             ax_3d.set_title("3D Tracking")
             ax_3d.set_xlabel("x")
             ax_3d.set_ylabel("y")
             # ax_3d.set_aspect('equal')
-            ax_3d.set_box_aspect([1, 1, 0.4])
+            ax_3d.set_box_aspect(limits[:,1]-limits[:,0])
 
             # grab frame and write to vid
             writer.grab_frame()
@@ -968,15 +967,15 @@ def skeleton_vid3D_single(
 
     # compute 3d grid limits
     offset = 50
-    x_lim1, x_lim2 = (
+    x_min, x_max = (
         np.min(pose_3d[:, :, 0]) - offset,
         np.max(pose_3d[:, :, 0]) + offset,
     )
-    y_lim1, y_lim2 = (
+    y_min, y_max = (
         np.min(pose_3d[:, :, 1]) - offset,
         np.max(pose_3d[:, :, 1]) + offset,
     )
-    z_lim1, z_lim2 = (
+    z_min, z_max = (
         np.minimum(0, np.min(pose_3d[:, :, 2])),
         np.max(pose_3d[:, :, 2]) + 10,
     )
@@ -1013,8 +1012,8 @@ def skeleton_vid3D_single(
                 ]
                 ax_3d.plot3D(xs, ys, zs, c=color, lw=3)
 
-            # ax_3d.set_xlim(x_lim1, x_lim2)
-            # ax_3d.set_ylim(y_lim1, y_lim2)
+            # ax_3d.set_xlim(x_min, x_max)
+            # ax_3d.set_ylim(y_min, y_max)
             # ax_3d.set_zlim(0, 150)
             # ax_3d.set_title("3D Tracking")
             # ax_3d.set_xlabel("x")
@@ -1079,15 +1078,15 @@ def skeleton_vid3D_features(
 
     # compute 3d grid limits
     offset = 10
-    x_lim1, x_lim2 = (
+    x_min, x_max = (
         np.min(pose_3d[:, :, 0]) - offset,
         np.max(pose_3d[:, :, 0]) + offset,
     )
-    y_lim1, y_lim2 = (
+    y_min, y_max = (
         np.min(pose_3d[:, :, 1]) - offset,
         np.max(pose_3d[:, :, 1]) + offset,
     )
-    z_lim1, z_lim2 = (
+    z_min, z_max = (
         np.minimum(0, np.min(pose_3d[:, :, 2])),
         np.max(pose_3d[:, :, 2]) + 10,
     )
@@ -1137,8 +1136,8 @@ def skeleton_vid3D_features(
                 ]
                 ax_3d.plot3D(xs, ys, zs, c=color, lw=2)
 
-            ax_3d.set_xlim(x_lim1, x_lim2)
-            ax_3d.set_ylim(y_lim1, y_lim2)
+            ax_3d.set_xlim(x_min, x_max)
+            ax_3d.set_ylim(y_min, y_max)
             ax_3d.set_zlim(0, 150)
             ax_3d.set_xlabel("x")
             ax_3d.set_ylabel("y")
