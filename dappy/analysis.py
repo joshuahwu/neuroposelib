@@ -11,6 +11,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score
 from sklearn.ensemble import RandomForestRegressor
 import seaborn as sns
+from embed import Watershed
+
+from scipy.spatial import distance
 
 
 def cluster_freq_from_data(data: np.ndarray, watershed):
@@ -209,3 +212,56 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray):
     cos_sim = np.sum(a * b, axis=1) / (norm_a * norm_b)
 
     return cos_sim
+
+
+## Calculating Jensen Shannon distance between binned segments of videos
+def bin_embed_distance(
+    values: np.ndarray,
+    meta: Union[np.ndarray, List],
+    augmentation: Union[np.ndarray, List],
+    time_bins: int = 100,
+    hist_bins: int = 100,
+    hist_range: Optional[np.ndarray] = None,
+):
+    dist_js = np.zeros(len(augmentation)-1)
+    dist_med, dist_mse = np.zeros(len(dist_js)), np.zeros(len(dist_js))
+    for i in range(len(augmentation)):
+        vals_aug = values[meta == augmentation[i]]
+        remainder = vals_aug.shape[0] % time_bins
+
+        if remainder == 0:
+            bin_aug = vals_aug.reshape((time_bins, -1, 2))
+        else:
+            bin_aug = vals_aug[:-remainder,...].reshape((time_bins, -1, 2))
+
+        stacked_hist = np.empty((0, hist_bins**2))
+        for j in range(time_bins):
+            stacked_hist = np.append(
+                stacked_hist,
+                np.histogram2d(
+                    bin_aug[j, :, 0],
+                    bin_aug[j, :, 1],
+                    bins=[hist_bins, hist_bins],
+                    range=hist_range,
+                    density=True,
+                )[0].reshape((1, -1)),
+                axis=0,
+            )
+
+        if i == 0:
+            vals_base = vals_aug
+            hist_base = stacked_hist
+        else:
+            # import pdb; pdb.set_trace()
+            dist_js[i-1] = np.mean(
+                np.array(
+                    [
+                        distance.jensenshannon(stacked_hist[i, :], hist_base[i, :])
+                        for i in range(time_bins)
+                    ]
+                )
+            )
+            # dist_mse[i-1] = np.sum((vals_base - vals_aug) ** 2) / len(vals_base)
+            # dist_med[i-1] = np.sqrt(np.sum((vals_base - vals_aug) ** 2)) / len(vals_base)
+
+    return dist_js#, dist_mse, dist_med

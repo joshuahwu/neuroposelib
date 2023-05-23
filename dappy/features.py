@@ -400,7 +400,8 @@ def center_spine(pose, keypt_idx=4):
     return pose - np.expand_dims(pose[:, keypt_idx, :], axis=1)
 
 
-def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False):
+def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False,
+                 dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32):
     """
     Centers mid spine to (0,0,0) and aligns spine_m -> spine_f to x-z plane
     IN:
@@ -445,7 +446,7 @@ def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False):
             and pose_rot[:, keypt_idx[1], 2].min() > -1e-5
         )
 
-    return pose_rot
+    return pose_rot.astype(dtype)
 
 
 def get_lengths(pose, linkages):
@@ -868,7 +869,6 @@ def pca(
     method="ipca",
 ):
     print("Calculating principal components ... ")
-    import time
 
     # Initializing the PCA method
     if method.startswith("torch"):

@@ -231,7 +231,7 @@ def pose_h5(path:str, dtype: Optional[Type[Union[np.float64, np.float32]]] = np.
     """
     hf = h5py.File(path, "r")
     pose = np.array(hf.get("pose"),dtype=dtype)
-    id = np.array(hf.get("id"),dtype=np.int)
+    id = np.array(hf.get("id"),dtype=np.int16)
     hf.close()
     return pose, id
 
