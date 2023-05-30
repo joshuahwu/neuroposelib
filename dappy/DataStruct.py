@@ -38,7 +38,6 @@ class DataStruct:
         self.data = data
         self.meta = meta
         self.connectivity = connectivity
-        self.meta_by_frame = meta_by_frame
 
         if (id is not None) or ("id" not in self.data):
             self.id = id
@@ -55,7 +54,7 @@ class DataStruct:
             self.id_full = id_full
         else:
             self.id_full = self.id
-
+        self.meta_by_frame = meta_by_frame
         # import pdb; pdb.set_trace()
 
     def __getitem__(self, idx):

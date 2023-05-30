@@ -9,7 +9,7 @@ from typing import Optional, Union, List, Tuple, Type
 import pandas as pd
 from tqdm import tqdm
 from scipy.interpolate import CubicSpline, splprep, splev
-import visualization as vis
+# import visualization as vis
 import functools
 
 def pose_by_id(func):
