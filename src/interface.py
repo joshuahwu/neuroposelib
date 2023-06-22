@@ -1,12 +1,10 @@
 from DataStruct import DataStruct
 import visualization as vis
 from embed import Watershed, BatchEmbed, Embed
-import tsnecuda as tc
 import os
-import hdf5storage
 from sklearn.decomposition import PCA
 import numpy as np
-from typing import Optional, Union, List, Tuple
+from typing import Union, List
 import yaml
 
 

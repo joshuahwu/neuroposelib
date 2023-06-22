@@ -3,10 +3,10 @@ import time
 import sys
 import math
 import os
-import DataStruct as ds
+from dappy import DataStruct as ds
 from typing import Optional, Union, List
 import faiss
-import tsnecuda as tc
+# import tsnecuda as tc
 import fitsne
 import umap
 import tqdm
@@ -115,20 +115,20 @@ class Embed:
         if method == "tsne_cuda":
             print("Running CUDA tSNE")
 
-            if lr == "auto":
-                lr = int(features.shape[0] / 12)
+            # if lr == "auto":
+            #     lr = int(features.shape[0] / 12)
 
-            if perplexity == "auto":
-                perplexity = max(int(features.shape[0] / 100), 30)
+            # if perplexity == "auto":
+            #     perplexity = max(int(features.shape[0] / 100), 30)
 
-            tsne = tc.TSNE(
-                n_iter=n_iter,
-                verbose=2,
-                num_neighbors=n_neighbors,
-                perplexity=perplexity,
-                learning_rate=lr,
-            )
-            embed_vals = tsne.fit_transform(features)
+            # tsne = tc.TSNE(
+            #     n_iter=n_iter,
+            #     verbose=2,
+            #     num_neighbors=n_neighbors,
+            #     perplexity=perplexity,
+            #     learning_rate=lr,
+            # )
+            # embed_vals = tsne.fit_transform(features)
         elif method == "fitsne":
             # https://github.com/KlugerLab/pyFIt-SNE
             print("Running FLtSNE")

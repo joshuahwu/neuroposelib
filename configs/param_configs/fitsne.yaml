@@ -2,10 +2,10 @@ label: 'fitsne'
 
 analysis: 'embed'
 
-downsample: 5
+downsample: 10
 
 column: 'Condition'
-density_by_column: ['id']
+density_by_column: ['label']
 
 filter_still: False
 
@@ -13,7 +13,7 @@ single_embed:
   method: 'fitsne'
   perplexity: 50
   lr: 'auto'
-  sigma: 17
+  sigma: 15
 
 transform_embed: 
   method: 'knn'

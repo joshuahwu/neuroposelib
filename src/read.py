@@ -4,7 +4,7 @@ import hdf5storage
 from typing import Optional, Union, List, Tuple, Type
 import pandas as pd
 import numpy as np
-from DataStruct import Connectivity
+from dappy.DataStruct import Connectivity
 from tqdm import tqdm
 
 
@@ -25,7 +25,7 @@ def config(path: str):
     return config_dict
 
 
-def meta(path, id: Optional[List[Union[str, int]]] = None):
+def meta(path, id: List[Union[str, int]]):
 
     meta = pd.read_csv(path)
     meta_by_frame = meta.iloc[id].reset_index().rename(columns={"index": "id"})
@@ -234,6 +234,17 @@ def pose_h5(path:str, dtype: Optional[Type[Union[np.float64, np.float32]]] = np.
     id = np.array(hf.get("id"),dtype=np.int16)
     hf.close()
     return pose, id
+
+def features_extended_h5(path: str, meta_dtype: Optional[Type] = str, dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,):
+    hf = h5py.File(path, "r")
+    features = np.array(hf.get("features"),dtype=dtype)
+    labels = np.array(hf.get("labels"), dtype=str).tolist()
+    id = np.array(hf.get("id"),dtype=np.int16)
+    meta = np.array(hf.get("meta"), dtype=meta_dtype).tolist()
+    clusters = np.array(hf.get("clusters"),dtype=np.int16)
+    hf.close()
+    print("Extended features loaded at path " + path)
+    return features, labels, id, meta, clusters
 
 
 def heuristics(path:str):

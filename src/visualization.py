@@ -15,9 +15,9 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 from typing import Optional, Union, List
 
-import DataStruct as ds
-from embed import Watershed, GaussDensity
-import analysis
+from dappy import DataStruct as ds
+from dappy.embed import Watershed, GaussDensity
+from dappy.analysis import cluster_freq_by_cat
 
 palette = [
     (1, 0.5, 0),
@@ -414,7 +414,7 @@ def cluster_freq(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=False)
         ["_".join([label1, label2]) for label1, label2 in zip(cat1_labels, cat2_labels)]
     )
 
-    freq, combined_keys = analysis.cluster_freq_by_cat(
+    freq, combined_keys = cluster_freq_by_cat(
         data_obj.data["Cluster"].values, cat=combined_labels
     )
 
@@ -520,7 +520,7 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
         ["_".join([label1, label2]) for label1, label2 in zip(cat1_labels, cat2_labels)]
     )
 
-    freq, combined_keys = analysis.cluster_freq_by_cat(
+    freq, combined_keys = cluster_freq_by_cat(
         data_obj.data["Cluster"].values, cat=combined_labels
     )
 
@@ -807,26 +807,20 @@ def skeleton_vid3D_expanded(
     return 0
 
 
-def get_3d_limits(pose: np.ndarray, offset: int = 50):
+def get_3d_limits(pose: np.ndarray):
     # compute 3d grid limits
-    offset = 50
-    x_min, x_max = (
-        np.min(pose[:, :, 0]) - offset,
-        np.max(pose[:, :, 0]) + offset,
-    )
-    y_min, y_max = (
-        np.min(pose[:, :, 1]) - offset,
-        np.max(pose[:, :, 1]) + offset,
-    )
-
     limits = np.append(
-        np.min(pose[:, :, :], axis=(0, 1))[:, None],
-        np.max(pose[:, :, :], axis=(0, 1))[:, None],
+        np.min(pose, axis=(0, 1))[:, None],
+        np.max(pose, axis=(0, 1))[:, None],
         axis=1,
     )
-    limits[:-1, :] += [-offset, offset]  # add offset to xy limits
+
+    distance = (limits[:,1] - limits[:,0])*0.05
+    offset = np.array([-distance, distance]).T
+    offset[2,0] = 0
+    limits += offset
+
     limits[2, 0] = np.minimum(0, limits[2, 0])  # z-min
-    limits[2, 1] += 10  # z-max offset
 
     return limits
 
@@ -908,6 +902,7 @@ def skeleton_vid3D(
             # grab frame and write to vid
             writer.grab_frame()
             ax_3d.clear()
+        fig.tight_layout
 
     plt.close()
     return 0

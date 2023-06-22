@@ -1,8 +1,8 @@
-from features import *
-import DataStruct as ds
+from dappy.features import *
+from dappy import DataStruct as ds
 import numpy as np
-import read, write
-from embed import Watershed, Embed
+from dappy import read, write
+from dappy.embed import Watershed, Embed
 from pathlib import Path
 
 
@@ -49,7 +49,7 @@ def run(features, labels, pose, id, connectivity, paths, params, meta, meta_by_f
         feat_categories = ["ego_euc", "ang"]
 
         pc_feats, pc_labels = pca(
-            features, labels, categories=feat_categories, n_pcs=8, method="fbpca"
+            features, labels, categories=feat_categories, n_pcs=5, method="fbpca"
         )
 
         wlet_feats, wlet_labels = wavelet(
@@ -66,7 +66,7 @@ def run(features, labels, pose, id, connectivity, paths, params, meta, meta_by_f
             wlet_feats,
             wlet_labels,
             categories=["wlet_" + cat for cat in feat_categories],
-            n_pcs=8,
+            n_pcs=5,
             method="fbpca",
         )
 

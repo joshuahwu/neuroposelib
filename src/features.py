@@ -418,7 +418,7 @@ def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False,
 
     if lock_to_x:
         print("Rotating spine to x axis ... ")
-        pitch = -np.arctan2(pose[:, keypt_idx[1], 2], pose[:, keypt_idx[1], 0])
+        pitch = np.arctan2(pose[:, keypt_idx[1], 2], pose[:, keypt_idx[1], 0])
     else:
         print("Rotating spine to xz plane ... ")
         pitch = np.zeros(yaw.shape)

@@ -1,22 +1,22 @@
-from features import *
-import DataStruct as ds
-import visualization as vis
-import interface as itf
+# from dappy.features import *
+# from dappy import DataStruct as ds
+# from dappy import visualization as vis
+# from dappy import interface as itf
 import numpy as np
 from tqdm import tqdm
-from typing import Union
+from typing import Union, List, Optional
 import sklearn
 from sklearn.linear_model import ElasticNet, ElasticNetCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score
 from sklearn.ensemble import RandomForestRegressor
 import seaborn as sns
-from embed import Watershed
+from dappy.embed import Watershed
 
 from scipy.spatial import distance
 
 
-def cluster_freq_from_data(data: np.ndarray, watershed):
+def cluster_freq_from_data(data: np.ndarray, watershed: Watershed):
     """
     Gets the cluster frequency of the data
     IN:
@@ -219,7 +219,7 @@ def bin_embed_distance(
     values: np.ndarray,
     meta: Union[np.ndarray, List],
     augmentation: Union[np.ndarray, List],
-    time_bins: int = 100,
+    time_bins: int = 1000,
     hist_bins: int = 100,
     hist_range: Optional[np.ndarray] = None,
 ):
@@ -265,3 +265,27 @@ def bin_embed_distance(
             # dist_med[i-1] = np.sqrt(np.sum((vals_base - vals_aug) ** 2)) / len(vals_base)
 
     return dist_js#, dist_mse, dist_med
+
+def levenshtein(s1, s2):
+    '''
+    From https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#Python
+    '''
+    if len(s1) < len(s2):
+        return levenshtein(s2, s1)
+
+    # len(s1) >= len(s2)
+    if len(s2) == 0:
+        return len(s1)
+
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1 # j+1 instead of j since previous_row and current_row are one character longer
+            deletions = current_row[j] + 1       # than s2
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    
+    return previous_row[-1]
+
