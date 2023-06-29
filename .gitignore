@@ -42,6 +42,8 @@ $RECYCLE.BIN/
 !configs/param_configs/fitsne.yaml
 !configs/path_configs/example_path.yaml
 
+*.egg-info
+
 # Windows shortcuts
 *.lnk
 

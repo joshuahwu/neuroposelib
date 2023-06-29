@@ -26,7 +26,6 @@ def config(path: str):
 
 
 def meta(path, id: List[Union[str, int]]):
-
     meta = pd.read_csv(path)
     meta_by_frame = meta.iloc[id].reset_index().rename(columns={"index": "id"})
     meta = meta.reset_index().rename(columns={"index": "id"})
@@ -131,9 +130,7 @@ def pose_mat(
         print(key)
         try:
             if mat_v7:
-                joint_preds = np.expand_dims(
-                    np.array(f[key], dtype=dtype).T, axis=1
-                )
+                joint_preds = np.expand_dims(np.array(f[key], dtype=dtype).T, axis=1)
             else:
                 joint_preds = np.expand_dims(f[key][0][0].astype(dtype), axis=1)
         except:
@@ -187,8 +184,10 @@ def connectivity(path: str, skeleton_name: str):
     return connectivity
 
 
-def features_h5(path,dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32):
-    """ Reads feature array from an `.h5` file.
+def features_h5(
+    path, dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32
+):
+    """Reads feature array from an `.h5` file.
 
     Parameters
     ----------
@@ -205,15 +204,18 @@ def features_h5(path,dtype: Optional[Type[Union[np.float64, np.float32]]] = np.f
         List of labels for each column of features.
     """
     hf = h5py.File(path, "r")
-    features = np.array(hf.get("features"),dtype=dtype)
+    features = np.array(hf.get("features"), dtype=dtype)
     labels = np.array(hf.get("labels"), dtype=str).tolist()
     hf.close()
     print("Features loaded at path " + path)
     return features, labels
 
 
-def pose_h5(path:str, dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,):
-    """ Reads 3D poses from an `.h5` file.
+def pose_h5(
+    path: str,
+    dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,
+):
+    """Reads 3D poses from an `.h5` file.
 
     Parameters
     ----------
@@ -230,24 +232,29 @@ def pose_h5(path:str, dtype: Optional[Type[Union[np.float64, np.float32]]] = np.
         Id label for each frame in pose, e.g. video id.
     """
     hf = h5py.File(path, "r")
-    pose = np.array(hf.get("pose"),dtype=dtype)
-    id = np.array(hf.get("id"),dtype=np.int16)
+    pose = np.array(hf.get("pose"), dtype=dtype)
+    id = np.array(hf.get("id"), dtype=np.int16)
     hf.close()
     return pose, id
 
-def features_extended_h5(path: str, meta_dtype: Optional[Type] = str, dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,):
+
+def features_extended_h5(
+    path: str,
+    meta_dtype: Optional[Type] = str,
+    dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,
+):
     hf = h5py.File(path, "r")
-    features = np.array(hf.get("features"),dtype=dtype)
+    features = np.array(hf.get("features"), dtype=dtype)
     labels = np.array(hf.get("labels"), dtype=str).tolist()
-    id = np.array(hf.get("id"),dtype=np.int16)
+    id = np.array(hf.get("id"), dtype=np.int16)
     meta = np.array(hf.get("meta"), dtype=meta_dtype).tolist()
-    clusters = np.array(hf.get("clusters"),dtype=np.int16)
+    clusters = np.array(hf.get("clusters"), dtype=np.int16)
     hf.close()
     print("Extended features loaded at path " + path)
     return features, labels, id, meta, clusters
 
 
-def heuristics(path:str):
+def heuristics(path: str):
     import importlib.util
 
     mod_spec = importlib.util.spec_from_file_location("heuristics", path)
@@ -256,16 +263,21 @@ def heuristics(path:str):
     return heur
 
 
-def pose_from_meta(path: str, connectivity: Connectivity, dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,):
+def pose_from_meta(
+    path: str,
+    connectivity: Connectivity,
+    key: Optional[str] = "ClusterDirectory",
+    dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,
+):
     """
     IN:
         path: path to metadata.csv file
     """
     meta = pd.read_csv(path)
-    merged_pose = np.empty((0, len(connectivity.joint_names), 3),dtype=dtype)
+    merged_pose = np.empty((0, len(connectivity.joint_names), 3), dtype=dtype)
     id = np.empty((0))
     for i, row in tqdm(meta.iterrows()):
-        pose_path = row["ClusterDirectory"]
+        pose_path = row[key]
         meta_pose = pose_mat(pose_path, connectivity, dtype=dtype)
         merged_pose = np.append(merged_pose, meta_pose, axis=0)
         id = np.append(id, i * np.ones((meta_pose.shape[0])))

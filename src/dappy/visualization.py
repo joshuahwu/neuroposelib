@@ -1,19 +1,24 @@
 import os
 import numpy as np
+
 # import scipy.io as sio
 import scipy as scp
+
 # import imageio
 import tqdm
+
 # import hdf5storage
 import pandas as pd
 import seaborn as sns
 from matplotlib.lines import Line2D
 import matplotlib
 
+from pathlib import Path
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Tuple
 
 from dappy import DataStruct as ds
 from dappy.embed import Watershed, GaussDensity
@@ -151,10 +156,9 @@ def scatter_on_watershed(
     column: str,
 ):
     labels = data.data[column].values
-
-    if not os.path.exists("".join([data.out_path, "points_by_cluster/"])):
-        os.makedirs("".join([data.out_path, "points_by_cluster/"]))
-
+    Path("".join([data.out_path, "points_by_cluster/"])).mkdir(
+        parents=True, exist_ok=True
+    )
     extent = [*watershed.hist_range[0], *watershed.hist_range[1]]
 
     f = plt.figure()
@@ -627,7 +631,7 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
     return
 
 
-def skeleton_vid3D_cat(
+def pose3D_category(
     data: ds.DataStruct,
     column: str,
     labels: Optional[List] = None,
@@ -667,7 +671,7 @@ def skeleton_vid3D_cat(
 
             print(sampled_points)
             # import pdb; pdb.set_trace()
-            skeleton_vid3D_expanded(
+            pose3D_expanded(
                 data,
                 label=label,
                 connectivity=data.connectivity,
@@ -678,7 +682,7 @@ def skeleton_vid3D_cat(
             )
 
 
-def skeleton_vid3D_expanded(
+def pose3D_expanded(
     data: Union[ds.DataStruct, np.ndarray],
     label: str,
     connectivity: Optional[ds.Connectivity] = None,
@@ -689,38 +693,9 @@ def skeleton_vid3D_expanded(
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/skeleton_vids/",
 ):
-    if isinstance(data, ds.DataStruct):
-        preds = data.pose
-        connectivity = data.connectivity
-    else:
-        preds = data
-
-    START_FRAME = np.array(frames) - int(N_FRAMES / 2) + 1
-    COLOR = np.moveaxis(
-        np.tile(connectivity.colors[..., None], len(frames)), -1, 0
-    ).reshape((-1, 4))
-    links = connectivity.links
-    links_expand = links
-    # total_frames = N_FRAMES*len(frames)#max(np.shape(f[list(f.keys())[0]]))
-
-    ## Expanding connectivity for each frame to be visualized
-    num_joints = np.max(links) + 1
-    for i in range(len(frames) - 1):
-        next_con = [
-            (x + (i + 1) * num_joints, y + (i + 1) * num_joints) for x, y in links
-        ]
-        links_expand = np.append(links_expand, np.array(next_con), axis=0)
-    save_path = os.path.join(SAVE_ROOT)
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-
-    # get dannce predictions
-    pose_3d = np.empty((0, num_joints, 3))
-    for start in START_FRAME:
-        pose_3d = np.append(pose_3d, preds[start : start + N_FRAMES, :, :], axis=0)
-
-    # compute 3d grid limits
-    limits = get_3d_limits(pose_3d, offset=50)
+    pose_3d, limits, links_expand, COLOR = _init_vid3D(
+        data, connectivity, frames, N_FRAMES, SAVE_ROOT
+    )
 
     # set up video writer
     writer = FFMpegWriter(fps=fps)
@@ -759,19 +734,19 @@ def skeleton_vid3D_expanded(
     ax_dens.set_xticks([])
     ax_dens.set_yticks([])
 
-    with writer.saving(fig, os.path.join(save_path, "vis_" + VID_NAME), dpi=dpi):
+    with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
             # grab frames
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
             kpts_3d = np.reshape(
-                pose_3d[curr_frames, :, :], (len(frames) * num_joints, 3)
+                pose_3d[curr_frames, :, :], (len(frames) * pose_3d.shape[-2], 3)
             )
 
             # plot 3d moving skeletons
             for i in range(len(np.unique(frames_meta))):
                 temp_idx = curr_frames[frames_meta == np.unique(frames_meta)[i]]
                 temp_kpts = np.reshape(
-                    [pose_3d[temp_idx, :, :]], (len(temp_idx) * num_joints, 3)
+                    [pose_3d[temp_idx, :, :]], (len(temp_idx) * pose_3d.shape[-2], 3)
                 )
                 ax_3d.scatter(
                     temp_kpts[:, 0],
@@ -815,9 +790,9 @@ def get_3d_limits(pose: np.ndarray):
         axis=1,
     )
 
-    distance = (limits[:,1] - limits[:,0])*0.05
+    distance = (limits[:, 1] - limits[:, 0]) * 0.05
     offset = np.array([-distance, distance]).T
-    offset[2,0] = 0
+    offset[2, 0] = 0
     limits += offset
 
     limits[2, 0] = np.minimum(0, limits[2, 0])  # z-min
@@ -825,18 +800,59 @@ def get_3d_limits(pose: np.ndarray):
     return limits
 
 
-def skeleton_vid3D(
+def _pose3D_frame(
+    ax_3d: matplotlib.axes.Axes,
     pose: np.ndarray,
-    connectivity: ds.Connectivity,
-    frames: List = [3000, 100000, 500000],
-    N_FRAMES: int = 300,
-    fps: int = 90,
-    dpi: int = 200,
-    VID_NAME: str = "0.mp4",
-    SAVE_ROOT: str = "./test/skeleton_vids/",
+    COLOR: np.ndarray,
+    links: np.ndarray,
+    limits: Optional[np.ndarray] = None,
 ):
-    START_FRAME = np.array(frames) - int(N_FRAMES / 2) + 1
-    COLOR = connectivity.colors * len(frames)
+    """
+    Plot single pose given a 3D matplotlib.axes.Axes object
+    """
+
+    # Plot keypoints
+    ax_3d.scatter(
+        pose[:, 0],
+        pose[:, 1],
+        pose[:, 2],
+        marker="o",
+        color="black",
+        s=30,
+        alpha=0.5,
+    )
+
+    # Plot keypoint segments
+    for color, (index_from, index_to) in zip(COLOR, links):
+        xs, ys, zs = [
+            np.array([pose[index_from, j], pose[index_to, j]]) for j in range(3)
+        ]
+        ax_3d.plot3D(xs, ys, zs, c=color, lw=4)
+
+    ax_3d.set_xlim(*limits[0, :])
+    ax_3d.set_ylim(*limits[1, :])
+    ax_3d.set_zlim(*limits[2, :])
+
+    ax_3d.set_box_aspect(limits[:, 1] - limits[:, 0])
+    return ax_3d
+
+
+def _init_vid3D(
+    data: np.ndarray,
+    connectivity: ds.Connectivity,
+    frames: np.ndarray,
+    centered: bool = True,
+    N_FRAMES: int = 150,
+    SAVE_ROOT: str = "./test/pose_vids/",
+):
+    Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
+
+    if centered:
+        frames = frames - int(N_FRAMES / 2) + 1
+
+    COLOR = np.moveaxis(
+        np.tile(connectivity.colors[..., None], len(frames)), -1, 0
+    ).reshape((-1, 4))
     links = connectivity.links
     links_expand = links
 
@@ -848,56 +864,66 @@ def skeleton_vid3D(
         ]
         links_expand = np.append(links_expand, np.array(next_con), axis=0)
 
-    save_path = os.path.join(SAVE_ROOT)
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-
     # get dannce predictions
-    pose_3d = np.empty((0, num_joints, 3))
-    for start in START_FRAME:
-        pose_3d = np.append(pose_3d, pose[start : start + N_FRAMES, :, :], axis=0)
+    pose_3d = []
+    for start in frames:
+        pose_3d += [data[start : start + N_FRAMES, ...]]
 
-    # set up video writer
-    # metadata = dict(title='dannce_visualization', artist='Matplotlib')
-    writer = FFMpegWriter(fps=fps)  # , metadata=metadata)
+    pose_3d = np.concatenate(pose_3d,axis=0)
 
-    limits = get_3d_limits(pose_3d, offset=50)
+    # compute 3d grid limits
+    limits = get_3d_limits(pose_3d)
+    return pose_3d, limits, links_expand, COLOR
 
+
+def _pose3D_arena(
+    ax_3d: matplotlib.axes.Axes,
+    data: np.ndarray,
+    COLORS: np.ndarray,
+    links: np.ndarray,
+    frames: np.ndarray,
+    limits: np.ndarray,
+    size: Tuple[int],
+    title: Optional[str] = None,
+):
+    (rows, cols) = size
+    kpts_3d = np.reshape(data[frames, :, :], (len(frames) * data.shape[-2], 3))
+
+    ax_3d = _pose3D_frame(
+        ax_3d, kpts_3d, COLORS, links, limits#, figsize=(cols * 5, rows * 5)
+    )
+
+    if title is not None:
+        ax_3d.set_title(title, fontsize=20, y=0.9)
+
+    return ax_3d
+
+
+def pose3D_arena(
+    pose: np.ndarray,
+    connectivity: ds.Connectivity,
+    frames: Union[List[int], int] = [3000, 100000, 500000],
+    centered: bool = True,
+    N_FRAMES: int = 300,
+    fps: int = 90,
+    dpi: int = 200,
+    VID_NAME: str = "0.mp4",
+    SAVE_ROOT: str = "./test/pose_vids/",
+):
+    pose_3d, limits, links, COLORS = _init_vid3D(
+        pose, connectivity, np.array(frames,dtype=int), centered, N_FRAMES, SAVE_ROOT
+    )
+
+    # Set up video writer
+    writer = FFMpegWriter(fps=fps)
     # Setup figure
-    fig = plt.figure(figsize=(12, 12))
+    figsize = (12, 12)
+    fig = plt.figure(figsize=figsize)
     ax_3d = fig.add_subplot(1, 1, 1, projection="3d")
-    with writer.saving(fig, os.path.join(save_path, "vis_" + VID_NAME), dpi=dpi):
+    with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
-            # grab frames
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
-            kpts_3d = np.reshape(
-                pose_3d[curr_frames, :, :], (len(frames) * num_joints, 3)
-            )
-
-            # plot 3d moving skeletons
-            ax_3d.scatter(
-                kpts_3d[:, 0],
-                kpts_3d[:, 1],
-                kpts_3d[:, 2],
-                marker=".",
-                color="black",
-                linewidths=0.5,
-            )
-            for color, (index_from, index_to) in zip(COLOR, links_expand):
-                xs, ys, zs = [
-                    np.array([kpts_3d[index_from, j], kpts_3d[index_to, j]])
-                    for j in range(3)
-                ]
-                ax_3d.plot3D(xs, ys, zs, c=color, lw=2)
-
-            ax_3d.set_xlim(*limits[0, :])
-            ax_3d.set_ylim(*limits[1, :])
-            ax_3d.set_zlim(*limits[2, :])
-            ax_3d.set_title("3D Tracking")
-            ax_3d.set_xlabel("x")
-            ax_3d.set_ylabel("y")
-            # ax_3d.set_aspect('equal')
-            ax_3d.set_box_aspect(limits[:, 1] - limits[:, 0])
+            ax_3d = _pose3D_arena(ax_3d, pose_3d, COLORS, links, curr_frames, limits, figsize)
 
             # grab frame and write to vid
             writer.grab_frame()
@@ -905,118 +931,93 @@ def skeleton_vid3D(
         fig.tight_layout
 
     plt.close()
-    return 0
+    return
 
 
-def skeleton_vid3D_single(
-    data: Union[ds.DataStruct, np.ndarray],
-    connectivity: Optional[ds.Connectivity] = None,
-    frames: List = [3000, 100000, 500000],
-    N_FRAMES: int = 300,
-    fps: int = 90,
-    dpi: int = 200,
-    VID_NAME: str = "0.mp4",
-    SAVE_ROOT: str = "./test/skeleton_vids/",
+def _pose3D_grid(
+    fig: plt.figure,
+    data: np.ndarray,
+    connectivity: ds.Connectivity,
+    frames: np.ndarray,
+    limits: np.ndarray,
+    size: Tuple[int],
+    labels: Optional[List[str]] = None,
 ):
-    if isinstance(data, ds.DataStruct):
-        preds = data.pose
-        connectivity = data.connectivity
-    else:
-        preds = data
+    (rows, cols) = size
+    for i, curr_frame in enumerate(frames):
+        temp_kpts = data[curr_frame, :, :]
 
-    if connectivity is None:
-        skeleton_name = "mouse" + str(preds.shape[1])
-        connectivity = Connectivity().load(
-            "../../CAPTURE_data/skeletons.py", skeleton_name=skeleton_name
+        ax_3d = fig.add_subplot(rows, cols, i + 1, projection="3d")
+        ax_3d = _pose3D_frame(
+            ax_3d,
+            temp_kpts,
+            connectivity.colors,
+            connectivity.links,
+            limits,
+            # TODO: adjust marker and line sizes w/figsize
+            # figsize=(cols * 5, rows * 5), 
         )
 
-    START_FRAME = np.array(frames) - int(N_FRAMES / 2) + 1
-    COLOR = connectivity.colors * len(frames)
-    links = connectivity.links
-    links_expand = links
-    # total_frames = N_FRAMES*len(frames)#max(np.shape(f[list(f.keys())[0]]))
+        ax_3d.grid(False)
+        ax_3d.axis(False)
+        for xyz_ax in [ax_3d.xaxis, ax_3d.yaxis, ax_3d.zaxis]:
+            xyz_ax.set_pane_color((1, 1, 1, 0))
+            xyz_ax._axinfo["grid"]["color"] = (1, 1, 1, 0)
 
-    ## Expanding connectivity for each frame to be visualized
-    num_joints = max(max(links)) + 1
-    for i in range(len(frames) - 1):
-        next_con = [
-            (x + (i + 1) * num_joints, y + (i + 1) * num_joints) for x, y in links
-        ]
-        links_expand = links_expand + next_con
+        if labels is not None:
+            ax_3d.set_title(str(labels[i]), fontsize=20, y=0.9)
 
-    save_path = os.path.join(SAVE_ROOT)
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
+    return fig
 
-    # get dannce predictions
-    pose_3d = np.empty((0, num_joints, 3))
-    for start in START_FRAME:
-        pose_3d = np.append(pose_3d, preds[start : start + N_FRAMES, :, :], axis=0)
 
-    # compute 3d grid limits
-    offset = 50
-    x_min, x_max = (
-        np.min(pose_3d[:, :, 0]) - offset,
-        np.max(pose_3d[:, :, 0]) + offset,
-    )
-    y_min, y_max = (
-        np.min(pose_3d[:, :, 1]) - offset,
-        np.max(pose_3d[:, :, 1]) + offset,
-    )
-    z_min, z_max = (
-        np.minimum(0, np.min(pose_3d[:, :, 2])),
-        np.max(pose_3d[:, :, 2]) + 10,
+def pose3D_grid(
+    pose: np.ndarray,
+    connectivity: ds.Connectivity,
+    frames: Union[List[int], int] = [3000, 100000, 5000000],
+    centered: bool = True,
+    labels: Optional[List] = None,
+    title: Optional[str] = None,
+    N_FRAMES: int = 150,
+    fps: int = 90,
+    dpi: int = 100,
+    VID_NAME: str = "0.mp4",
+    SAVE_ROOT: str = "./test/pose_vids/",
+):
+    # Reshape pose and other variables
+    pose_3d, limits, links, COLOR = _init_vid3D(
+        pose, connectivity, np.array(frames,dtype=int), centered, N_FRAMES, SAVE_ROOT
     )
 
-    # set up video writer
-    # metadata = dict(title='dannce_visualization', artist='Matplotlib')
-    writer = FFMpegWriter(fps=fps)  # , metadata=metadata)
+    # Set up video writer
+    writer = FFMpegWriter(fps=fps)
+    # Set up figure
+    cols = min(4, len(frames))
+    rows = int(len(frames) / 4)
+    figsize = (cols * 5, rows * 5)
+    fig = plt.figure(figsize=figsize)
 
-    # Setup figure
-    fig = plt.figure(figsize=(12, 12))
-    ax_3d = fig.add_subplot(1, 1, 1, projection="3d")
-    with writer.saving(fig, os.path.join(save_path, "vis_" + VID_NAME), dpi=dpi):
+    with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
-            # grab frames
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
-            kpts_3d = np.reshape(
-                pose_3d[curr_frames, :, :], (len(frames) * num_joints, 3)
+            fig = _pose3D_grid(
+                fig,
+                pose_3d,
+                connectivity,
+                curr_frames,
+                limits,
+                size=(rows, cols),
+                labels=labels,
             )
 
-            # plot 3d moving skeletons
-            ax_3d.scatter(
-                kpts_3d[:, 0],
-                kpts_3d[:, 1],
-                kpts_3d[:, 2],
-                marker=".",
-                s=200,
-                color="black",
-                linewidths=0.5,
-            )
-            for color, (index_from, index_to) in zip(COLOR, links_expand):
-                xs, ys, zs = [
-                    np.array([kpts_3d[index_from, j], kpts_3d[index_to, j]])
-                    for j in range(3)
-                ]
-                ax_3d.plot3D(xs, ys, zs, c=color, lw=3)
+            if title is not None:
+                fig.suptitle(title, fontsize=30)
 
-            # ax_3d.set_xlim(x_min, x_max)
-            # ax_3d.set_ylim(y_min, y_max)
-            # ax_3d.set_zlim(0, 150)
-            # ax_3d.set_title("3D Tracking")
-            # ax_3d.set_xlabel("x")
-            # ax_3d.set_ylabel("y")
-            # ax_3d.set_aspect('equal')
-            ax_3d.set_box_aspect([1, 1, 1])
-            ax_3d.axis("off")
-            # ax_3d.grid(b=None)
-
-            # grab frame and write to vid
+            fig.tight_layout()
             writer.grab_frame()
-            ax_3d.clear()
+            fig.clear()
 
     plt.close()
-    return 0
+    return
 
 
 def feature_hist(feature, label, filepath, range=None):
@@ -1029,9 +1030,9 @@ def feature_hist(feature, label, filepath, range=None):
     return
 
 
-def skeleton_vid3D_features(
-    pose,
-    feature,
+def pose3D_features(
+    pose: np.ndarray,
+    feature: np.ndarray,
     connectivity: Optional[ds.Connectivity] = None,
     frames: List = [3000],
     N_FRAMES: int = 150,
@@ -1040,42 +1041,9 @@ def skeleton_vid3D_features(
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/skeleton_vids/",
 ):
-    START_FRAME = np.array(frames) - int(N_FRAMES / 2) + 1
-    COLOR = connectivity.colors * len(frames)
-    links = connectivity.links
-    links_expand = links
-
-    ## Expanding connectivity for each frame to be visualized
-    num_joints = max(max(links)) + 1
-    for i in range(len(frames) - 1):
-        next_con = [
-            (x + (i + 1) * num_joints, y + (i + 1) * num_joints) for x, y in links
-        ]
-        links_expand = links_expand + next_con
-
-    save_path = os.path.join(SAVE_ROOT)
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-
-    # get dannce predictions
-    pose_3d = np.empty((0, num_joints, 3))
-    for start in START_FRAME:
-        pose_3d = np.append(pose_3d, pose[start : start + N_FRAMES, :, :], axis=0)
-        feature = feature[start : start + N_FRAMES]
-
-    # compute 3d grid limits
-    offset = 10
-    x_min, x_max = (
-        np.min(pose_3d[:, :, 0]) - offset,
-        np.max(pose_3d[:, :, 0]) + offset,
-    )
-    y_min, y_max = (
-        np.min(pose_3d[:, :, 1]) - offset,
-        np.max(pose_3d[:, :, 1]) + offset,
-    )
-    z_min, z_max = (
-        np.minimum(0, np.min(pose_3d[:, :, 2])),
-        np.max(pose_3d[:, :, 2]) + 10,
+    # Reshape pose and other variables
+    pose_3d, limits, links_expand, COLOR = _init_vid3D(
+        pose, connectivity, frames, N_FRAMES, SAVE_ROOT
     )
 
     # set up video writer
@@ -1087,7 +1055,7 @@ def skeleton_vid3D_features(
     ax_3d = fig.add_subplot(gs[0, 1], projection="3d")
     ax_trace = fig.add_subplot(gs[0, 0])
 
-    with writer.saving(fig, os.path.join(save_path, "vis_feat_" + VID_NAME), dpi=dpi):
+    with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_feat_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
             # grab frames
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES

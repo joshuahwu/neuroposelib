@@ -1,0 +1,43 @@
+[project]
+name = "dappy"
+version = "0.1_dev"
+authors = [
+  { name="Joshua H. Wu", email="joshua.wu@duke.edu" },
+]
+description = "3D Behavioral Analysis of Action Skeletons"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.8",
+]
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "scipy",
+    "pandas",
+    "sklearn",
+    "pyyaml",
+    "h5py",
+    "tqdm",
+    "umap-learn",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/joshuahwu/dappy"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+# [project.optional-dependencies]
+# docs = [
+#     "mkdocs",
+#     "mkdocstrings[python]",
+#     "mkdocs_section_index",
+#     "mkdocs_gen_files",
+#     "mkdocs_literate_nav",
+#     "mkdocs-gallery",
+# ]

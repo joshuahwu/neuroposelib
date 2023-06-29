@@ -1,47 +1,61 @@
-from features import *
-import DataStruct as ds
+import read, write, features, analysis, preprocess
 import visualization as vis
-import interface as itf
-import numpy as np
-import time
-import read, write
 from embed import Watershed, Embed
-import pickle
-import analysis
+import numpy as np
 
-analysis_key = "embedding_analysis_ws_r01"
-paths = read.config("../configs/path_configs/" + analysis_key + ".yaml")
-params = read.config("../configs/param_configs/fitsne.yaml")
+analysis_key = "ensemble_healthy"
+paths = read.config("../../configs/path_configs/" + analysis_key + ".yaml")
+
 connectivity = read.connectivity(
     path=paths["skeleton_path"], skeleton_name=paths["skeleton_name"]
 )
 
-pose= read.pose_mat(paths['pose_path'],
-                connectivity)
-
-vid_id = read.ids(paths['pose_path'], key=paths['exp_key'])
-
-meta, meta_by_frame = read.meta(paths['meta_path'],
-                                id = vid_id)
+pose, ids, meta, meta_by_frame = read.pose_from_meta(
+    paths["meta_path"],
+    connectivity=connectivity,
+    dtype=np.float32,
+    key="ClusterDirectory",
+)
+assert pose.dtype == np.float32
 
 # Separate videos have rotated floor planes - this rotates them back
-pose_dec = align_floor(pose)
-# pose_orig = align_floor_by_id(pose, vid_id)
+pose = preprocess.align_floor_by_id(pose, ids)
+assert pose.dtype == np.float32
+
+pose = preprocess.median_filter(pose, ids, filter_len=5)  # Regular median filter
+assert pose.dtype == np.float32
+
+vis.pose3D_arena(
+    pose=pose,
+    connectivity=connectivity,
+    frames=[3e4, 4e5, 8e5, 1e6],
+    centered=False,
+    N_FRAMES=100,
+    fps=90,
+    dpi=100,
+    VID_NAME="align_arena.mp4",
+    SAVE_ROOT="./test_plots/",
+)
+
+vis.pose3D_grid(
+    pose=pose,
+    connectivity=connectivity,
+    frames=[3e4, 4e5, 8e5, 1e6],
+    centered=False,
+    N_FRAMES=100,
+    fps=90,
+    dpi=100,
+    VID_NAME="align_grid.mp4",
+    SAVE_ROOT="./test_plots/",
+)
+
+# Calculating velocities and standard deviation of velocites over windows
+abs_vel, abs_vel_labels  = features.get_velocities(pose,
+                                          ids,
+                                          connectivity.joint_names,
+                                          joints=[0,4,5])
+
 import pdb; pdb.set_trace()
-write.pose_h5(pose,vid_id,paths['data_path'] + 'pose_aligned32.h5')
-
-pose, vid_id = read.pose_h5(paths['data_path'] + 'pose_aligned32.h5')
-
-pose = median_filter(pose,vid_id,filter_len=5) # Regular median filter
-import pdb; pdb.set_trace()
-# # pose = z_filter(pose, vid_id, threshold=2000)#, connectivity = connectivity)
-# # pose = vel_filter(pose,vid_id,threshold=100)#,max_iter=10, connectivity = connectivity) # Finds location of high velocity, removes, and interpolates value
-
-# # # # Calculating velocities and standard deviation of velocites over windows
-# # # abs_vel, abs_vel_labels  = get_velocities_fast(data_obj.pose,
-# # #                                           vid_id,
-# # #                                           connectivity.joint_names,
-# # #                                           joints=[0,4,5])
 
 # # # Centering all joint locations to mid-spine
 # # pose = center_spine(data_obj.pose)
@@ -193,27 +207,48 @@ data_obj = pickle.load(
 )
 
 
-vis.density(data_obj.ws.density, data_obj.ws.borders,
-            filepath = ''.join([paths['out_path'],params['label'],'/density.png']),show=False)
-vis.scatter(data_obj.embed_vals, filepath=''.join([paths['out_path'],params['label'],'/scatter.png']))
+vis.density(
+    data_obj.ws.density,
+    data_obj.ws.borders,
+    filepath="".join([paths["out_path"], params["label"], "/density.png"]),
+    show=False,
+)
+vis.scatter(
+    data_obj.embed_vals,
+    filepath="".join([paths["out_path"], params["label"], "/scatter.png"]),
+)
 
-for cat in params['density_by_column']:
-    vis.density_cat(data=data_obj, column=cat, watershed=data_obj.ws, n_col=4,
-                    filepath = ''.join([paths['out_path'],params['label'],'/density_',cat,'.png']))
+for cat in params["density_by_column"]:
+    vis.density_cat(
+        data=data_obj,
+        column=cat,
+        watershed=data_obj.ws,
+        n_col=4,
+        filepath="".join(
+            [paths["out_path"], params["label"], "/density_", cat, ".png"]
+        ),
+    )
 
 for state in range(20):
     state_bool = data_obj.data["State"].values.astype(int) == state
     sizes = [20 if is_state else 3 for is_state in state_bool]
     # import pdb; pdb.set_trace()
-    vis.scatter_by_cat(data_obj.embed_vals, 1*state_bool, color = [(0.5,0.5,0.5), (1, 0.5, 0)],size = sizes,
-                       label='state',filepath = ''.join([paths['out_path'],params['label'],'/state/',str(state),'_']))
+    vis.scatter_by_cat(
+        data_obj.embed_vals,
+        1 * state_bool,
+        color=[(0.5, 0.5, 0.5), (1, 0.5, 0)],
+        size=sizes,
+        label="state",
+        filepath="".join(
+            [paths["out_path"], params["label"], "/state/", str(state), "_"]
+        ),
+    )
 
 
 # vis.density_grid(data=data_obj,cat1='Condition',cat2='AnimalID',watershed=data_obj.ws,
 #                  filepath = ''.join([paths['out_path'],params['label'],'/density_grid.png']))
 
 # vis.skeleton_vid3D_cat(data_obj, 'Cluster', n_skeletons=10, filepath = ''.join([paths['out_path'],params['label'],'/']))
-
 
 
 # features, labels =  read.features_h5(path = paths['data_path'] + '/postural_feats.h5')

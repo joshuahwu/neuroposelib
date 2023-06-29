@@ -1,8 +1,6 @@
 import numpy as np
 import time
-import sys
-import math
-import os
+
 from dappy import DataStruct as ds
 from typing import Optional, Union, List
 import faiss
@@ -11,7 +9,7 @@ import fitsne
 import umap
 import tqdm
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
 from skimage.segmentation import watershed
 from skimage import measure
@@ -23,7 +21,7 @@ class Embed:
         self,
         n_neighbors: int = 150,
         embed_method: str = "fitsne",
-        transform_method: str = "xgboost",
+        transform_method: str = "knn",
         min_dist: float = 0.5,
         spread: float = 1.0,
         n_iter: int = 1000,
@@ -112,8 +110,8 @@ class Embed:
         if not perplexity:
             perplexity = self.perplexity
 
-        if method == "tsne_cuda":
-            print("Running CUDA tSNE")
+        # if method == "tsne_cuda":
+        #     print("Running CUDA tSNE")
 
             # if lr == "auto":
             #     lr = int(features.shape[0] / 12)
@@ -129,7 +127,7 @@ class Embed:
             #     learning_rate=lr,
             # )
             # embed_vals = tsne.fit_transform(features)
-        elif method == "fitsne":
+        if method == "fitsne":
             # https://github.com/KlugerLab/pyFIt-SNE
             print("Running FLtSNE")
             embed_vals = fitsne.FItSNE(
@@ -187,20 +185,19 @@ class Embed:
             print("Predicting using KNN")
             print(k)
             knn = KNNEmbed(k=k).fit(template, temp_embedding)
-            embed_vals = knn.predict(data, weights="distance")
+            embed_vals = knn.predict_x(data, weights="distance")
 
-        elif transform_method == "xgboost":
-            import xgboost as xgb
+        # elif transform_method == "xgboost":
+        #     import xgboost as xgb
 
-            print("Predicting using XGBoost RF")
-            print(n_trees)
-            embed_vals = np.zeros((np.shape(data)[0], 2))
-            for i in range(2):
-                embed = xgb.XGBRFRegressor(n_estimators=n_trees, verbosity=2).fit(
-                    template, temp_embedding[:, i]
-                )
-                embed_vals[:, i] = embed.predict(data)
-            # import pdb; pdb.set_trace()
+        #     print("Predicting using XGBoost RF")
+        #     print(n_trees)
+        #     embed_vals = np.zeros((np.shape(data)[0], 2))
+        #     for i in range(2):
+        #         embed = xgb.XGBRFRegressor(n_estimators=n_trees, verbosity=2).fit(
+        #             template, temp_embedding[:, i]
+        #         )
+        #         embed_vals[:, i] = embed.predict(data)
 
         elif transform_method == "sklearn_rf":
             from sklearn.ensemble import RandomForestRegressor
@@ -219,9 +216,9 @@ class BatchEmbed(Embed):
         sampling_n: int = 20,
         n_neighbors: int = 150,
         sigma: int = 15,
-        batch_method: str = "tsne_cuda",
-        embed_method: str = "tsne_cuda",
-        transform_method: str = "xgboost",
+        batch_method: str = "fitsne",
+        embed_method: str = "fitsne",
+        transform_method: str = "knn",
         min_dist: float = 0.5,
         spread: float = 1.0,
         n_iter: int = 1000,
@@ -263,18 +260,18 @@ class BatchEmbed(Embed):
         self,
         data: Union[np.ndarray, ds.DataStruct],
         batch_id: Optional[Union[np.ndarray, List[Union[int, str]]]] = None,
-        save_batchmaps: Optional[str] = None,
+        # save_batchmaps: Optional[str] = None,
         embed_temp: bool = True,
     ):
         """ """
-        if save_batchmaps:
-            import visualization as vis
+        # if save_batchmaps:
+        #     import visualization as vis
 
-            save_path = "".join([save_batchmaps, "/batch_maps/"])
-            if not os.path.exists(save_path):
-                os.makedirs(save_path)
+        #     save_path = "".join([save_batchmaps, "/batch_maps/"])
+        #     if not os.path.exists(save_path):
+        #         os.makedirs(save_path)
 
-            filename = "".join([save_path, self.embed_method])
+        #     filename = "".join([save_path, self.embed_method])
 
         self.template = np.empty((0, data.shape[1]))
         self.temp_idx = []
@@ -290,14 +287,14 @@ class BatchEmbed(Embed):
             )
             cluster_labels = ws.fit_predict(embed_vals)
 
-            if save_batchmaps:
-                ws.plot_density(
-                    filepath="".join([filename, str(batch), "_density.png"]),
-                    watershed=True,
-                )
-                vis.scatter(
-                    embed_vals, filepath="".join([filename, str(batch), "_scatter.png"])
-                )
+            # if save_batchmaps:
+            #     ws.plot_density(
+            #         filepath="".join([filename, str(batch), "_density.png"]),
+            #         watershed=True,
+            #     )
+            #     vis.scatter(
+            #         embed_vals, filepath="".join([filename, str(batch), "_scatter.png"])
+            #     )
 
             sampled_points, idx = self.__sample_clusters(
                 data_by_ID, cluster_labels, sample_size=self.sampling_n
@@ -373,32 +370,39 @@ class BatchEmbed(Embed):
         self = pickle.load(open(filepath, "rb"))
         return self
 
-
-class KNNEmbed:
+class KNNGraph:
     """
-    Using faiss to run k-Nearest Neighbors algorithm for embedding of points in 2D
-    when given high-D data and low-D embedding of template data
+    Using faiss to run k-Nearest Neighbors algorithm
     """
 
-    def __init__(self, k=5):
-        self.index = None
-        self.y = None
-        self.k = k
-
-    def fit(self, X, y):
+    def __init__(self, k: int=5):
         """
         Creates data structure for fast search of neighbors
         IN:
             X - Features of training data
             y - Training data
         """
+        self.k = k
+
+    def fit(self, X):
         self.index = faiss.IndexFlatL2(X.shape[1])
         self.index.add(np.ascontiguousarray(X, dtype=np.float32))
-        self.y = np.ascontiguousarray(y, dtype=np.float32)
 
         return self
 
-    def predict(self, X, weights="standard"):
+        
+
+class KNNEmbed(KNNGraph):
+    """
+    Using faiss to run k-Nearest Neighbors algorithm for embedding of points in 2D
+    when given high-D data and low-D embedding of template data
+    """
+    def __init__(self, k: int=5):
+        super().init(k)
+        self.distances = None
+        self.indices = None
+
+    def predict_x(self, X, y, weights="standard"):
         """
         Predicts embedding of data using KNN
         IN:
@@ -411,6 +415,7 @@ class KNNEmbed:
         distances, indices = self.index.search(
             np.ascontiguousarray(X, dtype=np.float32), k=self.k
         )
+        y = np.ascontiguousarray(y, dtype=np.float32)
         votes = self.y[indices]
 
         if weights == "distance":
@@ -426,6 +431,7 @@ class KNNEmbed:
         weights = np.repeat(np.expand_dims(weights, axis=2), 2, axis=2)
         predictions = np.sum(votes * weights, axis=1)
         return predictions
+
 
 
 class GaussDensity:
@@ -555,13 +561,13 @@ class GaussDensity:
 
         return data_in_bin
 
-    def plot_density(self, filepath: str = "./plot_folder/density.png"):
-        f = plt.figure()
-        ax = f.add_subplot(111)
-        ax.imshow(self.density)
-        ax.set_aspect("auto")
-        plt.savefig(filepath, dpi=400)
-        plt.close()
+    # def plot_density(self, filepath: str = "./plot_folder/density.png"):
+    #     f = plt.figure()
+    #     ax = f.add_subplot(111)
+    #     ax.imshow(self.density)
+    #     ax.set_aspect("auto")
+    #     plt.savefig(filepath, dpi=400)
+    #     plt.close()
 
 
 class Watershed(GaussDensity):
@@ -609,6 +615,7 @@ class Watershed(GaussDensity):
         self.watershed_map = watershed(
             -self.density, mask=self.density > self.density_thresh, watershed_line=False
         )
+        self.watershed_map[self.density < 1e-5] = 0
         self.borders = np.empty((0, 2))
 
         for i in range(1, len(np.unique(self.watershed_map))):
@@ -645,158 +652,158 @@ class Watershed(GaussDensity):
         cluster_labels = self.predict(data)
         return cluster_labels
 
-    def plot_watershed(
-        self, filepath: str = "./plot_folder/watershed.png", borders: bool = True
-    ):
-        f = plt.figure()
-        ax = f.add_subplot(111)
-        ax.imshow(self.watershed_map)
-        ax.set_aspect("auto")
-        if borders:
-            ax.plot(self.borders[:, 0], self.borders[:, 1], ".r", markersize=0.05)
-        plt.savefig("".join([filepath, "_watershed.png"]), dpi=400)
-        plt.close()
+    # def plot_watershed(
+    #     self, filepath: str = "./plot_folder/watershed.png", borders: bool = True
+    # ):
+    #     f = plt.figure()
+    #     ax = f.add_subplot(111)
+    #     ax.imshow(self.watershed_map)
+    #     ax.set_aspect("auto")
+    #     if borders:
+    #         ax.plot(self.borders[:, 0], self.borders[:, 1], ".r", markersize=0.05)
+    #     plt.savefig("".join([filepath, "_watershed.png"]), dpi=400)
+    #     plt.close()
 
-    def plot_density(
-        self, filepath: str = "./plot_folder/density.png", watershed: bool = True
-    ):
-        f = plt.figure()
-        ax = f.add_subplot(111)
-        if watershed:
-            ax.plot(self.borders[:, 0], self.borders[:, 1], ".r", markersize=0.1)
-        ax.imshow(self.density)
-        ax.set_aspect("auto")
-        plt.savefig(filepath, dpi=400)
-        plt.close()
+    # def plot_density(
+    #     self, filepath: str = "./plot_folder/density.png", watershed: bool = True
+    # ):
+    #     f = plt.figure()
+    #     ax = f.add_subplot(111)
+    #     if watershed:
+    #         ax.plot(self.borders[:, 0], self.borders[:, 1], ".r", markersize=0.1)
+    #     ax.imshow(self.density)
+    #     ax.set_aspect("auto")
+    #     plt.savefig(filepath, dpi=400)
+    #     plt.close()
 
 
-class KFoldEmbed:
-    def __init__(
-        k_split: int = 10,
-        param_range=list(range(1, 22, 2)),
-        plot_folder: str = "./plots/",
-        watershed: bool = True,
-    ):
-        self.k_split = k_split
-        self.plot_folder = plot_folder
-        self.param = param
+# class KFoldEmbed:
+#     def __init__(
+#         k_split: int = 10,
+#         param_range=list(range(1, 22, 2)),
+#         plot_folder: str = "./plots/",
+#         watershed: bool = True,
+#     ):
+#         self.k_split = k_split
+#         self.plot_folder = plot_folder
+#         self.param = param
 
-        self.mse = []
-        self.euc = []
+#         self.mse = []
+#         self.euc = []
 
-    def run(
-        self,
-        embedder: Union[BatchEmbed, Embed],
-        param: str,
-    ):
-        """
-        param can be either k, n_tree, or
-        """
-        from sklearn.model_selection import KFold
+#     def run(
+#         self,
+#         embedder: Union[BatchEmbed, Embed],
+#         param: str,
+#     ):
+#         """
+#         param can be either k, n_tree, or
+#         """
+#         from sklearn.model_selection import KFold
 
-        print("Embedding 10-fold data")
-        template = embedder.template
-        temp_embedding = embedder.temp_embedding
-        print("Template shape: ", template.shape)
-        print("Predictions shape: ", temp_embedding.shape)
-        kf = KFold(n_splits=k_split, shuffle=True)
-        preds_max_dist = np.sqrt(
-            np.sum(
-                (np.amax(temp_embedding, axis=0) - np.amin(temp_embedding, axis=0)) ** 2
-            )
-        )
+#         print("Embedding 10-fold data")
+#         template = embedder.template
+#         temp_embedding = embedder.temp_embedding
+#         print("Template shape: ", template.shape)
+#         print("Predictions shape: ", temp_embedding.shape)
+#         kf = KFold(n_splits=k_split, shuffle=True)
+#         preds_max_dist = np.sqrt(
+#             np.sum(
+#                 (np.amax(temp_embedding, axis=0) - np.amin(temp_embedding, axis=0)) ** 2
+#             )
+#         )
 
-        metric_vals, min_metric_embedding = [], []
+#         metric_vals, min_metric_embedding = [], []
 
-        for param_val in param_range:
-            setattr(embedder, param, param_val)  # seting new param
-            print("Reembedding with ", param_val, " ", param)
-            kf_embedding = np.empty((0, 2))
-            start = time.time()
-            mse_k, euc_k = np.zeros(shape)
+#         for param_val in param_range:
+#             setattr(embedder, param, param_val)  # seting new param
+#             print("Reembedding with ", param_val, " ", param)
+#             kf_embedding = np.empty((0, 2))
+#             start = time.time()
+#             mse_k, euc_k = np.zeros(shape)
 
-            for train, test in tqdm.tqdm(kf.split(template, temp_embedding)):
-                # Embed the 90
-                kf_temp_embedding = embedder.embed(
-                    data=template[train], save_self=False
-                )
+#             for train, test in tqdm.tqdm(kf.split(template, temp_embedding)):
+#                 # Embed the 90
+#                 kf_temp_embedding = embedder.embed(
+#                     data=template[train], save_self=False
+#                 )
 
-                # Reembed the 10 using the 90
-                kf_embedding = embedder.predict(
-                    data=template[test],
-                    template=template[train],
-                    temp_embedding=kf_temp_embedding,
-                )
+#                 # Reembed the 10 using the 90
+#                 kf_embedding = embedder.predict(
+#                     data=template[test],
+#                     template=template[train],
+#                     temp_embedding=kf_temp_embedding,
+#                 )
 
-                kf_embedding = np.append(kf_embedding, reembedding, axis=0)
-                test_idx += test
+#                 kf_embedding = np.append(kf_embedding, reembedding, axis=0)
+#                 test_idx += test
 
-                mse_k[test] = (temp_embedding[test] - kf_embedding) ** 2
+#                 mse_k[test] = (temp_embedding[test] - kf_embedding) ** 2
 
-            print("Total Time K-Fold Reembedding: ", time.time() - start)
+#             print("Total Time K-Fold Reembedding: ", time.time() - start)
 
-            euc = np.mean(
-                np.sqrt(
-                    np.sum(
-                        (data_shuffled[: kf_embedding.shape[0], :2] - kf_embedding)
-                        ** 2,
-                        axis=1,
-                    )
-                )
-            )
-            mse = np.mean(
-                np.sum(
-                    (data_shuffled[: kf_embedding.shape[0], :2] - kf_embedding) ** 2,
-                    axis=1,
-                )
-            )
+#             euc = np.mean(
+#                 np.sqrt(
+#                     np.sum(
+#                         (data_shuffled[: kf_embedding.shape[0], :2] - kf_embedding)
+#                         ** 2,
+#                         axis=1,
+#                     )
+#                 )
+#             )
+#             mse = np.mean(
+#                 np.sum(
+#                     (data_shuffled[: kf_embedding.shape[0], :2] - kf_embedding) ** 2,
+#                     axis=1,
+#                 )
+#             )
 
-            curr_metric = curr_metric / max_dist
-            print(curr_metric)
+#             curr_metric = curr_metric / max_dist
+#             print(curr_metric)
 
-            print("Reembedding Metric: ", curr_metric)
+#             print("Reembedding Metric: ", curr_metric)
 
-            # if metric is empty or curr_metric is lowest so far
-            if not metric_vals or all(curr_metric < val for val in metric_vals):
-                min_metric_embedding = kf_embedding
-                min_metric_nn = nn
+#             # if metric is empty or curr_metric is lowest so far
+#             if not metric_vals or all(curr_metric < val for val in metric_vals):
+#                 min_metric_embedding = kf_embedding
+#                 min_metric_nn = nn
 
-            metric_vals += [curr_metric]
+#             metric_vals += [curr_metric]
 
-        ws = Watershed(sigma=15, max_clip=1, log_out=True, pad_factor=0.05)
-        cluster_true = ws.fit_predict(temp_embedding)
+#         ws = Watershed(sigma=15, max_clip=1, log_out=True, pad_factor=0.05)
+#         cluster_true = ws.fit_predict(temp_embedding)
 
-        cluster_preds = ws.predict(reembedding)
+#         cluster_preds = ws.predict(reembedding)
 
-        f = plt.figure()
-        plt.scatter(
-            predictions[:, 0],
-            predictions[:, 1],
-            marker=".",
-            s=3,
-            linewidths=0,
-            c="b",
-            label="Targets",
-        )
-        plt.scatter(
-            min_metric_embedding[:, 0],
-            min_metric_embedding[:, 1],
-            marker=".",
-            s=3,
-            linewidths=0,
-            c="m",
-            label="CV Predictions",
-        )
-        plt.legend()
-        plt.savefig(
-            "".join([plot_folder, "k_fold_mbed_", str(min_metric_nn), "nn.png"]),
-            dpi=400,
-        )
-        plt.close()
+#         f = plt.figure()
+#         plt.scatter(
+#             predictions[:, 0],
+#             predictions[:, 1],
+#             marker=".",
+#             s=3,
+#             linewidths=0,
+#             c="b",
+#             label="Targets",
+#         )
+#         plt.scatter(
+#             min_metric_embedding[:, 0],
+#             min_metric_embedding[:, 1],
+#             marker=".",
+#             s=3,
+#             linewidths=0,
+#             c="m",
+#             label="CV Predictions",
+#         )
+#         plt.legend()
+#         plt.savefig(
+#             "".join([plot_folder, "k_fold_mbed_", str(min_metric_nn), "nn.png"]),
+#             dpi=400,
+#         )
+#         plt.close()
 
-        f = plt.figure()
-        plt.plot(nn_range, metric_vals, marker="o", c="k")
-        plt.savefig("".join([plot_folder, "k_fold_embed_metric.png"]), dpi=400)
-        plt.close()
+#         f = plt.figure()
+#         plt.plot(nn_range, metric_vals, marker="o", c="k")
+#         plt.savefig("".join([plot_folder, "k_fold_embed_metric.png"]), dpi=400)
+#         plt.close()
 
-        return min_metric_nn
+#         return min_metric_nn
