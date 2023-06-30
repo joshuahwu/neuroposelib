@@ -227,9 +227,9 @@ def anipose_med_filt(
         )  # Median filter 5 frames repeat the ends of video
         pose_error = np.linalg.norm(pose_error, axis=-1).mean(axis=-1)
 
-        plt.hist(pose_error, bins=1000)
-        plt.savefig("../../results/interp_ensemble/err_hist" + str(i) + ".png")
-        plt.close()
+        # plt.hist(pose_error, bins=1000)
+        # plt.savefig("../../results/interp_ensemble/err_hist" + str(i) + ".png")
+        # plt.close()
 
         bad_tracking_frames = np.where(pose_error > threshold)[0]
         print(bad_tracking_frames.shape)
@@ -248,9 +248,9 @@ def anipose_med_filt(
         )  # Median filter 5 frames repeat the ends of video
         pose_error = np.linalg.norm(pose_error, axis=-1).mean(axis=-1)
 
-        plt.hist(pose_error, bins=1000)
-        plt.savefig("../../results/interp_ensemble/err_hist_post" + str(i) + ".png")
-        plt.close()
+        # plt.hist(pose_error, bins=1000)
+        # plt.savefig("../../results/interp_ensemble/err_hist_post" + str(i) + ".png")
+        # plt.close()
 
     return pose
 
@@ -258,11 +258,10 @@ def anipose_med_filt(
 def center_spine(pose, keypt_idx=4):
     print("Centering poses to mid spine ...")
     # Center spine_m to (0,0,0)
-    return pose - np.expand_dims(pose[:, keypt_idx, :], axis=1)
+    return pose - pose[:, keypt_idx: keypt_idx+1, :]
 
 
-def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False,
-                 dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32):
+def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False):
     """
     Centers mid spine to (0,0,0) and aligns spine_m -> spine_f to x-z plane
     IN:
@@ -282,14 +281,14 @@ def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False,
         pitch = np.arctan2(pose[:, keypt_idx[1], 2], pose[:, keypt_idx[1], 0])
     else:
         print("Rotating spine to xz plane ... ")
-        pitch = np.zeros(yaw.shape)
+        pitch = np.zeros(yaw.shape, dtype=pose.dtype)
 
     # Rotation matrix for pitch and yaw
     rot_mat = np.array(
         [
             [np.cos(yaw) * np.cos(pitch), -np.sin(yaw), np.cos(yaw) * np.sin(pitch)],
             [np.sin(yaw) * np.cos(pitch), np.cos(yaw), np.sin(yaw) * np.sin(pitch)],
-            [-np.sin(pitch), np.zeros(len(yaw)), np.cos(pitch)],
+            [-np.sin(pitch), np.zeros(len(yaw), dtype=pose.dtype), np.cos(pitch)],
         ]
     ).repeat(num_joints, axis=2)
     pose_rot = np.einsum("jki,ik->ij", rot_mat, np.reshape(pose, (-1, 3))).reshape(
@@ -307,4 +306,4 @@ def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False,
             and pose_rot[:, keypt_idx[1], 2].min() > -1e-5
         )
 
-    return pose_rot.astype(dtype)
+    return pose_rot

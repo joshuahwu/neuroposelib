@@ -1,21 +1,26 @@
 import read, write, features, analysis, preprocess
 import visualization as vis
 from embed import Watershed, Embed
+import DataStruct as ds
 import numpy as np
 
 analysis_key = "ensemble_healthy"
-paths = read.config("../../configs/path_configs/" + analysis_key + ".yaml")
+config = read.config("../../configs/path_configs/" + analysis_key + ".yaml")
 
 connectivity = read.connectivity(
-    path=paths["skeleton_path"], skeleton_name=paths["skeleton_name"]
+    path=config["skeleton_path"], skeleton_name=config["skeleton_name"]
 )
 
-pose, ids, meta, meta_by_frame = read.pose_from_meta(
-    paths["meta_path"],
-    connectivity=connectivity,
-    dtype=np.float32,
-    key="ClusterDirectory",
-)
+# pose, ids, meta, meta_by_frame = read.pose_from_meta(
+#     config["meta_path"],
+#     connectivity=connectivity,
+#     dtype=np.float32,
+#     key="ClusterDirectory",
+# )
+
+pose, ids = read.pose_h5(config["data_path"] + "pose_aligned.h5", dtype=np.float32)
+
+meta, meta_by_frame = read.meta(config["meta_path"], id=ids)
 assert pose.dtype == np.float32
 
 # Separate videos have rotated floor planes - this rotates them back
@@ -25,244 +30,115 @@ assert pose.dtype == np.float32
 pose = preprocess.median_filter(pose, ids, filter_len=5)  # Regular median filter
 assert pose.dtype == np.float32
 
-vis.pose3D_arena(
-    pose=pose,
-    connectivity=connectivity,
-    frames=[3e4, 4e5, 8e5, 1e6],
-    centered=False,
-    N_FRAMES=100,
-    fps=90,
-    dpi=100,
-    VID_NAME="align_arena.mp4",
-    SAVE_ROOT="./test_plots/",
-)
+# vis.pose3D_arena(
+#     pose=pose,
+#     connectivity=connectivity,
+#     frames=[3e4, 4e5, 8e5, 1e6],
+#     centered=False,
+#     N_FRAMES=100,
+#     fps=90,
+#     dpi=100,
+#     VID_NAME="align_arena.mp4",
+#     SAVE_ROOT="./test_plots/",
+# )
 
-vis.pose3D_grid(
-    pose=pose,
-    connectivity=connectivity,
-    frames=[3e4, 4e5, 8e5, 1e6],
-    centered=False,
-    N_FRAMES=100,
-    fps=90,
-    dpi=100,
-    VID_NAME="align_grid.mp4",
-    SAVE_ROOT="./test_plots/",
-)
+# vis.pose3D_grid(
+#     pose=pose,
+#     connectivity=connectivity,
+#     frames=[3e4, 4e5, 8e5, 1e6],
+#     centered=False,
+#     N_FRAMES=100,
+#     fps=90,
+#     dpi=100,
+#     VID_NAME="align_grid.mp4",
+#     SAVE_ROOT="./test_plots/",
+# )
 
 # Calculating velocities and standard deviation of velocites over windows
-abs_vel, abs_vel_labels  = features.get_velocities(pose,
-                                          ids,
-                                          connectivity.joint_names,
-                                          joints=[0,4,5])
+abs_vel, abs_vel_labels = features.get_velocities(
+    pose,
+    ids,
+    connectivity.joint_names,
+    joints=[0, 4, 5],
+    widths=[3, 31, 89],
+    abs_val=False,
+    f_s=90,
+    std=True,
+)
+assert abs_vel.dtype == np.float32
 
-import pdb; pdb.set_trace()
+# Centering all joint locations to mid-spine
+pose = preprocess.center_spine(pose)
+assert pose.dtype == np.float32
 
-# # # Centering all joint locations to mid-spine
-# # pose = center_spine(data_obj.pose)
+# Rotates front spine to xz axis
+pose = preprocess.rotate_spine(pose)
+assert pose.dtype == np.float32
 
-# # # Rotates front spine to xz axis
-# # pose = rotate_spine(pose)
+# Reshape pose to get egocentric pose features
+ego_pose, ego_pose_labels = features.get_ego_pose(pose, connectivity.joint_names)
+assert ego_pose.dtype == np.float32
 
-# # # # Getting relative velocities
-# # # rel_vel, rel_vel_labels = get_velocities_fast(pose,
-# # #                                          vid_id,
-# # #                                          connectivity.joint_names,
-# # #                                          joints=np.delete(np.arange(18),4))
+# Calculating joint angles
+angles, angle_labels = features.get_angles(pose, connectivity.angles)
+assert angles.dtype == np.float32
 
-# # # Reshape pose to get egocentric pose features
-# # ego_pose, ego_pose_labels  = get_ego_pose(pose,
-# #                                           connectivity.joint_names)
+# Calculating angle velocities
+ang_vel, ang_vel_labels = features.get_angular_vel(angles, angle_labels, ids)
+assert ang_vel.dtype == np.float32
 
-# # # Calculating joint angles
-# # angles, angle_labels = get_angles(pose,
-# #                                   connectivity.angles)
+# Collect all features together
+labels = ego_pose_labels + angle_labels
+feats = np.concatenate([ego_pose, angles], axis=1)
+assert feats.dtype == np.float32
 
-# # # # Calculating angle velocities
-# # # ang_vel, ang_vel_labels = get_angular_vel_fast(angles,
-# # #                                           angle_labels,
-# # #                                           vid_id)
+feat_categories = ["ego_euc", "ang"]
 
-# # # Collect all features together
-# # labels = ego_pose_labels + angle_labels
-# # features = np.concatenate([ego_pose, angles], axis=1)
+pc_feats, pc_labels = features.pca(
+    feats, labels, categories=feat_categories, n_pcs=5, method="fbpca"
+)
+assert pc_feats.dtype == np.float32
 
-# # # # Clear memory
-# # # del pose, rel_vel, ego_pose, angles, ang_vel, #abs_vel
-# # # del rel_vel_labels, ego_pose_labels, angle_labels, ang_vel_labels, #abs_vel_labels
+wlet_feats, wlet_labels = features.wavelet(
+    features=pc_feats,
+    labels=pc_labels,
+    ids=ids,
+    f_s=90,
+    freq=np.linspace(0.5, 4.5, 25) ** 2,
+    w0=5,
+)
+assert wlet_feats.dtype == np.float32
 
-# # # # Save postural features to h5 file
-# # # write.features_h5(features, labels, path = ''.join([paths['data_path'],'postural_feats.h5']))
+pc_wlet, pc_wlet_labels = features.pca(
+    wlet_feats,
+    wlet_labels,
+    categories=["wlet_" + cat for cat in feat_categories],
+    n_pcs=5,
+    method="fbpca",
+)
+assert pc_wlet.dtype == np.float32
 
-# # # # Read postural features from h5 file
-# # # features, labels = read.features_h5(path = ''.join([paths['data_path'],'postural_feats.h5']))
+pc_feats = np.hstack((pc_feats, pc_wlet))
+pc_labels += pc_wlet_labels
 
-# # feat_categories =['ego_euc','ang']
-# # # # feat_categories = ['abs_vel','rel_vel','ego_euc','ang','avel']
+data_obj = ds.DataStruct(
+    pose=pose, id=ids, meta=meta, meta_by_frame=meta_by_frame, connectivity=connectivity
+)
+data_obj.features = pc_feats
+data_obj = data_obj[:: config["downsample"], :]
 
-# # pc_feats, pc_labels = pca(features,
-# #                           labels,
-# #                           categories = feat_categories,
-# #                           n_pcs = 5,
-# #                           method = 'fbpca')
+# Embedding using fitsne
+embedder = Embed(
+    embed_method=config["single_embed"]["method"],
+    perplexity=config["single_embed"]["perplexity"],
+    lr=config["single_embed"]["lr"],
+)
+data_obj.embed_vals = embedder.embed(data_obj.features, save_self=True)
+assert data_obj.embed_vals.dtype == np.float32
 
-# # # # del features, labels
-
-# # wlet_feats, wlet_labels = wavelet(pc_feats,
-# #                                   pc_labels,
-# #                                   data_obj.id,
-# #                                   sample_freq = 90,
-# #                                   freq = np.linspace(0.5,25,25),
-# #                                 #   freq = np.linspace(0.5,4.5,25)**2,
-# #                                   w0 = 5)
-
-# # write.features_h5(wlet_feats, wlet_labels, path = ''.join([paths['out_path'],'kinematic_feats.h5']))
-
-# # pc_wlet, pc_wlet_labels = pca(wlet_feats,
-# #                               wlet_labels,
-# #                               categories = ['wlet_' + cat for cat in feat_categories],
-# #                               n_pcs = 5,
-# #                               method = 'fbpca')
-
-# # # del wlet_feats, wlet_labels
-
-# # pc_feats = np.hstack((pc_feats, pc_wlet))
-# # pc_labels += pc_wlet_labels
-# # del pc_wlet, pc_wlet_labels
-
-# # write.features_h5(pc_feats, pc_labels, path = ''.join([paths['out_path'],'pca_feats.h5']))
-# downsample = 1
-# pc_feats, pc_labels = read.features_h5(path = ''.join([paths['out_path'],'pca_feats.h5']))
-# data_obj.features = pc_feats
-# data_obj = data_obj[::downsample,:]
-
-
-# from warhmm import twarhmm
-# from warhmm.twarhmm import TWARHMM, Posterior, LinearRegressionObservations
-# from warhmm.data_util import (
-#     standardize_pcs,
-#     precompute_ar_covariates,
-#     format_capture_features,
-# )
-# # import wandb
-
-# hyperparameter_defaults = dict(
-#     num_discrete_states=20,
-#     data_dim=10,
-#     covariates_dim=11,
-#     tau_scale=1,
-#     num_taus=31,
-#     kappa=10000,
-#     alpha=1,
-#     covariance_reg=1e-4,
-# )
-
-# # train_dataset, _ = format_capture_features(data_obj.features[:,:10], data_obj.id)
-# data_obj = data_obj[1::2,:]
-# # train_dataset, _, _ = standardize_pcs(train_dataset)
-# # print("data loaded")
-# # precompute_ar_covariates(train_dataset, num_lags=1, fit_intercept=True)
-# # # precompute_ar_covariates(test_dataset, num_lags=1, fit_intercept=True)
-
-# # print("finished precompute covariates")
-# # twarhmm.LinearRegressionObservations.precompute_suff_stats(train_dataset)
-# # # LinearRegressionObservations.precompute_suff_stats(test_dataset)
-# # print("finished precompute sufficient statistics")
-
-# # twarhmm_model = pickle.load(open('/hom/exx/Desktop/GitHub/results/R01_warhmm/twarhmm.p','rb'))
-
-# # total_states = config['num_taus']*config['num_discrete_states']
-# # train_posteriors = [twarhmm.Posterior(model, train_data, total_states,0).update() for train_data in train_dataset]
-
-# test_posteriors = pickle.load(open('/home/exx/Desktop/GitHub/results/R01_warhmm/test_posteriors.p','rb'))
-
-# warhmm_state = np.zeros(len(data_obj.id))
-# for posterior, id in zip(test_posteriors, np.unique(data_obj.id)):
-#     discrete_states = posterior.get_states()//hyperparameter_defaults['num_taus']
-#     warhmm_state[data_obj.id==id] = discrete_states
-
-# data_obj.data['State'] = warhmm_state
-
-# # vis.skeleton_vid3D_cat(data_obj, 'State', n_skeletons=10, filepath = ''.join([paths['out_path'],'warhmm/']))
-
-# # import pdb; pdb.set_trace()
-# # Embedding using fitsne
-# data_obj = data_obj[::3,:]
-# embedder = Embed(embed_method = params['single_embed']['method'],
-#                  perplexity = params['single_embed']['perplexity'],
-#                  lr = params['single_embed']['lr'])
-# data_obj.embed_vals = embedder.embed(data_obj.features, save_self=True)
-
-
-# # Watershed clustering
-# data_obj.ws = Watershed(sigma = params['single_embed']['sigma'],
-#                         max_clip = 1,
-#                         log_out = True,
-#                         pad_factor = 0.05)
-# data_obj.data.loc[:,'Cluster'] = data_obj.ws.fit_predict(data = data_obj.embed_vals)
-
-# print("Writing Data Object to pickle")
-# data_obj.write_pickle(''.join([paths['out_path'],params['label'],'/']))
-data_obj = pickle.load(
-    open("".join([paths["out_path"], params["label"], "/datastruct.p"]), "rb")
+# Watershed clustering
+data_obj.ws = Watershed(
+    sigma=config["single_embed"]["sigma"], max_clip=1, log_out=True, pad_factor=0.05
 )
 
-
-vis.density(
-    data_obj.ws.density,
-    data_obj.ws.borders,
-    filepath="".join([paths["out_path"], params["label"], "/density.png"]),
-    show=False,
-)
-vis.scatter(
-    data_obj.embed_vals,
-    filepath="".join([paths["out_path"], params["label"], "/scatter.png"]),
-)
-
-for cat in params["density_by_column"]:
-    vis.density_cat(
-        data=data_obj,
-        column=cat,
-        watershed=data_obj.ws,
-        n_col=4,
-        filepath="".join(
-            [paths["out_path"], params["label"], "/density_", cat, ".png"]
-        ),
-    )
-
-for state in range(20):
-    state_bool = data_obj.data["State"].values.astype(int) == state
-    sizes = [20 if is_state else 3 for is_state in state_bool]
-    # import pdb; pdb.set_trace()
-    vis.scatter_by_cat(
-        data_obj.embed_vals,
-        1 * state_bool,
-        color=[(0.5, 0.5, 0.5), (1, 0.5, 0)],
-        size=sizes,
-        label="state",
-        filepath="".join(
-            [paths["out_path"], params["label"], "/state/", str(state), "_"]
-        ),
-    )
-
-
-# vis.density_grid(data=data_obj,cat1='Condition',cat2='AnimalID',watershed=data_obj.ws,
-#                  filepath = ''.join([paths['out_path'],params['label'],'/density_grid.png']))
-
-# vis.skeleton_vid3D_cat(data_obj, 'Cluster', n_skeletons=10, filepath = ''.join([paths['out_path'],params['label'],'/']))
-
-
-# features, labels =  read.features_h5(path = paths['data_path'] + '/postural_feats.h5')
-# features = features[::params['downsample'], :]
-# features, labels = standard_scale(features, labels)
-
-# heur = read.heuristics(path = paths['heuristics_path'])
-
-# vis.heuristics(features, labels, data_obj, heur.HEURISTICS_DICT[paths['skeleton_name']],
-#                     filepath = paths['out_path']+params['label'])
-
-# vis.labeled_watershed(
-#     data_obj.ws.watershed_map,
-#     paths["out_path"] + params["label"] + "/behavior_labels.csv",
-# )
-
-# vis.density_feat(data_obj, data_obj.ws, features, labels, 'avel_0_3_4_xy_5')
+data_obj.data.loc[:, "Cluster"] = data_obj.ws.fit_predict(data=data_obj.embed_vals)

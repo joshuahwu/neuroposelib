@@ -1,0 +1,22 @@
+name: dappy
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.8
+  - numpy
+  - faiss-gpu=1.6.5
+  - matplotlib
+  - seaborn
+  - hdf5storage
+  - umap-learn
+  - numba=0.55.1
+  - scikit-image
+  - cython
+  - fftw
+  - pyfit-sne
+  - pandas
+  - fbpca
+  - ffmpeg

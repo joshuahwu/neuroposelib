@@ -52,30 +52,6 @@ class Embed:
 
         self.embedder = embedder
 
-    # @property
-    # def perplexity(self):
-    #     if self._perplexity == 'auto':
-    #         return max(int(self._n/100),30)
-    #     else:
-    #         return self._perplexity
-
-    # @perplexity.setter
-    # def perplexity(self,
-    #                perplexity: Union[str, int] = 'auto'):
-    #     self._perplexity = perplexity
-
-    # @property
-    # def lr(self):
-    #     if self._lr == 'auto':
-    #         return int(self._n/12)
-    #     else:
-    #         return self._lr
-
-    # @lr.setter
-    # def lr(self,
-    #        lr: Union[str, int] = 'auto'):
-    #     self._lr = lr
-
     def embed(
         self,
         features: Optional[np.ndarray] = None,
@@ -130,15 +106,15 @@ class Embed:
         if method == "fitsne":
             # https://github.com/KlugerLab/pyFIt-SNE
             print("Running FLtSNE")
-            embed_vals = fitsne.FItSNE(
+            embed_vals = fitsne.FItSNE( # requires double
                 features.astype(np.double), perplexity=perplexity, learning_rate=lr
-            ).astype(np.float)
+            ).astype(features.dtype)
         elif method == "umap":
             print("Running UMAP")
             embedder = umap.UMAP(
                 n_neighbors=n_neighbors, spread=spread, min_dist=min_dist, verbose=True
             )
-            embed_vals = embedder.fit_transform(features)
+            embed_vals = embedder.fit_transform(features).astype(features.dtype)
             if save_self:
                 self.embedder = embedder
 
@@ -473,7 +449,7 @@ class GaussDensity:
         range_len = (
             np.ceil(np.amax(data, axis=0)) - np.floor(np.amin(data, axis=0))
         ).astype(int)
-        padding = range_len * self.pad_factor
+        padding = (range_len * self.pad_factor).astype(data.dtype)
 
         # Calculate x and y limits for histogram and density
         if new or (self.hist_range is None):
@@ -482,8 +458,6 @@ class GaussDensity:
                 [np.amin(data[:, 0]) - padding[0], np.amax(data[:, 0]) + padding[0]],
                 [np.amin(data[:, 1]) - padding[1], np.amax(data[:, 1]) + padding[1]],
             ]
-            # self.hist_range = [[int(np.floor(np.amin(data[:,0]))-padding[0]),int(np.ceil(np.amax(data[:,0]))+padding[0])],
-            #                    [int(np.floor(np.amin(data[:,1]))-padding[1]),int(np.ceil(np.amax(data[:,1]))+padding[1])]]
 
         hist, self.xedges, self.yedges = np.histogram2d(
             data[:, 0],
@@ -495,7 +469,6 @@ class GaussDensity:
         hist = np.rot90(hist)
 
         assert (self.xedges[0] < self.xedges[-1]) and (self.yedges[0] < self.yedges[1])
-        # import pdb; pdb.set_trace()
 
         return hist
 
@@ -528,7 +501,7 @@ class GaussDensity:
 
         if new:
             self.density = density
-        # import pdb; pdb.set_trace()
+
         return density
 
     def map_bins(self, data: np.ndarray):
@@ -545,7 +518,9 @@ class GaussDensity:
             self.density = None
             self.hist(data, new=True)
 
-        data_in_bin = np.zeros(np.shape(data))
+        dtype = np.int32 if data.dtype==np.float32 else int
+
+        data_in_bin = np.zeros(np.shape(data),dtype)
 
         # This is actually slower
         # data_in_bin[:,1] = np.argmax(self.xedges>np.repeat(data[:,0][:,None],len(self.xedges),axis=1),axis=1)-1
@@ -596,7 +571,7 @@ class Watershed(GaussDensity):
 
         self.density = None  # TODO: Consider more when this saves and doesn't
 
-    def fit(self, data: Union[ds.DataStruct, np.ndarray]):
+    def fit(self, data: np.ndarray):
         """
         Running watershed clustering on data
         IN:
@@ -604,19 +579,15 @@ class Watershed(GaussDensity):
         OUT:
             self.density
         """
-        if isinstance(data, ds.DataStruct):
-            data_ = data.embed_vals.values
-        else:
-            data_ = data
 
-        self.density = self.fit_density(data_, new=True, map_bin=False)
+        self.density = self.fit_density(data, new=True, map_bin=False)
 
         print("Calculating watershed")
         self.watershed_map = watershed(
             -self.density, mask=self.density > self.density_thresh, watershed_line=False
         )
         self.watershed_map[self.density < 1e-5] = 0
-        self.borders = np.empty((0, 2))
+        self.borders = np.empty((0, 2),dtype=data.dtype)
 
         for i in range(1, len(np.unique(self.watershed_map))):
             contour = measure.find_contours(self.watershed_map.T == i, 0.5)[0]
@@ -635,11 +606,11 @@ class Watershed(GaussDensity):
         OUT:
             cluster_labels - cluster labels of all data
         """
-
+        dtype = np.int32 if data.dtype == np.float32 else int
         data_in_bin = self.map_bins(data)
 
         cluster_labels = self.watershed_map[
-            data_in_bin[:, 0].astype(int), data_in_bin[:, 1].astype(int)
+            data_in_bin[:, 0].astype(dtype), data_in_bin[:, 1].astype(dtype)
         ]
         print(str(int(np.amax(cluster_labels) + 1)), "clusters detected")
         print(str(np.unique(cluster_labels).shape), "unique clusters detected")

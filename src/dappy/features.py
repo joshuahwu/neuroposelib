@@ -46,13 +46,16 @@ def get_velocities(
         print("Calculating absolute velocities ... ")
         tag = "abs"
 
+    dtype = pose.dtype
     ax_labels = ["norm", "x", "y", "z"]
-    vel = np.zeros((pose.shape[0], len(joints) * len(widths) * len(ax_labels)))
-    vel_stds = np.zeros(vel.shape)
+    vel = np.zeros(
+        (pose.shape[0], len(joints) * len(widths) * len(ax_labels)), dtype=dtype
+    )
+    vel_stds = np.zeros(vel.shape, dtype=dtype)
     vel_labels, std_labels = [], []
 
     for _, i in enumerate(tqdm(np.unique(ids))):  # Separating by video
-        pose_exp = pose[ids == i, :, :][:, joints, :]
+        pose_exp = pose[ids == i, ...][:, joints, :]
 
         # Calculate average velocity and velocity stds over the windows
         for j, width in enumerate(widths):
@@ -176,17 +179,17 @@ def get_euler_angles(pose: np.ndarray, links: np.ndarray):
     return angles, feat_labels
 
 
-def get_angles(pose: np.ndarray, link_pairs: np.ndarray):
+def get_angles(pose: np.ndarray, links: np.ndarray):
     angles, labels = [], []
     print("Calculating joint angles ... ")
-    for i, pair in enumerate(tqdm(link_pairs)):
+    for i, pair in enumerate(tqdm(links)):
         v1 = pose[:, pair[0], :] - pose[:, pair[1], :]  # Calculate vectors
         v2 = pose[:, pair[2], :] - pose[:, pair[1], :]
 
         v1_u = v1 / np.linalg.norm(v1, axis=1)[..., None]  # Unit vectors
         v2_u = v2 / np.linalg.norm(v2, axis=1)[..., None]
 
-        angles += [np.arccos(np.clip(np.sum(v1_u * v2_u, axis=1), -1, 1))]
+        angles += [np.arccos(np.clip(np.sum(v1_u * v2_u, axis=1), -1, 1))[..., None]]
 
         labels += ["_".join(["ang"] + [str(i) for i in pair])]
     angles = np.concatenate(angles, axis=1)
@@ -207,8 +210,8 @@ def get_angular_vel(
     """
     print("Calculating velocities of angles ... ")
     num_ang = angles.shape[1]
-    avel = np.zeros((angles.shape[0], num_ang * len(widths)))
-    avel_stds = np.zeros(avel.shape)
+    avel = np.zeros((angles.shape[0], num_ang * len(widths)), dtype=angles.dtype)
+    avel_stds = np.zeros(avel.shape, dtype=angles.dtype)
     avel_labels, std_labels = [], []
     for _, i in enumerate(tqdm(np.unique(ids))):
         ang_exp = angles[ids == i, :]
@@ -258,7 +261,7 @@ def get_head_angular(
     angle = np.arctan2(v1[:, 0], v1[:, 1]) - np.arctan2(v2[:, 0], v2[:, 1])
     angle = np.where(angle > 0, angle, angle + 2 * np.pi)
 
-    angular_vel = np.zeros((len(angle), len(widths)))
+    angular_vel = np.zeros((len(angle), len(widths)), dtype=pose.dtype)
     for _, i in tqdm.tqdm(np.unique(ids)):
         angle_exp = angle[ids == i]
         d_angv = angle_exp - np.append(angle_exp[0], angle_exp[:-1])
@@ -279,8 +282,10 @@ def wavelet(
 ):
     # scp.signal.morlet2(500, )
     print("Calculating wavelets ... ")
-    widths = w0 * f_s / (2 * freq * np.pi)
-    wlet_feats = np.zeros((features.shape[0], len(freq) * features.shape[1]))
+    widths = (w0 * f_s / (2 * freq * np.pi)).astype(features.dtype)
+    wlet_feats = np.zeros(
+        (features.shape[0], len(freq) * features.shape[1]), features.dtype
+    )
 
     wlet_labels = [
         "_".join(["wlet", label, str(np.round(f, 2))]) for label in labels for f in freq
@@ -312,9 +317,10 @@ def pca(
     #     features = torch.tensor(features)
     # else:
     # Centering the features if not torch (pytorch does it itself)
-
     features = features - features.mean(axis=0)
-    pca_feats = np.zeros((features.shape[0], len(categories) * n_pcs), dtype=np.float32)
+    pca_feats = np.zeros(
+        (features.shape[0], len(categories) * n_pcs), dtype=features.dtype
+    )
 
     if method == "ipca":
         from sklearn.decomposition import IncrementalPCA
@@ -362,9 +368,10 @@ def pca(
         #         )
 
         elif method == "fbpca":
-            (_, _, V) = fbpca.pca(features[:, cols_idx], k=n_pcs)
+            # import pdb; pdb.set_trace()
+            (_, _, V) = fbpca.pca(features[:, cols_idx].astype(np.float64), k=n_pcs)
             pca_feats[:, i * n_pcs : (i + 1) * n_pcs] = np.matmul(
-                features[:, cols_idx], V.T
+                features[:, cols_idx], V.astype(features.dtype).T
             )
 
     # if method.startswith("torch_pca"):

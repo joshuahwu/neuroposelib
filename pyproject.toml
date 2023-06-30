@@ -7,23 +7,14 @@ authors = [
 description = "3D Behavioral Analysis of Action Skeletons"
 readme = "README.md"
 requires-python = ">=3.8"
+license ={file = "LICENSE"}
 classifiers = [
     "Development Status :: 1 - Planning",
     "Intended Audience :: Science/Research",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3.8",
 ]
-dependencies = [
-    "numpy",
-    "matplotlib",
-    "scipy",
-    "pandas",
-    "sklearn",
-    "pyyaml",
-    "h5py",
-    "tqdm",
-    "umap-learn",
-]
+dependencies = []
 
 [project.urls]
 "Homepage" = "https://github.com/joshuahwu/dappy"
