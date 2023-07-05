@@ -13,6 +13,7 @@ conda env create -f environment.yml
 conda activate dappy
 pip install -e .
 ```
+Note that `pip` and `setuptools` must be updated to the most recent versions.
 
 To begin gaining familiarity with the functionality of this package, run through the code in `tutorial/tutorial.ipynb`.
 

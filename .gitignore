@@ -9,9 +9,6 @@ Desktop.ini
 # Recycle Bin used on file shares
 $RECYCLE.BIN/
 
-./CAPTURE_analysis/
-./CAPTURE_data/
-
 *.mat
 *.sh
 *.out
@@ -34,13 +31,12 @@ $RECYCLE.BIN/
 !/tutorials/
 /tutorials/*
 !/tutorials/tutorial.ipynb
+/configs/*
+!/configs/tutorial.yaml
 
 /dappy/wandb/
 /dappy/models/
 /dappy/artifcats/
-
-!configs/param_configs/fitsne.yaml
-!configs/path_configs/example_path.yaml
 
 *.egg-info
 
