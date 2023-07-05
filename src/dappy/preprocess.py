@@ -2,7 +2,7 @@ import scipy.ndimage as scp_ndi
 from scipy.interpolate import CubicSpline
 import numpy as np
 
-from dappy.utils import by_id
+from dappy.utils import by_id, get_frame_diff
 from typing import Optional, Union, List, Type
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R

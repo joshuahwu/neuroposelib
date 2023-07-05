@@ -105,14 +105,14 @@ def pose_mat(
     path : str
         Path to pose `.mat` file.
     connectivity : Connectivity
-        Connectivity object containing keypoint/joint/skeleta information.
+        Connectivity object containing keypoint/joint/skeletal information.
     dtype : Optional[Type[Union[np.float64, np.float32]]], optional
-        , by default np.float32
+        Desired output data type, by default np.float32
 
     Returns
     -------
-    _type_
-        _description_
+    pose : np.ndarray
+        NumPy array (# frames x # keypoints x 3 coordinates)
     """
 
     try:

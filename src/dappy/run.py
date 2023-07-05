@@ -1,7 +1,7 @@
 from dappy.features import *
 from dappy import DataStruct as ds
 import numpy as np
-from dappy import read, write
+from dappy import read, write, utils
 from dappy.embed import Watershed, Embed
 from pathlib import Path
 

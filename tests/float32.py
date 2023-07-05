@@ -1,7 +1,7 @@
-import read, write, features, analysis, preprocess
-import visualization as vis
-from embed import Watershed, Embed
-import DataStruct as ds
+from dappy import read, write, features, analysis, preprocess
+import dappy.visualization as vis
+from dappy.embed import Watershed, Embed
+import dappy.DataStruct as ds
 import numpy as np
 
 analysis_key = "ensemble_healthy"
