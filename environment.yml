@@ -7,7 +7,7 @@ channels:
 dependencies:
   - python=3.8
   - numpy
-  - faiss-gpu=1.6.5
+  - faiss-gpu=1.7.1
   - matplotlib
   - seaborn
   - hdf5storage

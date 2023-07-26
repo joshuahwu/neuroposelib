@@ -96,7 +96,7 @@ def pose_mat(
     path: str,
     connectivity: Connectivity,
     dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,
-):
+) -> np.ndarray: ## TODO: Use output docstrings
     """Reads 3D pose data from .mat files.
 
 
@@ -181,6 +181,19 @@ def connectivity(path: str, skeleton_name: str):
         joint_names=joint_names, colors=colors, links=links, angles=angles
     )
 
+    return connectivity
+
+def connectivity_config(path: str):
+    skeleton_config = config(path)
+
+    joint_names = skeleton_config["LABELS"]
+    colors = skeleton_config["COLORS"]
+    links = skeleton_config["SEGMENTS"]
+
+    connectivity = Connectivity(
+        joint_names=joint_names, colors=colors, links=links
+    )
+    
     return connectivity
 
 

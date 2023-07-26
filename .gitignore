@@ -9,7 +9,6 @@ Desktop.ini
 # Recycle Bin used on file shares
 $RECYCLE.BIN/
 
-*.mat
 *.sh
 *.out
 *.p
@@ -22,22 +21,28 @@ $RECYCLE.BIN/
 *.txt
 *.mat
 
+*.h5
 *.mp4
 *.yaml
 *.png
 *.pyc
 *./dappy/__pycache__/
 
+!/data/demo_meta.csv
 !/tutorials/
 /tutorials/*
 !/tutorials/tutorial.ipynb
+!/tutorials/automated_pipeline.py
 /configs/*
+/configs/param_configs/
+/configs/param_configs/*
 !/configs/tutorial.yaml
 
 /dappy/wandb/
 /dappy/models/
 /dappy/artifcats/
 
+/results/*
 *.egg-info
 
 # Windows shortcuts

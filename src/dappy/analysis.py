@@ -12,9 +12,92 @@ from sklearn.metrics import r2_score
 from sklearn.ensemble import RandomForestRegressor
 import seaborn as sns
 from dappy.embed import Watershed
-
+import faiss
+import time
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import dijkstra, minimum_spanning_tree
 from scipy.spatial import distance
 
+def get_nn_graph(X: np.ndarray, k: int = 5, weighted: bool = True):
+    X = np.ascontiguousarray(X, dtype=np.float32)
+
+    # max_k = 20
+    print("Building NN Graph")
+    start_time = time.time()
+    index = faiss.IndexFlatL2(X.shape[1])
+    index.add(X)
+    distances, indices = index.search(X, k=k+1)
+    distances, indices = distances[:, 1:], indices[:, 1:]
+    row = np.tile(np.arange(X.shape[0])[:, None], k)
+
+    # min_distances, min_indices = distances[:, :k], indices[:,:k]
+    # min_row = row = np.tile(np.arange(X.shape[0])[:, None], k)
+    if weighted:
+        nn_graph = csr_matrix(
+            (distances.flatten(), (row.flatten(), indices.flatten())),
+            shape=(X.shape[0], X.shape[0]),
+        )
+
+        # min_graph = csr_matrix(
+        #     (min_distances.flatten(), (min_row.flatten(), min_indices.flatten())),
+        #     shape=(X.shape[0], X.shape[0]),
+        # )
+    else:
+        nn_graph = csr_matrix(
+            (np.ones(distances.flatten().shape), (row.flatten(), indices.flatten())),
+            shape=(X.shape[0], X.shape[0]),
+        )
+    #     min_graph = csr_matrix(
+    #         (np.ones(min_distances.flatten()), (min_row.flatten(), min_indices.flatten())),
+    #         shape=(X.shape[0], X.shape[0]),
+    #     )
+
+    print("NN Time: " + str(time.time() - start_time))
+
+    # # Get minimum spanning tree to ensure full connectivity in graph
+    # start_time = time.time()
+    # min_span_tree = minimum_spanning_tree(nn_graph)
+    # min_span_tree.data = min_span_tree.data.astype(X.dtype)
+    # print("Minimum Spanning Tree Time: " + str(time.time() - start_time))
+
+    # # Get union between minimum spanning tree and nn graph
+    # min_span_tree_insert = min_span_tree - nn_graph
+    # min_span_tree_insert.data = np.where(min_span_tree_insert.data < 0, 1, 0)
+    # graph = (
+    #     min_span_tree
+    #     - min_span_tree.multiply(min_span_tree_insert)
+    #     + nn_graph.multiply(min_span_tree_insert)
+    # )
+
+    return nn_graph
+
+
+def get_pose_geodesic(
+    pose: np.ndarray,
+    graph: csr_matrix,
+    START_FRAME: int,
+    END_FRAME: int,
+):
+    print("Calculating Dijkstra")
+    path_indices = dijkstra(
+        csgraph=graph, directed=False, indices=END_FRAME, return_predecessors=True
+    )[1]
+
+    print("Finding pose geodesic")
+    geodesic_pose, geodesic_indices = [], []
+    curr_frame = START_FRAME
+
+    while path_indices[curr_frame] > 0:
+        geodesic_pose += [pose[curr_frame : curr_frame + 1, ...]]
+        geodesic_indices += [curr_frame]
+        curr_frame = path_indices[curr_frame]
+
+    if curr_frame != END_FRAME:
+        print("Broken graph")
+
+    geodesic_pose = np.concatenate(geodesic_pose, axis=0)
+
+    return geodesic_pose, geodesic_indices
 
 def cluster_freq_from_data(data: np.ndarray, watershed: Watershed):
     """
@@ -63,12 +146,6 @@ def lstsq(freq: np.ndarray, y: np.ndarray, filepath: str):
         m = np.linalg.lstsq(np.delete(freq, i, axis=0), np.delete(y, i))[0]
         pred_y[i] = freq[i, :] @ m
 
-    plt.scatter(y, pred_y)
-    plt.xlabel("Real Fluorescence")
-    plt.ylabel("Predicted Fluorescence")
-    plt.savefig("".join([filepath, "lstsq.png"]))
-    plt.close()
-
     print("R2 Score " + str(r2_score(y, pred_y)))
     return pred_y
 
@@ -85,16 +162,16 @@ def elastic_net(freq: np.ndarray, y: np.ndarray, filepath: str):
         regr.fit(scaler.transform(temp_lesion), np.log2(np.delete(y, i)))
         pred_y[i] = regr.predict(scaler.transform(freq[i, :][None, :]))
 
-    sns.set(rc={'figure.figsize':(6,5)})
-    f = plt.figure()
-    # import pdb; pdb.set_trace()
-    plt.plot(np.linspace(y.min(), y.max(), 100), np.linspace(y.min(),y.max(),100), markersize=0, color='k', label="y = x")
-    plt.legend(loc="upper center")
-    plt.scatter(y, 2**pred_y, s=30)
-    plt.xlabel("Real Fluorescence")
-    plt.ylabel("Predicted Fluorescence")
-    plt.savefig("".join([filepath, "elastic.png"]))
-    plt.close()
+    # sns.set(rc={'figure.figsize':(6,5)})
+    # f = plt.figure()
+    # # import pdb; pdb.set_trace()
+    # plt.plot(np.linspace(y.min(), y.max(), 100), np.linspace(y.min(),y.max(),100), markersize=0, color='k', label="y = x")
+    # plt.legend(loc="upper center")
+    # plt.scatter(y, 2**pred_y, s=30)
+    # plt.xlabel("Real Fluorescence")
+    # plt.ylabel("Predicted Fluorescence")
+    # plt.savefig("".join([filepath, "elastic.png"]))
+    # plt.close()
 
     print("R2 Score " + str(r2_score(y, 2**pred_y)))
     return pred_y, 
@@ -148,11 +225,11 @@ def random_forest(freq: np.ndarray, y: np.ndarray, filepath: str):
         rf_regr.fit(np.delete(freq, i, axis=0), np.delete(y, i))
         pred_y[i] = rf_regr.predict(freq[i, :][None, :])
 
-    plt.scatter(y, pred_y)
-    plt.xlabel("Real Fluorescence")
-    plt.ylabel("Predicted Fluorescence")
-    plt.savefig("".join([filepath, "rforest.png"]))
-    plt.close()
+    # plt.scatter(y, pred_y)
+    # plt.xlabel("Real Fluorescence")
+    # plt.ylabel("Predicted Fluorescence")
+    # plt.savefig("".join([filepath, "rforest.png"]))
+    # plt.close()
     print("R2 Score " + str(r2_score(y, pred_y)))
     return
 

@@ -220,8 +220,7 @@ def anipose_med_filt(
 
     for _, i in enumerate(tqdm(np.unique(exp_id))):
         pose_exp = pose[exp_id == i, :, :]
-        # dxyz = get_frame_diff(pose_exp, time=1, idx_center=False)
-        # vel =
+        
         pose_error = pose_exp - scp_ndi.median_filter(
             pose_exp, (filter_len, 1, 1)
         )  # Median filter 5 frames repeat the ends of video

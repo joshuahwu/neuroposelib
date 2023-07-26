@@ -3,14 +3,17 @@ from tqdm import tqdm
 import numpy as np
 from typing import Union, List
 
+
 def by_id(func):
     @functools.wraps(func)
-    def wrapper(pose: np.ndarray, ids:Union[np.ndarray, List], **kwargs):
+    def wrapper(pose: np.ndarray, ids: Union[np.ndarray, List], **kwargs):
         for _, i in enumerate(tqdm(np.unique(ids))):
-            pose_exp = pose[ids == i,:,:]
-            pose[ids == i ,:,:] = func(pose_exp, **kwargs)
+            pose_exp = pose[ids == i, :, :]
+            pose[ids == i, :, :] = func(pose_exp, **kwargs)
         return pose
+
     return wrapper
+
 
 def rolling_window(data:np.ndarray, window:int):
     """
@@ -35,6 +38,7 @@ def rolling_window(data:np.ndarray, window:int):
     return np.swapaxes(
         np.lib.stride_tricks.as_strided(d_pad, shape=shape, strides=strides), 0, 1
     )
+
 
 def get_frame_diff(x: np.ndarray, time: int, idx_center: bool = True):
     """

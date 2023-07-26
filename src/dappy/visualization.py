@@ -910,6 +910,9 @@ def pose3D_arena(
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
 ):
+    if isinstance(frames, int):
+        frames = [frames]
+
     pose_3d, limits, links, COLORS = _init_vid3D(
         pose, connectivity, np.array(frames,dtype=int), centered, N_FRAMES, SAVE_ROOT
     )
@@ -983,6 +986,8 @@ def pose3D_grid(
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
 ):
+    if isinstance(frames, int):
+        frames = [frames]
     # Reshape pose and other variables
     pose_3d, limits, links, COLOR = _init_vid3D(
         pose, connectivity, np.array(frames,dtype=int), centered, N_FRAMES, SAVE_ROOT
@@ -992,7 +997,7 @@ def pose3D_grid(
     writer = FFMpegWriter(fps=fps)
     # Set up figure
     cols = min(4, len(frames))
-    rows = int(len(frames) / 4)
+    rows = int(len(frames) / 4) + 1
     figsize = (cols * 5, rows * 5)
     fig = plt.figure(figsize=figsize)
 
@@ -1041,6 +1046,8 @@ def pose3D_features(
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/skeleton_vids/",
 ):
+    if isinstance(frames, int):
+        frames = [frames]
     # Reshape pose and other variables
     pose_3d, limits, links_expand, COLOR = _init_vid3D(
         pose, connectivity, frames, N_FRAMES, SAVE_ROOT
