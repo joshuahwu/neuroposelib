@@ -15,7 +15,7 @@ pip install -e .
 ```
 Note that `pip` and `setuptools` must be updated to the most recent versions.
 
-To begin gaining familiarity with the functionality of this package, run through the code in `tutorial/tutorial.ipynb`.
+To begin gaining familiarity with the functionality of this package, download the [demo dataset](https://duke.box.com/v/demo-mouse-poses) and run through the code in `/tutorials/tutorial.ipynb`.
 
 ## Authors
 * **Joshua Wu** - joshua.wu@duke.edu
