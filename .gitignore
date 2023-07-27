@@ -26,23 +26,21 @@ $RECYCLE.BIN/
 *.yaml
 *.png
 *.pyc
-*./dappy/__pycache__/
+*./src/dappy/__pycache__/
 
-!/data/demo_meta.csv
-!/tutorials/
+
+
 /tutorials/*
 !/tutorials/tutorial.ipynb
 !/tutorials/automated_pipeline.py
 /configs/*
-/configs/param_configs/
-/configs/param_configs/*
 !/configs/tutorial.yaml
 
-/dappy/wandb/
-/dappy/models/
-/dappy/artifcats/
-
-/results/*
+/tutorials/results/*
+/tutorials/data/*
+!/tutorials/results/
+!/tutorials/data/
+!tutorials/data/demo_meta.csv
 *.egg-info
 
 # Windows shortcuts

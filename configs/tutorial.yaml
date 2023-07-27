@@ -1,8 +1,8 @@
 # Folder path of data location
-data_path: '../data/'
+data_path: './data/'
 
 # Output folder of all plots
-out_path: '../results/tutorial/'
+out_path: './results/tutorial/'
 
 # File path of skeletal specifications
 skeleton_path: '../src/dappy/skeletons.py'
