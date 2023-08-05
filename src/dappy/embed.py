@@ -1,3 +1,4 @@
+import functools
 import numpy as np
 import time
 
@@ -5,7 +6,7 @@ from dappy import DataStruct as ds
 from typing import Optional, Union, List
 import faiss
 # import tsnecuda as tc
-import fitsne
+import openTSNE
 import umap
 import tqdm
 
@@ -20,13 +21,13 @@ class Embed:
     def __init__(
         self,
         n_neighbors: int = 150,
-        embed_method: str = "fitsne",
+        embed_method: str = "openTSNE",
         transform_method: str = "knn",
         min_dist: float = 0.5,
         spread: float = 1.0,
         n_iter: int = 1000,
         perplexity: Union[str, int] = "auto",
-        lr: Union[str, int] = "auto",
+        lr: Union[str, float] = "auto",
         k: int = 5,
         n_trees: int = 100,
         embedder=None,
@@ -58,7 +59,7 @@ class Embed:
         n_iter: Optional[int] = None,
         n_neighbors: Optional[int] = None,
         perplexity: Optional[Union[str, int]] = None,
-        lr: Optional[Union[str, int]] = None,
+        lr: Optional[Union[str, float]] = None,
         min_dist: Optional[float] = None,
         spread: Optional[float] = None,
         method: Optional[str] = None,
@@ -103,12 +104,17 @@ class Embed:
             #     learning_rate=lr,
             # )
             # embed_vals = tsne.fit_transform(features)
-        if method == "fitsne":
-            # https://github.com/KlugerLab/pyFIt-SNE
-            print("Running FLtSNE")
-            embed_vals = fitsne.FItSNE( # requires double
-                features.astype(np.double), perplexity=perplexity, learning_rate=lr
-            ).astype(features.dtype)
+        if method == 'openTSNE':
+            print("Running openTSNE")
+
+            partial_tsne = functools.partial(openTSNE.TSNE, learning_rate=lr)
+            if perplexity == "auto":
+                tsne = partial_tsne()
+            else:
+                assert isinstance(perplexity, int)
+                tsne = partial_tsne(perplexity=perplexity)
+            embed_vals = tsne.fit(features)
+
         elif method == "umap":
             print("Running UMAP")
             embedder = umap.UMAP(
@@ -117,6 +123,8 @@ class Embed:
             embed_vals = embedder.fit_transform(features).astype(features.dtype)
             if save_self:
                 self.embedder = embedder
+        else:
+            raise ValueError(f"Unexpected method {method}")
 
         if save_self:
             self.template = features
@@ -192,8 +200,8 @@ class BatchEmbed(Embed):
         sampling_n: int = 20,
         n_neighbors: int = 150,
         sigma: int = 15,
-        batch_method: str = "fitsne",
-        embed_method: str = "fitsne",
+        batch_method: str = "openTSNE",
+        embed_method: str = "openTSNE",
         transform_method: str = "knn",
         min_dist: float = 0.5,
         spread: float = 1.0,
