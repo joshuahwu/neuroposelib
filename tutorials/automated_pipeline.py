@@ -90,7 +90,7 @@ def run(features, labels, pose, id, connectivity, paths, params, meta, meta_by_f
     data_obj.features = pc_feats
     data_obj = data_obj[:: params["downsample"], :]
 
-    # Embedding using fitsne
+    # Embedding using t-SNE
     embedder = Embed(
         embed_method=params["single_embed"]["method"],
         perplexity=params["single_embed"]["perplexity"],
