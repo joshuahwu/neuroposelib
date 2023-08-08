@@ -21,7 +21,7 @@ class Embed:
     def __init__(
         self,
         n_neighbors: int = 150,
-        embed_method: str = "openTSNE",
+        embed_method: str = "fitsne",
         transform_method: str = "knn",
         min_dist: float = 0.5,
         spread: float = 1.0,
@@ -104,8 +104,8 @@ class Embed:
             #     learning_rate=lr,
             # )
             # embed_vals = tsne.fit_transform(features)
-        if method == 'openTSNE':
-            print("Running openTSNE")
+        if method == 'fitsne':
+            print("Running fitsne via openTSNE")
 
             partial_tsne = functools.partial(openTSNE.TSNE, learning_rate=lr)
             if perplexity == "auto":
@@ -200,8 +200,8 @@ class BatchEmbed(Embed):
         sampling_n: int = 20,
         n_neighbors: int = 150,
         sigma: int = 15,
-        batch_method: str = "openTSNE",
-        embed_method: str = "openTSNE",
+        batch_method: str = "fitsne",
+        embed_method: str = "fitsne",
         transform_method: str = "knn",
         min_dist: float = 0.5,
         spread: float = 1.0,
