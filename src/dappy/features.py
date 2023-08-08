@@ -301,11 +301,12 @@ def wavelet(
 
 
 def pca(
-    features,
-    labels,
-    categories=["vel", "ego_euc", "ang", "avel"],
-    n_pcs=10,
-    method="ipca",
+    features: np.ndarray,
+    labels: List,
+    categories: List[str]=["vel", "ego_euc", "ang", "avel"],
+    n_pcs: int = 10,
+    downsample: int = 1, 
+    method="fbpca",
 ):
     print("Calculating principal components ... ")
 
@@ -368,7 +369,7 @@ def pca(
         #         )
 
         elif method == "fbpca":
-            # import pdb; pdb.set_trace()
+            import pdb; pdb.set_trace()
             (_, _, V) = fbpca.pca(features[:, cols_idx].astype(np.float64), k=n_pcs)
             pca_feats[:, i * n_pcs : (i + 1) * n_pcs] = np.matmul(
                 features[:, cols_idx], V.astype(features.dtype).T

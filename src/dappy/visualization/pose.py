@@ -20,6 +20,7 @@ def sample3D(
     labels: Union[np.ndarray, List],
     n_samples: int = 9,
     vid_label: str = "cluster",
+    centered: bool = True,
     N_FRAMES: int = 100,
     fps: int = 90,
     filepath: str = "./plot_folder",
@@ -41,7 +42,7 @@ def sample3D(
                 if len(sampled_points) == num_points:  # sampled enough points
                     break
                 elif any(
-                    np.abs(permuted_points[i] - sampled_points) < 200
+                    np.abs(permuted_points[i] - np.array(sampled_points)) < 200
                 ):  # point is not far enough from previous points
                     continue
                 elif permuted_points[i]<(N_FRAMES/2):
@@ -59,7 +60,7 @@ def sample3D(
                 pose,
                 connectivity=connectivity,
                 frames=sampled_points,
-                centered=True,
+                centered=centered,
                 N_FRAMES=N_FRAMES,
                 fps = fps,
                 VID_NAME="".join([vid_label,str(cat), ".mp4"]),

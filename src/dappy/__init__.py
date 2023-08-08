@@ -1,1 +1,1 @@
-from . import vis
+from . import visualization as vis
