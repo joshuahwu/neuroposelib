@@ -1,27 +1,27 @@
 # Folder path of data location
-data_path: './data/'
+data_path: "./data/"
 
 # Output folder of all plots
-out_path: './results/tutorial/'
+out_path: "./results/tutorial/"
 
 # File path of skeletal specifications
-skeleton_path: '../src/dappy/skeletons.py'
+skeleton_path: "../src/dappy/skeletons.py"
 
 # Key of skeleton in the skeletons file
-skeleton_name: 'mouse20_notail'
+skeleton_name: "mouse20_notail"
 
-label: 'fitsne'
+label: "fitsne"
 downsample: 10
 
 # Parameters for t-SNE embedding
 single_embed:
-  method: 'fitsne'
+  method: "fitsne"
   perplexity: 50
-  lr: 'auto'
+  lr: "auto"
   sigma: 15
 
 # Parameters for embedding new data into an existing t-SNE embedding
-transform_embed: 
-  method: 'knn'
+transform_embed:
+  method: "knn"
   k: 5
   sigma: 15

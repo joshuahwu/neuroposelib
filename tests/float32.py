@@ -127,7 +127,7 @@ data_obj = ds.DataStruct(
 data_obj.features = pc_feats
 data_obj = data_obj[:: config["downsample"], :]
 
-# Embedding using fitsne
+# Embedding using t-SNE
 embedder = Embed(
     embed_method=config["single_embed"]["method"],
     perplexity=config["single_embed"]["perplexity"],
