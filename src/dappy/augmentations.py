@@ -3,6 +3,7 @@ import pandas as pd
 from typing import Union, List, Dict
 import numpy as np
 import tqdm
+from scipy.interpolate import CubicSpline
 
 
 def expand_meta(meta: pd.DataFrame, ids: pd.DataFrame, reps: int):
@@ -15,7 +16,7 @@ def expand_meta(meta: pd.DataFrame, ids: pd.DataFrame, reps: int):
     # ids_expanded = np.tile(ids, reps).reshape((reps, -1))
     # ids_expanded += np.arange(reps)[:, None] * (np.max(ids_expanded) + 1)
     ids_expanded = (
-        np.add.outer(ids, np.arange(0, reps) * (np.max(ids) + 1))
+        np.add.outer(ids, np.arange(reps) * (np.max(ids) + 1))
         .T.flatten()
         .astype(ids.dtype)
     )
@@ -65,8 +66,8 @@ def joint_ablation(
 
     pose_augmented = np.concatenate(pose_augmented, axis=0)
 
-    num_augs = len(ablations) + 1
-    meta_expanded, ids_expanded = expand_meta(meta, ids, num_augs)
+    n_augs = len(ablations) + 1
+    meta_expanded, ids_expanded = expand_meta(meta, ids, n_augs)
     meta_expanded["joint_ablation"] = label
 
     return pose_augmented, meta_expanded, ids_expanded
@@ -110,9 +111,76 @@ def noise(
         ).astype(pose.dtype)
 
     pose_augmented = np.tile(pose.T, len(level)).T
-    assert np.sum(pose_augmented[:len(pose)] - pose) == 0
+    assert np.sum(pose_augmented[: len(pose)] - pose) == 0
     pose_augmented += noise
     meta_expanded, ids_expanded = expand_meta(meta, ids, len(level))
-    meta_expanded['noise'] = np.repeat(level,np.max(ids)+1)
+    meta_expanded["noise"] = np.repeat(level, np.max(ids) + 1)
 
+    return pose_augmented, meta_expanded, ids_expanded
+
+
+def speed(
+    pose: np.ndarray,
+    level: Union[np.ndarray, List],
+    ids: Union[np.ndarray, List],
+    meta: pd.DataFrame,
+):
+    pose_augmented, ids_expanded = [], []
+    for i, id in enumerate(tqdm.tqdm(np.unique(ids))):
+        n_frames = np.sum(ids == id)
+        # Fit interpolator to 
+        cs = CubicSpline(np.arange(n_frames), pose[ids == id, ...])
+        for j, lvl in enumerate(level):
+            new_t = np.linspace(0, n_frames - 1, int(n_frames / lvl))
+            pose_interpolated = cs(new_t)
+
+            pose_augmented += [pose_interpolated]
+            curr_id = i * len(level) + j
+            ids_expanded += [np.ones(pose_interpolated.shape[0]) * curr_id]
+
+    pose_augmented = np.concatenate(pose_augmented, axis=0)
+    ids_expanded = np.concatenate(ids_expanded)
+
+    # For speed unlike w/the other augmentations, we repeat instead of tile
+    meta_expanded = pd.DataFrame(
+        np.repeat(meta.values, len(level), axis=0), columns=meta.columns
+    )
+    meta_expanded["old_id"] = meta_expanded["id"].copy()
+    meta_expanded["id"] = meta_expanded.index
+    meta_expanded["speed"] = np.tile(level, np.max(ids) + 1)
+
+    return pose_augmented, meta_expanded, ids_expanded
+
+
+def pitch(
+    pose: np.ndarray,
+    ids: Union[np.ndarray, List],
+    meta: pd.DataFrame,
+    n_levels: int = 10,
+    spinef_idx: int = 3,
+):
+    pose_augmented = []
+    pitch_level = np.linspace(0, 1, n_levels) # Adjusts pitch by fraction of 1
+    pitch = np.arctan2(pose[:, spinef_idx, 2], pose[:, spinef_idx, 0])
+    n_joints = pose.shape[1]
+
+    for i, level in enumerate(tqdm.tqdm(pitch_level)):
+        pitch_adjusted = pitch*level
+        rot_mat = np.array(
+            [
+                [np.cos(pitch_adjusted), np.zeros(len(pitch)), np.sin(pitch_adjusted)],
+                [np.zeros(len(pitch)), np.ones(len(pitch)), np.zeros(len(pitch))],
+                [-np.sin(pitch_adjusted), np.zeros(len(pitch)), np.cos(pitch_adjusted)],
+            ]
+        ).repeat(n_joints, axis=2)
+        
+        pose_rot = np.einsum("jki,ik->ij", rot_mat, np.reshape(pose, (-1, 3))).reshape(
+            pose.shape
+        )
+
+        pose_augmented += [pose_rot]
+
+    pose_augmented = np.concatenate(pose_augmented, axis=0)
+    meta_expanded, ids_expanded = expand_meta(meta, ids, n_levels)
+    meta_expanded["pitch"] = np.repeat(pitch_level, np.max(ids) + 1)
     return pose_augmented, meta_expanded, ids_expanded

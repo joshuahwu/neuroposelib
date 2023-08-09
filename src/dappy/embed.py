@@ -5,6 +5,7 @@ import time
 from dappy import DataStruct as ds
 from typing import Optional, Union, List
 import faiss
+
 # import tsnecuda as tc
 import openTSNE
 import umap
@@ -34,7 +35,6 @@ class Embed:
         template=None,
         temp_embedding=None,
     ):
-
         self.n_neighbors = n_neighbors
 
         self.min_dist = min_dist
@@ -90,30 +90,37 @@ class Embed:
         # if method == "tsne_cuda":
         #     print("Running CUDA tSNE")
 
-            # if lr == "auto":
-            #     lr = int(features.shape[0] / 12)
+        # if lr == "auto":
+        #     lr = int(features.shape[0] / 12)
 
-            # if perplexity == "auto":
-            #     perplexity = max(int(features.shape[0] / 100), 30)
+        # if perplexity == "auto":
+        #     perplexity = max(int(features.shape[0] / 100), 30)
 
-            # tsne = tc.TSNE(
-            #     n_iter=n_iter,
-            #     verbose=2,
-            #     num_neighbors=n_neighbors,
-            #     perplexity=perplexity,
-            #     learning_rate=lr,
-            # )
-            # embed_vals = tsne.fit_transform(features)
-        if method == 'fitsne':
+        # tsne = tc.TSNE(
+        #     n_iter=n_iter,
+        #     verbose=2,
+        #     num_neighbors=n_neighbors,
+        #     perplexity=perplexity,
+        #     learning_rate=lr,
+        # )
+        # embed_vals = tsne.fit_transform(features)
+        if method == "fitsne":
             print("Running fitsne via openTSNE")
 
-            partial_tsne = functools.partial(openTSNE.TSNE, learning_rate=lr)
+            partial_tsne = functools.partial(
+                openTSNE.TSNE,
+                learning_rate=lr,
+                neighbors="annoy",
+                negative_gradient_method="fft",
+                n_jobs = -1,
+                verbose=True,
+            )
             if perplexity == "auto":
                 tsne = partial_tsne()
             else:
                 assert isinstance(perplexity, int)
                 tsne = partial_tsne(perplexity=perplexity)
-            embed_vals = tsne.fit(features)
+            embed_vals = tsne.fit(features.astype(np.float64)).astype(features.dtype)
 
         elif method == "umap":
             print("Running UMAP")
@@ -215,7 +222,6 @@ class BatchEmbed(Embed):
         temp_idx=[],
         temp_embedding=None,
     ):
-
         """
         t-SNE parameters here are used in the embedding of batches,
         not for the final template itself
@@ -299,7 +305,6 @@ class BatchEmbed(Embed):
         batch_id: Optional[Union[np.ndarray, List[Union[int, str]]]] = None,
         save_batchmaps: Optional[str] = None,
     ):
-
         self.fit(
             data=data, batch_id=batch_id, save_batchmaps=save_batchmaps, embed_temp=True
         )
@@ -354,12 +359,13 @@ class BatchEmbed(Embed):
         self = pickle.load(open(filepath, "rb"))
         return self
 
+
 class KNNGraph:
     """
     Using faiss to run k-Nearest Neighbors algorithm
     """
 
-    def __init__(self, k: int=5):
+    def __init__(self, k: int = 5):
         """
         Creates data structure for fast search of neighbors
         IN:
@@ -374,14 +380,14 @@ class KNNGraph:
 
         return self
 
-        
 
 class KNNEmbed(KNNGraph):
     """
     Using faiss to run k-Nearest Neighbors algorithm for embedding of points in 2D
     when given high-D data and low-D embedding of template data
     """
-    def __init__(self, k: int=5):
+
+    def __init__(self, k: int = 5):
         super().init(k)
         self.distances = None
         self.indices = None
@@ -417,7 +423,6 @@ class KNNEmbed(KNNGraph):
         return predictions
 
 
-
 class GaussDensity:
     """
     Class for creating Gaussian density maps of 2D scatter data
@@ -431,7 +436,6 @@ class GaussDensity:
         log_out: bool = False,
         pad_factor: float = 0.025,
     ):
-
         self.sigma = sigma
         self.n_bins = n_bins
         self.max_clip = max_clip
@@ -481,7 +485,6 @@ class GaussDensity:
         return hist
 
     def fit_density(self, data: np.ndarray, new: bool = True, map_bin: bool = True):
-
         """
         Calculate Gaussian density for 2D embedding
 
@@ -526,9 +529,9 @@ class GaussDensity:
             self.density = None
             self.hist(data, new=True)
 
-        dtype = np.int32 if data.dtype==np.float32 else int
+        dtype = np.int32 if data.dtype == np.float32 else int
 
-        data_in_bin = np.zeros(np.shape(data),dtype)
+        data_in_bin = np.zeros(np.shape(data), dtype)
 
         # This is actually slower
         # data_in_bin[:,1] = np.argmax(self.xedges>np.repeat(data[:,0][:,None],len(self.xedges),axis=1),axis=1)-1
@@ -554,7 +557,6 @@ class GaussDensity:
 
 
 class Watershed(GaussDensity):
-
     density_thresh = 1e-5
 
     def __init__(
@@ -565,7 +567,6 @@ class Watershed(GaussDensity):
         log_out: bool = False,
         pad_factor: float = 0.025,
     ):
-
         super().__init__(
             sigma=sigma,
             n_bins=n_bins,
@@ -595,7 +596,7 @@ class Watershed(GaussDensity):
             -self.density, mask=self.density > self.density_thresh, watershed_line=False
         )
         self.watershed_map[self.density < 1e-5] = 0
-        self.borders = np.empty((0, 2),dtype=data.dtype)
+        self.borders = np.empty((0, 2), dtype=data.dtype)
 
         for i in range(1, len(np.unique(self.watershed_map))):
             contour = measure.find_contours(self.watershed_map.T == i, 0.5)[0]

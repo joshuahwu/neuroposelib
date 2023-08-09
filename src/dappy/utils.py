@@ -75,7 +75,7 @@ def remove_edge_ids(id: np.array, size: int):
     return ind_out
 
 
-def standard_scale(features, clip=None):
+def standard_scale(features, labels, clip=None):
     features -= features.mean(axis=0)
     feat_std = np.std(features, axis=0)
     features = features[:, feat_std != 0]
