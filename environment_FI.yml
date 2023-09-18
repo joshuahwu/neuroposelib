@@ -8,7 +8,6 @@ dependencies:
   - faiss-cpu=1.6.5
   - umap-learn
   - fbpca
-  - opentsne
   - matplotlib
   - seaborn
   - hdf5storage

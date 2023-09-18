@@ -1,5 +1,3 @@
-name: dappy
-
 channels:
   - conda-forge
   - defaults

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Optional, Union, List, Tuple, Type
-
+from pathlib import Path
 
 class DataStruct:
 
@@ -24,7 +24,6 @@ class DataStruct:
         id: Optional[Union[List, np.ndarray]] = None,
         meta: pd.DataFrame = pd.DataFrame(),
         meta_by_frame: pd.DataFrame = pd.DataFrame(),
-        id_full: Optional[Union[List, np.ndarray]] = None,
         pose: np.ndarray = None,
         connectivity=None,
         frame: Optional[Union[List, np.ndarray]] = None,
@@ -46,10 +45,6 @@ class DataStruct:
         elif "frame" not in self.data:
             self.frame = np.arange(0, self.data.shape[0])
 
-        if id_full is not None:
-            self.id_full = id_full
-        else:
-            self.id_full = self.id
         self.meta_by_frame = meta_by_frame
         # import pdb; pdb.set_trace()
 
@@ -60,7 +55,6 @@ class DataStruct:
             data=self.data.loc[idx].reset_index(drop=True),
             pose=self.pose,
             meta=self.meta,
-            id_full=self.id_full,
             feature_labels=self.feature_labels,
             connectivity=self.connectivity,
         )
@@ -129,18 +123,21 @@ class DataStruct:
         pickle.dump(self, open("".join([out_path, "datastruct.p"]), "wb"))
 
     def downsample(self, downsample: int):
+        """
+        TODO: Separately downsamples by id
+        """
         return self[::downsample]
 
-    def cluster_freq(self, cat="id"):
+    def cluster_freq(self, cat1="id", cat2="Cluster"):
         """
-        Calculates the percentage of time each id spends in each cluster
+        Calculates the percentage of time each cat1 spends in each cat2
         OUT:
             freq: numpy array of (# videos x # clusters)
         """
-        num_clusters = np.max(self.data["Cluster"]) + 1
-        freq = np.zeros((len(self.meta[cat]), num_clusters))
-        for i in self.meta[cat]:
-            cluster_by_exp = self.data["Cluster"][self.data[cat] == i]
+        num_clusters = np.max(self.data[cat2]) + 1
+        freq = np.zeros((len(self.meta[cat1]), num_clusters))
+        for i in self.meta[cat1]:
+            cluster_by_exp = self.data[cat2][self.data[cat1] == i]
             freq[i, :] = np.histogram(
                 cluster_by_exp, bins=num_clusters, range=(-0.5, num_clusters - 0.5)
             )[0]
@@ -148,7 +145,7 @@ class DataStruct:
         frame_totals = np.where(frame_totals == 0, 1, frame_totals)
         freq = freq / np.expand_dims(frame_totals, axis=1)
 
-        self.freq = freq
+        self.cluster_frequency = freq
 
         return freq
 
