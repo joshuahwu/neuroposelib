@@ -14,7 +14,6 @@ dependencies:
   - scikit-image=0.19
   - cython=3.0
   - fftw=3.3
-  # - opentsne
   - pandas
   - fbpca
   - ffmpeg=4.2

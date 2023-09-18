@@ -5,10 +5,6 @@ import time
 from dappy import DataStruct as ds
 from typing import Optional, Union, List
 import faiss
-
-# import tsnecuda as tc
-import openTSNE
-import umap
 import tqdm
 
 # import matplotlib.pyplot as plt
@@ -47,6 +43,7 @@ class Embed:
         self.n_trees = n_trees
 
         self.embed_method = embed_method
+
         self.transform_method = transform_method
         self.template = template
         self.temp_embedding = temp_embedding
@@ -106,6 +103,7 @@ class Embed:
         # embed_vals = tsne.fit_transform(features)
         if method == "fitsne":
             print("Running fitsne via openTSNE")
+            import openTSNE
 
             partial_tsne = functools.partial(
                 openTSNE.TSNE,
@@ -124,6 +122,7 @@ class Embed:
             embed_vals = tsne.fit(features.astype(np.float64)).astype(features.dtype)
 
         elif method == "umap":
+            import umap
             print("Running UMAP")
             embedder = umap.UMAP(
                 n_neighbors=n_neighbors, spread=spread, min_dist=min_dist, verbose=True

@@ -439,8 +439,6 @@ def grid3D(
     # Set up figure
     rows = int(np.sqrt(len(frames)))
     cols = int(np.ceil(len(frames) / rows))
-    # cols = min(4, len(frames))
-    # rows = int(len(frames) / 4) + 1
     figsize = (cols * 5, rows * 5)
     fig = plt.figure(figsize=figsize)
 
@@ -459,7 +457,6 @@ def grid3D(
 
             if title is not None:
                 fig.suptitle(title, fontsize=30)
-
             fig.tight_layout()
             writer.grab_frame()
             fig.clear()

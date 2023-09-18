@@ -5,7 +5,7 @@ import dappy.DataStruct as ds
 import numpy as np
 
 analysis_key = "ensemble_healthy"
-config = read.config("../../configs/path_configs/" + analysis_key + ".yaml")
+config = read.config("../configs/" + analysis_key + ".yaml")
 
 connectivity = read.connectivity(
     path=config["skeleton_path"], skeleton_name=config["skeleton_name"]
@@ -142,3 +142,5 @@ data_obj.ws = Watershed(
 )
 
 data_obj.data.loc[:, "Cluster"] = data_obj.ws.fit_predict(data=data_obj.embed_vals)
+
+data_obj.write_pickle(config["out_path"])
