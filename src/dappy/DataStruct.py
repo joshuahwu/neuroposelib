@@ -119,6 +119,7 @@ class DataStruct:
         # if out_path is None:
         #     out_path = self.out_path
         import pickle
+        Path(out_path).mkdir(parents=True, exist_ok=True)
 
         pickle.dump(self, open("".join([out_path, "datastruct.p"]), "wb"))
 
@@ -128,7 +129,7 @@ class DataStruct:
         """
         return self[::downsample]
 
-    def cluster_freq(self, cat1="id", cat2="Cluster"):
+    def get_frequencies(self, cat1="id", cat2="Cluster"):
         """
         Calculates the percentage of time each cat1 spends in each cat2
         OUT:
@@ -144,8 +145,6 @@ class DataStruct:
         frame_totals = np.sum(freq, axis=1)
         frame_totals = np.where(frame_totals == 0, 1, frame_totals)
         freq = freq / np.expand_dims(frame_totals, axis=1)
-
-        self.cluster_frequency = freq
 
         return freq
 
