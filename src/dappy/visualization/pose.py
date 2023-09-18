@@ -383,9 +383,7 @@ def grid3D(
     writer = FFMpegWriter(fps=fps)
     # Set up figure
     rows = int(np.sqrt(len(frames)))
-    cols = int(len(frames)/rows)+1
-    # cols = min(4, len(frames))
-    # rows = int(len(frames) / 4) + 1
+    cols = int(np.ceil(len(frames)/rows))
     figsize = (cols * 5, rows * 5)
     fig = plt.figure(figsize=figsize)
 
@@ -404,7 +402,6 @@ def grid3D(
 
             if title is not None:
                 fig.suptitle(title, fontsize=30)
-
             fig.tight_layout()
             writer.grab_frame()
             fig.clear()

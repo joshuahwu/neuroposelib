@@ -1,22 +1,19 @@
-name: dappy
-
 channels:
   - conda-forge
   - defaults
 
 dependencies:
-  - python=3.8
+  - python=3.9
   - numpy=1.23
-  # - faiss-gpu=1.7.1
-  - faiss
+  - faiss-cpu=1.6.5
+  - umap-learn
+  - fbpca
+  - opentsne
   - matplotlib
   - seaborn
   - hdf5storage
-  - umap-learn
   - numba=0.55.1
   - scikit-image
   - cython
-  - fftw
   - pandas
-  - fbpca
-  - ffmpeg
+  - ffmpeg=
