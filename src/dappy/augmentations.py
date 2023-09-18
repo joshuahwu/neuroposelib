@@ -5,7 +5,6 @@ import numpy as np
 import tqdm
 from scipy.interpolate import CubicSpline
 
-
 def expand_meta(meta: pd.DataFrame, ids: pd.DataFrame, reps: int):
     # Tile pandas DataFrame
     meta_expanded = pd.DataFrame(np.tile(meta.values.T, reps).T, columns=meta.columns)
@@ -102,6 +101,7 @@ def noise(
     ids: Union[np.ndarray, List],
     meta: pd.DataFrame,
 ):
+    print("Augmenting poses with noise")
     # Assumes first element of "level" is 0
     noise = np.zeros(np.shape(pose), dtype=pose.dtype)
     for lev in level[1:]:

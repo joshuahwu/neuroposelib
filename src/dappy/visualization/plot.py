@@ -17,7 +17,6 @@ from pathlib import Path
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.animation import FFMpegWriter
 from typing import Optional, Union, List, Tuple
 
 from dappy import DataStruct as ds
@@ -82,7 +81,7 @@ def scatter_by_cat(
 
 
 def scatter(
-    data: Union[np.ndarray, ds.DataStruct],
+    data: np.ndarray,
     color: Optional[Union[List, np.ndarray]] = None,
     marker_size: int = 3,
     ax_label: str = "t-SNE",
@@ -96,16 +95,12 @@ def scatter(
     input: zValues dataframe, [num of points x 2]
     output: a scatter plot
     """
-    if isinstance(data, ds.DataStruct):
-        x = data.embed_vals[:, 0]
-        y = data.embed_vals[:, 1]
-    elif isinstance(data, np.ndarray):
-        if data.shape.index(2) == 1:
-            x = data[:, 0]
-            y = data[:, 1]
-        else:
-            x = data[0, :]
-            y = data[1, :]
+    if data.shape.index(2) == 1:
+        x = data[:, 0]
+        y = data[:, 1]
+    else:
+        x = data[0, :]
+        y = data[1, :]
 
     f = plt.figure()
     plt.scatter(
@@ -630,6 +625,7 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
     plt.close()
     return
 
+
 def heuristics(features, labels, data_obj, heuristics, filepath):
     filepath = filepath + "/heuristics/"
     for heur_key in heuristics:
@@ -676,15 +672,15 @@ def heuristics(features, labels, data_obj, heuristics, filepath):
         sorted_idx = np.argsort(heur_feats)
         print(sorted_idx)
 
-        skeleton_vid3D(
-            data_obj.pose,
-            data_obj.connectivity,
-            frames=[sorted_idx[-1] * 10],
-            N_FRAMES=100,
-            dpi=100,
-            VID_NAME="highest_" + heur_key + "_score.mp4",
-            SAVE_ROOT=filepath,
-        )
+        # skeleton_vid3D(
+        #     data_obj.pose,
+        #     data_obj.connectivity,
+        #     frames=[sorted_idx[-1] * 10],
+        #     N_FRAMES=100,
+        #     dpi=100,
+        #     VID_NAME="highest_" + heur_key + "_score.mp4",
+        #     SAVE_ROOT=filepath,
+        # )
 
 
 def labeled_watershed(watershed, borders, labels_path):
@@ -774,3 +770,57 @@ def labeled_watershed(watershed, borders, labels_path):
     # )
     plt.savefig("./labeled_map.png")
     plt.close()
+
+
+def feature_ridge(
+    feature: np.ndarray,
+    labels: Union[List, np.ndarray],
+    xlabel: str,
+    ylabel: str,
+    path: str = "./",
+):
+    df = pd.DataFrame({xlabel: feature, ylabel: labels})
+    pal = sns.cubehelix_palette(10, rot=-0.25, light=0.7)
+    grid = sns.FacetGrid(df, row=ylabel, hue=ylabel, aspect=15, height=0.5, palette=pal)
+
+    # Draw the densities in a few steps
+    grid.map(
+        sns.kdeplot,
+        xlabel,
+        bw_adjust=0.5,
+        clip_on=False,
+        fill=True,
+        alpha=1,
+        linewidth=1.5,
+    )
+    grid.map(sns.kdeplot, xlabel, clip_on=False, color="w", lw=2, bw_adjust=0.5)
+
+    # passing color=None to refline() uses the hue mapping
+    grid.refline(y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
+
+    # Define and use a simple function to label the plot in axes coordinates
+    def labelax(x, color, label):
+        ax = plt.gca()
+        ax.text(
+            0,
+            0.2,
+            label,
+            fontweight="bold",
+            color=color,
+            ha="left",
+            va="center",
+            transform=ax.transAxes,
+        )
+
+    grid.map(labelax, xlabel)
+
+    # Set the subplots to overlap
+    grid.figure.subplots_adjust(hspace=-0.25)
+
+    # Remove axes details that don't play well with overlap
+    grid.set_titles("")
+    grid.set(yticks=[], ylabel="")
+    grid.despine(bottom=True, left=True)
+
+    Path(path).mkdir(parents=True, exist_ok=True)
+    plt.savefig(path + "{}_{}_ridge.png".format(xlabel, ylabel))

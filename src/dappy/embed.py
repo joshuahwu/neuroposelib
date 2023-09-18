@@ -113,6 +113,7 @@ class Embed:
                 neighbors="annoy",
                 negative_gradient_method="fft",
                 n_jobs = -1,
+                exaggeration = 1.5,
                 verbose=True,
             )
             if perplexity == "auto":

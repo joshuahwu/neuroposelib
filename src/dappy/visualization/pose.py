@@ -14,6 +14,7 @@ from typing import Optional, Union, List, Tuple
 
 from dappy import DataStruct as ds
 
+
 def sample3D(
     pose: np.ndarray,
     connectivity: ds.Connectivity,
@@ -23,6 +24,7 @@ def sample3D(
     centered: bool = True,
     N_FRAMES: int = 100,
     fps: int = 90,
+    show_map: bool = True,
     filepath: str = "./plot_folder",
 ):
     assert pose.shape[0] == len(labels)
@@ -36,7 +38,9 @@ def sample3D(
             continue
         else:
             num_points = min(len(label_idx), n_samples)
-            permuted_points = np.random.permutation(label_idx) # b/c moving frames filter
+            permuted_points = np.random.permutation(
+                label_idx
+            )  # b/c moving frames filter
             sampled_points = []
             for i in range(len(permuted_points)):
                 if len(sampled_points) == num_points:  # sampled enough points
@@ -45,30 +49,79 @@ def sample3D(
                     np.abs(permuted_points[i] - np.array(sampled_points)) < 200
                 ):  # point is not far enough from previous points
                     continue
-                elif permuted_points[i]<(N_FRAMES/2):
+                elif permuted_points[i] < (N_FRAMES / 2):
                     continue
-                elif permuted_points[i]>(len(labels) - N_FRAMES/2):
+                elif permuted_points[i] > (len(labels) - N_FRAMES / 2):
                     continue
                 else:
                     sampled_points += [permuted_points[i]]
 
-            import pdb; pdb.set_trace()
             assert np.all(labels[sampled_points] == cat)
 
             print(sampled_points)
-            arena3D(
-                pose,
-                connectivity=connectivity,
-                frames=sampled_points,
-                centered=centered,
-                N_FRAMES=N_FRAMES,
-                fps = fps,
-                VID_NAME="".join([vid_label,str(cat), ".mp4"]),
-                SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
+            if show_map:
+                pose3D_expanded(
+                    pose,
+                    label=cat,
+                    connectivity=connectivity,
+                    frames=sampled_points,
+                    N_FRAMES=N_FRAMES,
+                    fps=fps,
+                    VID_NAME="".join([vid_label, str(cat), ".mp4"]),
+                    SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
+                )
+            else:
+                arena3D(
+                    pose,
+                    connectivity=connectivity,
+                    frames=sampled_points,
+                    centered=centered,
+                    N_FRAMES=N_FRAMES,
+                    fps=fps,
+                    VID_NAME="".join([vid_label, str(cat), ".mp4"]),
+                    SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
+                )
+
+def arena3D_map(
+    pose: np.ndarray,
+    connectivity: ds.Connectivity,
+    frames: Union[List[int], int] = [3000, 100000, 500000],
+    centered: bool = True,
+    N_FRAMES: int = 300,
+    fps: int = 90,
+    dpi: int = 200,
+    VID_NAME: str = "0.mp4",
+    SAVE_ROOT: str = "./test/pose_vids/",
+):
+    if isinstance(frames, int):
+        frames = [frames]
+
+    pose_3d, limits, links, COLORS = _init_vid3D(
+        pose, connectivity, np.array(frames, dtype=int), centered, N_FRAMES, SAVE_ROOT
+    )
+
+    # Set up video writer
+    writer = FFMpegWriter(fps=fps)
+    # Setup figure
+    figsize = (12, 12)
+    fig = plt.figure(figsize=figsize)
+    ax_3d = fig.add_subplot(1, 1, 1, projection="3d")
+    with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
+        for curr_frame in tqdm.tqdm(range(N_FRAMES)):
+            curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
+            ax_3d = _pose3D_arena(
+                ax_3d, pose_3d, COLORS, links, curr_frames, limits, figsize
             )
 
+            # grab frame and write to vid
+            writer.grab_frame()
+            ax_3d.clear()
+        fig.tight_layout
 
-def pose3D_expanded(
+    plt.close()
+    return
+
+def arena3D_map(
     data: Union[ds.DataStruct, np.ndarray],
     label: str,
     connectivity: Optional[ds.Connectivity] = None,
@@ -255,7 +308,7 @@ def _init_vid3D(
     for start in frames:
         pose_3d += [data[start : start + N_FRAMES, ...]]
 
-    pose_3d = np.concatenate(pose_3d,axis=0)
+    pose_3d = np.concatenate(pose_3d, axis=0)
 
     # compute 3d grid limits
     limits = get_3d_limits(pose_3d)
@@ -276,7 +329,7 @@ def _pose3D_arena(
     kpts_3d = np.reshape(data[frames, :, :], (len(frames) * data.shape[-2], 3))
 
     ax_3d = _pose3D_frame(
-        ax_3d, kpts_3d, COLORS, links, limits#, figsize=(cols * 5, rows * 5)
+        ax_3d, kpts_3d, COLORS, links, limits  # , figsize=(cols * 5, rows * 5)
     )
 
     if title is not None:
@@ -300,7 +353,7 @@ def arena3D(
         frames = [frames]
 
     pose_3d, limits, links, COLORS = _init_vid3D(
-        pose, connectivity, np.array(frames,dtype=int), centered, N_FRAMES, SAVE_ROOT
+        pose, connectivity, np.array(frames, dtype=int), centered, N_FRAMES, SAVE_ROOT
     )
 
     # Set up video writer
@@ -312,7 +365,9 @@ def arena3D(
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
-            ax_3d = _pose3D_arena(ax_3d, pose_3d, COLORS, links, curr_frames, limits, figsize)
+            ax_3d = _pose3D_arena(
+                ax_3d, pose_3d, COLORS, links, curr_frames, limits, figsize
+            )
 
             # grab frame and write to vid
             writer.grab_frame()
@@ -344,7 +399,7 @@ def _pose3D_grid(
             connectivity.links,
             limits,
             # TODO: adjust marker and line sizes w/figsize
-            # figsize=(cols * 5, rows * 5), 
+            # figsize=(cols * 5, rows * 5),
         )
 
         ax_3d.grid(False)
@@ -376,14 +431,14 @@ def grid3D(
         frames = [frames]
     # Reshape pose and other variables
     pose_3d, limits, links, COLOR = _init_vid3D(
-        pose, connectivity, np.array(frames,dtype=int), centered, N_FRAMES, SAVE_ROOT
+        pose, connectivity, np.array(frames, dtype=int), centered, N_FRAMES, SAVE_ROOT
     )
 
     # Set up video writer
     writer = FFMpegWriter(fps=fps)
     # Set up figure
     rows = int(np.sqrt(len(frames)))
-    cols = int(len(frames)/rows)+1
+    cols = int(np.ceil(len(frames) / rows))
     # cols = min(4, len(frames))
     # rows = int(len(frames) / 4) + 1
     figsize = (cols * 5, rows * 5)
