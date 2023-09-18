@@ -7,6 +7,11 @@ class DataStruct:
 
     """
     Class for organizing and linking metadata to features and pose data
+
+    TODO: Refactor this class/potentially deprecate
+    TODO: If refactor, make categorical meta fields to be sparse matrices.
+    TODO: Another idea is to use this to store analysis transform objects 
+    (e.g. pca, umap, t-sne, watershed)
     """
 
     _props = [
