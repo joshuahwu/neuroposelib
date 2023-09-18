@@ -27,7 +27,7 @@ $RECYCLE.BIN/
 *.png
 *.pyc
 *./src/dappy/__pycache__/
-
+/.vscode/
 
 
 /tutorials/*

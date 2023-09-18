@@ -73,8 +73,8 @@ def scatter_by_cat(
         palette=color,
         s=size,
     )
-    ax.set(xlabel="t-SNE 1", ylabel="t-SNE 2")
-    ax.set_box_aspect(0.8)
+    # ax.set(xlabel="t-SNE 1", ylabel="t-SNE 2")
+    ax.set_box_aspect(0.9)
     ax.figure.savefig("".join([filepath, "scatter_by_", label, ".png"]))
     plt.close()
     # plt.savefig(''.join([filepath, 'scatter_by_', label, '.png']))
@@ -138,7 +138,7 @@ def watershed(
     f = plt.figure()
     ax = f.add_subplot(111)
     ax.imshow(ws_map)
-    ax.set_aspect("auto")
+    ax.set_aspect(0.9)
     if ws_borders is not None:
         ax.plot(ws_borders[:, 0], ws_borders[:, 1], ".k", markersize=0.05)
     plt.savefig("".join([filepath, "_watershed.png"]), dpi=200)
@@ -169,7 +169,7 @@ def scatter_on_watershed(
     )
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.set_aspect("auto")
+    ax.set_aspect(0.9)
     filename = "".join([data.out_path, "points_by_cluster/all.png"])
     plt.savefig(filename, dpi=200)
     plt.close()
@@ -187,7 +187,7 @@ def scatter_on_watershed(
         )
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.set_aspect("auto")
+        ax.set_aspect(0.9)
         filename = "".join(
             [
                 data.out_path,
@@ -244,7 +244,7 @@ def density(
     ax.imshow(density)
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.set_aspect("auto")
+    ax.set_aspect(0.9)
     if filepath:
         plt.savefig(filepath, dpi=200)
     if show:
@@ -288,8 +288,6 @@ def density_cat(
                 )
             ax_arr[col_i].set_aspect(0.9)
             ax_arr[col_i].set_title(label)
-            ax_arr[col_i].set_xlabel("t-SNE 1")
-            ax_arr[col_i].set_ylabel("t-SNE 2")
             ax_arr[col_i].set_xticks([])
             ax_arr[col_i].set_yticks([])
         else:
@@ -304,8 +302,6 @@ def density_cat(
                 )
             ax_arr[row_i, col_i].set_aspect(0.9)
             ax_arr[row_i, col_i].set_title(label)
-            ax_arr[row_i, col_i].set_xlabel("t-SNE 1")
-            ax_arr[row_i, col_i].set_ylabel("t-SNE 2")
             ax_arr[row_i, col_i].set_xticks([])
             ax_arr[row_i, col_i].set_yticks([])
     f.tight_layout()
@@ -353,10 +349,8 @@ def density_grid(
                         ".k",
                         markersize=0.1,
                     )
-                ax_arr[j].set_aspect("auto")
+                ax_arr[j].set_aspect(0.9)
                 ax_arr[j].set_title(label1)
-                ax_arr[j].set_xlabel("t-SNE 1")
-                ax_arr[j].set_ylabel("t-SNE 2")
                 ax_arr[j].set_xticks([])
                 ax_arr[j].set_yticks([])
             else:
@@ -371,9 +365,7 @@ def density_grid(
                     )
                 if i == 0:
                     ax_arr[0, j].set_title(label2)
-                ax_arr[i, j].set_aspect("auto")
-                ax_arr[i, j].set_xlabel("t-SNE 1")
-                ax_arr[i, j].set_ylabel("t-SNE 2")
+                ax_arr[i, j].set_aspect(0.9)
                 ax_arr[i, j].set_xticks([])
                 ax_arr[i, j].set_yticks([])
     f.tight_layout()

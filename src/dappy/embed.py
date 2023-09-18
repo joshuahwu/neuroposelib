@@ -110,8 +110,8 @@ class Embed:
                 learning_rate=lr,
                 neighbors="annoy",
                 negative_gradient_method="fft",
-                n_jobs = -1,
-                exaggeration = 1.5,
+                n_jobs=-1,
+                exaggeration=1.5,
                 verbose=True,
             )
             if perplexity == "auto":
@@ -119,10 +119,13 @@ class Embed:
             else:
                 assert isinstance(perplexity, int)
                 tsne = partial_tsne(perplexity=perplexity)
-            embed_vals = tsne.fit(features.astype(np.float64)).astype(features.dtype)
+            embed_vals = np.array(
+                tsne.fit(features.astype(np.float64)), dtype=features.dtype
+            )
 
         elif method == "umap":
             import umap
+
             print("Running UMAP")
             embedder = umap.UMAP(
                 n_neighbors=n_neighbors, spread=spread, min_dist=min_dist, verbose=True
