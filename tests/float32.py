@@ -142,5 +142,4 @@ data_obj.ws = Watershed(
 )
 
 data_obj.data.loc[:, "Cluster"] = data_obj.ws.fit_predict(data=data_obj.embed_vals)
-import pdb; pdb.set_trace()
 data_obj.write_pickle(config["out_path"])
