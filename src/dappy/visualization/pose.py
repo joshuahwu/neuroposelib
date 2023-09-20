@@ -13,7 +13,7 @@ from matplotlib.animation import FFMpegWriter
 from typing import Optional, Union, List, Tuple
 from dappy.embed import Watershed
 from dappy import DataStruct as ds
-from dappy.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
+from dappy.visualization.constants import PALETTE, EPS, DEFAULT_BONE
 from dappy.visualization.plot import _mask_density
 
 
@@ -144,7 +144,7 @@ def arena3D_map(
     ax_dens.imshow(
         density,
         vmin=EPS,
-        cmap=DEFAULT_VIRIDIS,
+        cmap=DEFAULT_BONE,
     )
 
     ax_dens.plot(

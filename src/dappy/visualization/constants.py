@@ -1,4 +1,5 @@
 import matplotlib
+import numpy as np
 
 PALETTE = [
     (1, 0.5, 0),
@@ -31,3 +32,8 @@ PALETTE = [
 DEFAULT_VIRIDIS = matplotlib.cm.get_cmap("viridis")
 DEFAULT_VIRIDIS.set_under("white")
 EPS = 0.99e-3
+
+DEFAULT_BONE = matplotlib.colors.ListedColormap(
+    matplotlib.colormaps["bone_r"](np.linspace(0.05, 0.4, 256))
+)
+DEFAULT_BONE.set_under("white")
