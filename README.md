@@ -21,7 +21,7 @@ pip install -e .
 
 Note that `pip` and `setuptools` must be updated to the most recent versions.
 
-To begin gaining familiarity with the functionality of this package, download the demo dataset at [this link](https://duke.box.com/v/demo-mouse-poses) or by the following command:
+To begin gaining familiarity with the functionality of this package, download the demo dataset at [this link](https://duke.box.com/v/demo-mouse-poses) or with the command line as follows:
 
 ```
 cd dappy
