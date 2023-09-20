@@ -9,7 +9,6 @@ import tqdm
 
 # import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
-from skimage.segmentation import watershed
 from skimage import measure
 import pickle
 
@@ -560,7 +559,7 @@ class GaussDensity:
 
 
 class Watershed(GaussDensity):
-    density_thresh = 1e-5
+    density_thresh = 1e-3
 
     def __init__(
         self,
@@ -591,14 +590,14 @@ class Watershed(GaussDensity):
         OUT:
             self.density
         """
-
+        from skimage.segmentation import watershed
         self.density = self.fit_density(data, new=True, map_bin=False)
 
         print("Calculating watershed")
         self.watershed_map = watershed(
             -self.density, mask=self.density > self.density_thresh, watershed_line=False
         )
-        self.watershed_map[self.density < 1e-5] = 0
+        self.watershed_map[self.density < self.density_thresh] = 0
         self.borders = np.empty((0, 2), dtype=data.dtype)
 
         for i in range(1, len(np.unique(self.watershed_map))):

@@ -11,8 +11,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 from typing import Optional, Union, List, Tuple
-
+from dappy.embed import Watershed
 from dappy import DataStruct as ds
+from dappy.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
+from dappy.visualization.plot import _mask_density
 
 
 def sample3D(
@@ -24,12 +26,22 @@ def sample3D(
     centered: bool = True,
     N_FRAMES: int = 100,
     fps: int = 90,
-    show_map: bool = True,
+    watershed: Optional[Watershed] = None,
+    embed_vals: Optional[np.ndarray] = None,
     filepath: str = "./plot_folder",
 ):
-    assert pose.shape[0] == len(labels)
-    index = np.arange(len(labels))
+    
+    if pose.shape[0] != len(labels):
+        print("Detected labels not the same shape as pose...")
+        downsample = int(np.ceil(pose.shape[0]/len(labels)))
+        print("Assuming labels downsampled by {}".format(downsample))
+        assert 0 <= len(labels)*downsample - pose.shape[0] < downsample
+    else:
+        downsample = 1
 
+    assert (embed_vals is None) or (embed_vals.shape[0] == len(labels))
+    
+    index = np.arange(len(labels))*downsample
     unique_labels = np.unique(labels)
 
     for cat in tqdm.tqdm(unique_labels):
@@ -51,18 +63,36 @@ def sample3D(
                     continue
                 elif permuted_points[i] < (N_FRAMES / 2):
                     continue
-                elif permuted_points[i] > (len(labels) - N_FRAMES / 2):
+                elif permuted_points[i] > (pose.shape[0] - N_FRAMES / 2):
                     continue
                 else:
                     sampled_points += [permuted_points[i]]
 
-            assert np.all(labels[sampled_points] == cat)
+            assert np.all(labels[(np.array(sampled_points)/downsample).astype(int)] == cat)
 
             print(sampled_points)
-            if show_map:
-                pose3D_expanded(
+            if (watershed is not None) and (embed_vals is not None):
+                density = watershed.fit_density(
+                    embed_vals[labels == cat, :], new=False
+                )  # Fit density on old axes
+
+                arena3D_map(
                     pose,
-                    label=cat,
+                    _mask_density(density, watershed.watershed_map, eps=EPS*1.01),
+                    watershed_borders=watershed.borders,
+                    connectivity=connectivity,
+                    frames=sampled_points,
+                    N_FRAMES=N_FRAMES,
+                    fps=fps,
+                    VID_NAME="".join([vid_label, str(cat), ".mp4"]),
+                    SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
+                )
+            elif (watershed is not None) and (embed_vals is None):
+                density = np.where(watershed.watershed_map == cat, 1, 0.1)
+                arena3D_map(
+                    pose,
+                    _mask_density(density, watershed.watershed_map, eps=EPS*1.01),
+                    watershed_borders=watershed.borders,
                     connectivity=connectivity,
                     frames=sampled_points,
                     N_FRAMES=N_FRAMES,
@@ -82,8 +112,11 @@ def sample3D(
                     SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
                 )
 
+
 def arena3D_map(
     pose: np.ndarray,
+    density: np.ndarray,
+    watershed_borders: np.ndarray,
     connectivity: ds.Connectivity,
     frames: Union[List[int], int] = [3000, 100000, 500000],
     centered: bool = True,
@@ -103,9 +136,28 @@ def arena3D_map(
     # Set up video writer
     writer = FFMpegWriter(fps=fps)
     # Setup figure
-    figsize = (12, 12)
+    figsize = (24, 12)
     fig = plt.figure(figsize=figsize)
-    ax_3d = fig.add_subplot(1, 1, 1, projection="3d")
+    gs = fig.add_gridspec(1, 2)
+    ax_3d = fig.add_subplot(gs[0, 1], projection="3d")
+    ax_dens = fig.add_subplot(gs[0, 0])
+    ax_dens.imshow(
+        density,
+        vmin=EPS,
+        cmap=DEFAULT_VIRIDIS,
+    )
+
+    ax_dens.plot(
+        watershed_borders[:, 0],
+        watershed_borders[:, 1],
+        ".k",
+        markersize=0.1,
+    )
+
+    ax_dens.set_aspect(0.9)
+    ax_dens.set_title("Map")
+    ax_dens.axis("off")
+
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
@@ -121,104 +173,105 @@ def arena3D_map(
     plt.close()
     return
 
-def arena3D_map(
-    data: Union[ds.DataStruct, np.ndarray],
-    label: str,
-    connectivity: Optional[ds.Connectivity] = None,
-    frames: List = [3000, 100000, 5000000],
-    N_FRAMES: int = 150,
-    fps: int = 90,
-    dpi: int = 100,
-    VID_NAME: str = "0.mp4",
-    SAVE_ROOT: str = "./test/skeleton_vids/",
-):
-    pose_3d, limits, links_expand, COLOR = _init_vid3D(
-        data, connectivity, frames, N_FRAMES, SAVE_ROOT
-    )
 
-    # set up video writer
-    writer = FFMpegWriter(fps=fps)
+# def arena3D_map(
+#     data: Union[ds.DataStruct, np.ndarray],
+#     label: str,
+#     connectivity: Optional[ds.Connectivity] = None,
+#     frames: List = [3000, 100000, 5000000],
+#     N_FRAMES: int = 150,
+#     fps: int = 90,
+#     dpi: int = 100,
+#     VID_NAME: str = "0.mp4",
+#     SAVE_ROOT: str = "./test/skeleton_vids/",
+# ):
+#     pose_3d, limits, links_expand, COLOR = _init_vid3D(
+#         data, connectivity, frames, N_FRAMES, SAVE_ROOT
+#     )
 
-    extent = [*data.ws.hist_range[0], *data.ws.hist_range[1]]
-    embed_vals = data.embed_vals[data.data["Cluster"] == label]
-    colors = [
-        "k",
-        "tab:blue",
-        "tab:green",
-        "tab:orange",
-        "tab:purple",
-        "tab:brown",
-        "tab:pink",
-        "tab:gray",
-        "tab:olive",
-        "tab:cyan",
-        "#dc0ab4",
-        "#00b7c7",
-    ]
+#     # set up video writer
+#     writer = FFMpegWriter(fps=fps)
 
-    # Setup figure
-    fig = plt.figure(figsize=(20, 10))
-    gs = fig.add_gridspec(1, 2)
-    ax_3d = fig.add_subplot(gs[0, 1], projection="3d")
-    ax_dens = fig.add_subplot(gs[0, 0])
+#     extent = [*data.ws.hist_range[0], *data.ws.hist_range[1]]
+#     embed_vals = data.embed_vals[data.data["Cluster"] == label]
+#     colors = [
+#         "k",
+#         "tab:blue",
+#         "tab:green",
+#         "tab:orange",
+#         "tab:purple",
+#         "tab:brown",
+#         "tab:pink",
+#         "tab:gray",
+#         "tab:olive",
+#         "tab:cyan",
+#         "#dc0ab4",
+#         "#00b7c7",
+#     ]
 
-    cond_uniq = data.data["Condition"].unique()
-    frames_meta = data.data[data.data["frame"].isin(frames)]["Condition"].values
+#     # Setup figure
+#     fig = plt.figure(figsize=(20, 10))
+#     gs = fig.add_gridspec(1, 2)
+#     ax_3d = fig.add_subplot(gs[0, 1], projection="3d")
+#     ax_dens = fig.add_subplot(gs[0, 0])
 
-    ax_dens.imshow(data.ws.watershed_map, zorder=0, extent=extent)
-    ax_dens.plot(
-        embed_vals[:, 0], embed_vals[:, 1], ".r", markersize=1, alpha=0.1, zorder=1
-    )
-    ax_dens.set_aspect("auto")
-    ax_dens.set_xticks([])
-    ax_dens.set_yticks([])
+#     cond_uniq = data.data["Condition"].unique()
+#     frames_meta = data.data[data.data["frame"].isin(frames)]["Condition"].values
 
-    with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
-        for curr_frame in tqdm.tqdm(range(N_FRAMES)):
-            # grab frames
-            curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
-            kpts_3d = np.reshape(
-                pose_3d[curr_frames, :, :], (len(frames) * pose_3d.shape[-2], 3)
-            )
+#     ax_dens.imshow(data.ws.watershed_map, zorder=0, extent=extent)
+#     ax_dens.plot(
+#         embed_vals[:, 0], embed_vals[:, 1], ".r", markersize=1, alpha=0.1, zorder=1
+#     )
+#     ax_dens.set_aspect("auto")
+#     ax_dens.set_xticks([])
+#     ax_dens.set_yticks([])
 
-            # plot 3d moving skeletons
-            for i in range(len(np.unique(frames_meta))):
-                temp_idx = curr_frames[frames_meta == np.unique(frames_meta)[i]]
-                temp_kpts = np.reshape(
-                    [pose_3d[temp_idx, :, :]], (len(temp_idx) * pose_3d.shape[-2], 3)
-                )
-                ax_3d.scatter(
-                    temp_kpts[:, 0],
-                    temp_kpts[:, 1],
-                    temp_kpts[:, 2],
-                    marker=".",
-                    color=colors[i],
-                    linewidths=0.5,
-                    label=cond_uniq[i],
-                )
-            ax_3d.legend()
+#     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
+#         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
+#             # grab frames
+#             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
+#             kpts_3d = np.reshape(
+#                 pose_3d[curr_frames, :, :], (len(frames) * pose_3d.shape[-2], 3)
+#             )
 
-            for color, (index_from, index_to) in zip(COLOR, links_expand):
-                xs, ys, zs = [
-                    np.array([kpts_3d[index_from, j], kpts_3d[index_to, j]])
-                    for j in range(3)
-                ]
-                ax_3d.plot3D(xs, ys, zs, c=color, lw=2)
+#             # plot 3d moving skeletons
+#             for i in range(len(np.unique(frames_meta))):
+#                 temp_idx = curr_frames[frames_meta == np.unique(frames_meta)[i]]
+#                 temp_kpts = np.reshape(
+#                     [pose_3d[temp_idx, :, :]], (len(temp_idx) * pose_3d.shape[-2], 3)
+#                 )
+#                 ax_3d.scatter(
+#                     temp_kpts[:, 0],
+#                     temp_kpts[:, 1],
+#                     temp_kpts[:, 2],
+#                     marker=".",
+#                     color=colors[i],
+#                     linewidths=0.5,
+#                     label=cond_uniq[i],
+#                 )
+#             ax_3d.legend()
 
-            ax_3d.set_xlim(*limits[0, :])
-            ax_3d.set_ylim(*limits[1, :])
-            ax_3d.set_zlim(*limits[2, :])
-            ax_3d.set_xlabel("x")
-            ax_3d.set_ylabel("y")
-            ax_3d.set_box_aspect(limits[:, 1] - limits[:, 0])
+#             for color, (index_from, index_to) in zip(COLOR, links_expand):
+#                 xs, ys, zs = [
+#                     np.array([kpts_3d[index_from, j], kpts_3d[index_to, j]])
+#                     for j in range(3)
+#                 ]
+#                 ax_3d.plot3D(xs, ys, zs, c=color, lw=2)
 
-            # grab frame and write to vid
-            writer.grab_frame()
-            fig.tight_layout()
-            ax_3d.clear()
+#             ax_3d.set_xlim(*limits[0, :])
+#             ax_3d.set_ylim(*limits[1, :])
+#             ax_3d.set_zlim(*limits[2, :])
+#             ax_3d.set_xlabel("x")
+#             ax_3d.set_ylabel("y")
+#             ax_3d.set_box_aspect(limits[:, 1] - limits[:, 0])
 
-    plt.close()
-    return 0
+#             # grab frame and write to vid
+#             writer.grab_frame()
+#             fig.tight_layout()
+#             ax_3d.clear()
+
+#     plt.close()
+#     return 0
 
 
 def get_3d_limits(pose: np.ndarray):

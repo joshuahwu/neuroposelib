@@ -1,13 +1,8 @@
 import os
 import numpy as np
-
-# import scipy.io as sio
 import scipy as scp
-
-# import imageio
 import tqdm
 
-# import hdf5storage
 import pandas as pd
 import seaborn as sns
 from matplotlib.lines import Line2D
@@ -22,34 +17,7 @@ from typing import Optional, Union, List, Tuple
 from dappy import DataStruct as ds
 from dappy.embed import Watershed, GaussDensity
 from dappy.analysis import cluster_freq_by_cat
-
-palette = [
-    (1, 0.5, 0),
-    (0.5, 0.5, 0.85),
-    (0, 1, 0),
-    (1, 0, 0),
-    (0, 0, 0.9),
-    (0, 1, 1),
-    (0.4, 0.4, 0.4),
-    (0.5, 0.85, 0.5),
-    (0.5, 0.15, 0.5),
-    (0.15, 0.5, 0.5),
-    (0.5, 0.5, 0.15),
-    (0.9, 0.9, 0),
-    (1, 0, 1),
-    (0, 0.5, 1),
-    (0.85, 0.5, 0.5),
-    (0.5, 1, 0),
-    (0.5, 0, 1),
-    (1, 0, 0.5),
-    (0, 0.9, 0.6),
-    (0.3, 0.6, 0),
-    (0, 0.3, 0.6),
-    (0.6, 0.3, 0),
-    (0.3, 0, 0.6),
-    (0, 0.6, 0.3),
-    (0.6, 0, 0.3),
-]
+from dappy.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
 
 
 def scatter_by_cat(
@@ -60,11 +28,8 @@ def scatter_by_cat(
     color=None,
     filepath: str = "./",
 ):
-    colors = np.zeros(cat.shape)
-    # for i, key in enumerate(np.unique(cat)):
-    #     colors[cat==key] = np.repeat(palette[i], np.size(colors[cat==key]))
     if color == None:
-        color = palette
+        color = PALETTE
     ax = sns.scatterplot(
         x=data[:, 0],
         y=data[:, 1],
@@ -85,7 +50,7 @@ def scatter(
     color: Optional[Union[List, np.ndarray]] = None,
     marker_size: int = 3,
     ax_label: str = "t-SNE",
-    filepath: str = "./plot_folder/scatter.png",
+    filepath: str = "./results/scatter.png",
     show: bool = False,
     **kwargs
 ):
@@ -129,7 +94,7 @@ def scatter(
 def watershed(
     ws_map: np.ndarray,
     ws_borders: Optional[np.ndarray] = None,
-    filepath: str = "./plot_folder/watershed.png",
+    filepath: str = "./results/watershed.png",
 ):
     """
     Plotting a watershed map with clusters colored
@@ -137,32 +102,38 @@ def watershed(
     """
     f = plt.figure()
     ax = f.add_subplot(111)
-    ax.imshow(ws_map)
+    ax.imshow(ws_map, vmin=EPS, cmap=DEFAULT_VIRIDIS)
     ax.set_aspect(0.9)
     if ws_borders is not None:
         ax.plot(ws_borders[:, 0], ws_borders[:, 1], ".k", markersize=0.05)
+
+    ax.axis("off")
     plt.savefig("".join([filepath, "_watershed.png"]), dpi=200)
     plt.close()
 
 
 def scatter_on_watershed(
-    data: ds.DataStruct,
-    watershed: GaussDensity,
-    column: str,
+    data: ds.DataStruct, watershed: GaussDensity, column: str, path: str = "./results/"
 ):
+    out_path = "{}points_by_{}/".format(path, column)
     labels = data.data[column].values
-    Path("".join([data.out_path, "points_by_cluster/"])).mkdir(
-        parents=True, exist_ok=True
-    )
+    Path(out_path).mkdir(parents=True, exist_ok=True)
     extent = [*watershed.hist_range[0], *watershed.hist_range[1]]
 
     f = plt.figure()
     ax = f.add_subplot(111)
-    ax.imshow(watershed.watershed_map, zorder=1, extent=extent)
+    ax.imshow(
+        watershed.watershed_map,
+        zorder=1,
+        extent=extent,
+        vmin=EPS,
+        cmap=DEFAULT_VIRIDIS,
+    )
     ax.plot(
         data.embed_vals[:, 0],
         data.embed_vals[:, 1],
-        ".r",
+        marker=".",
+        c="k",
         markersize=1,
         alpha=0.1,
         zorder=2,
@@ -170,34 +141,39 @@ def scatter_on_watershed(
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_aspect(0.9)
-    filename = "".join([data.out_path, "points_by_cluster/all.png"])
+    ax.axis("off")
+    filename = "{}all.png".format(out_path)
     plt.savefig(filename, dpi=200)
     plt.close()
 
     print("Plotting scatter on watershed for each ", column)
-    for i, label in tqdm.tqdm(enumerate(np.unique(labels))):
+    for i, label in enumerate(tqdm.tqdm(np.unique(labels))):
         embed_vals = data.embed_vals[data.data[column] == label]
 
         f = plt.figure()
         ax = f.add_subplot(111)
-        ax.imshow(watershed.watershed_map, zorder=0, extent=extent)
+        ax.imshow(
+            watershed.watershed_map,
+            zorder=0,
+            extent=extent,
+            vmin=EPS,
+            cmap=DEFAULT_VIRIDIS,
+        )
 
         ax.plot(
-            embed_vals[:, 0], embed_vals[:, 1], ".r", markersize=1, alpha=0.1, zorder=1
+            embed_vals[:, 0],
+            embed_vals[:, 1],
+            marker=".",
+            c="k",
+            markersize=2,
+            alpha=0.1,
+            zorder=2,
         )
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_aspect(0.9)
-        filename = "".join(
-            [
-                data.out_path,
-                "points_by_cluster/",
-                column,
-                "_points_",
-                str(label),
-                ".png",
-            ]
-        )
+        filename = "{}{}_points_{}.png".format(out_path, column, str(label))
+        ax.axis("off")
         plt.savefig(filename, dpi=400)
         plt.close()
 
@@ -208,7 +184,7 @@ def density_feat(
     features: np.ndarray,
     feature_labels: List,
     key: str,
-    file_path: str = "./plot_folder/",
+    file_path: str = "./results/",
 ):
     feat_key = features[:, feature_labels.index(key)]
     density_feat = np.zeros((watershed.n_bins, watershed.n_bins))
@@ -234,17 +210,18 @@ def density_feat(
 def density(
     density: np.ndarray,
     ws_borders: Optional[np.ndarray] = None,
-    filepath: str = "./plot_folder/density.png",
+    filepath: str = "./results/density.png",
     show: bool = False,
 ):
     f = plt.figure()
     ax = f.add_subplot(111)
     if ws_borders is not None:
         ax.plot(ws_borders[:, 0], ws_borders[:, 1], ".k", markersize=0.1)
-    ax.imshow(density)
+    ax.imshow(density, vmin=EPS, cmap=DEFAULT_VIRIDIS)
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_aspect(0.9)
+    ax.axis("off")
     if filepath:
         plt.savefig(filepath, dpi=200)
     if show:
@@ -252,58 +229,59 @@ def density(
     plt.close()
 
 
+def _mask_density(density, watershed_map, eps: float = EPS*1.01):
+    mask = watershed_map >= 1
+    density[mask] = np.maximum(density[mask], eps)
+    density[~mask] = 0
+    return density
+
+
 def density_cat(
     data: ds.DataStruct,
     column: str,
     watershed: Watershed,
-    filepath: str = "./plot_folder/density_by_label.png",
-    n_col: int = 4,
+    filepath: str = "./results/density_by_label.png",
     show: bool = False,
 ):
     """
     Plot densities by a category label
     """
     labels = data.data[column].values
-    n_col = min(n_col, len(np.unique(labels)))
-    n_rows = int(np.ceil(len(np.unique(labels)) / n_col))
-    f, ax_arr = plt.subplots(n_rows, n_col, figsize=((n_col + 1) * 4, n_rows * 4))
+
+    n_ulabels = len(np.unique(labels))
+    n_rows = int(np.sqrt(n_ulabels))
+    n_cols = int(np.ceil(n_ulabels / n_rows))
+    f, ax_arr = plt.subplots(n_rows, n_cols, figsize=(n_cols * 4, n_rows * 4))
 
     # Loop over unique labels
-    for i, label in enumerate(np.unique(labels)):
+    for i, (label, ax) in enumerate(
+        zip(np.unique(labels), ax_arr.reshape(-1)[:n_ulabels])
+    ):
         embed_vals = data.embed_vals[data.data[column] == label]  # Indexing by label
         density = watershed.fit_density(
             embed_vals, new=False
         )  # Fit density on old axes
-        col_i = i % n_col
-        row_i = int(i / n_col)
-        if n_rows == 1:
-            ax_arr[col_i].imshow(density)  # scp.special.softmax(density))
 
-            if watershed is not None:
-                ax_arr[col_i].plot(
-                    watershed.borders[:, 0],
-                    watershed.borders[:, 1],
-                    ".k",
-                    markersize=0.1,
-                )
-            ax_arr[col_i].set_aspect(0.9)
-            ax_arr[col_i].set_title(label)
-            ax_arr[col_i].set_xticks([])
-            ax_arr[col_i].set_yticks([])
-        else:
-            ax_arr[int(i / n_col), col_i].imshow(scp.special.softmax(density))
+        ax.imshow(
+            _mask_density(density, watershed.watershed_map, EPS*1.01),
+            vmin=EPS,
+            cmap=DEFAULT_VIRIDIS,
+        )  # scp.special.softmax(density))
 
-            if watershed is not None:
-                ax_arr[row_i, col_i].plot(
-                    watershed.borders[:, 0],
-                    watershed.borders[:, 1],
-                    ".k",
-                    markersize=0.1,
-                )
-            ax_arr[row_i, col_i].set_aspect(0.9)
-            ax_arr[row_i, col_i].set_title(label)
-            ax_arr[row_i, col_i].set_xticks([])
-            ax_arr[row_i, col_i].set_yticks([])
+        if watershed is not None:
+            ax.plot(
+                watershed.borders[:, 0],
+                watershed.borders[:, 1],
+                ".k",
+                markersize=0.1,
+            )
+        ax.set_aspect(0.9)
+        ax.set_title(label)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.axis("off")
+
+    # ax_arr = ax_arr.reshape(n_rows,n_cols)
     f.tight_layout()
     plt.savefig(filepath, dpi=200)
     if show:
@@ -317,7 +295,7 @@ def density_grid(
     cat1: str,
     cat2: str,
     watershed: Watershed,
-    filepath: str = "./plot_folder/density_by_label.png",
+    filepath: str = "./results/density_by_label.png",
     show: bool = False,
 ):
     """
@@ -330,44 +308,45 @@ def density_grid(
 
     # Loop over unique labels
     for i, label1 in enumerate(np.unique(labels1)):
-        ax_arr[i, 0].set_title(label1)
+        # if n_rows != 1:
+        #     ax_arr[i, 0].set_title(label1)
+
         for j, label2 in enumerate(np.unique(labels2)):
-            # import pdb; pdb.set_trace()
             embed_vals = data.embed_vals[
                 (data.data[cat1] == label1) & (data.data[cat2] == label2)
             ]  # Indexing by label
             density = watershed.fit_density(
                 embed_vals, new=False
             )  # Fit density on old axes
-            if n_rows == 1:
-                ax_arr[j].imshow(density)  # scp.special.softmax(density))
+            idx = i * len(np.unique(labels2)) + j
 
-                if watershed is not None:
-                    ax_arr[j].plot(
-                        watershed.borders[:, 0],
-                        watershed.borders[:, 1],
-                        ".k",
-                        markersize=0.1,
-                    )
-                ax_arr[j].set_aspect(0.9)
-                ax_arr[j].set_title(label1)
-                ax_arr[j].set_xticks([])
-                ax_arr[j].set_yticks([])
-            else:
-                ax_arr[i, j].imshow(scp.special.softmax(density))
+            # if n_rows == 1:
+            ax_arr[idx].imshow(
+                _mask_density(density, watershed.watershed_map, EPS*1.01),
+                vmin=EPS,
+                cmap=DEFAULT_VIRIDIS,
+            )
 
-                if watershed is not None:
-                    ax_arr[i, j].plot(
-                        watershed.borders[:, 0],
-                        watershed.borders[:, 1],
-                        ".k",
-                        markersize=0.1,
-                    )
-                if i == 0:
-                    ax_arr[0, j].set_title(label2)
-                ax_arr[i, j].set_aspect(0.9)
-                ax_arr[i, j].set_xticks([])
-                ax_arr[i, j].set_yticks([])
+            if watershed is not None:
+                ax_arr[idx].plot(
+                    watershed.borders[:, 0],
+                    watershed.borders[:, 1],
+                    ".k",
+                    markersize=0.1,
+                )
+            ax_arr[idx].set_aspect(0.9)
+            # ax_arr[idx].axis("off")
+            ax_arr[idx].set_xticks([])
+            ax_arr[idx].set_yticks([])
+            for spine in ax_arr[idx].spines.values():
+                spine.set_visible(False)
+
+            if j == 0:
+                ax_arr[idx].set_ylabel(label1)
+
+            if i == 0:
+                ax_arr[idx].set_title(label2)
+
     f.tight_layout()
     plt.savefig(filepath, dpi=200)
     if show:
@@ -399,7 +378,6 @@ def cluster_freq(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=False)
     # Cat1 and cat2 labels for all points
     cat1_labels = data_obj.data[cat1].astype(str).values.tolist()
     cat2_labels = data_obj.data[cat2].astype(str).values.tolist()
-    # import pdb; pdb.set_trace()
 
     combined_labels = np.array(
         ["_".join([label1, label2]) for label1, label2 in zip(cat1_labels, cat2_labels)]
@@ -422,11 +400,9 @@ def cluster_freq(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=False)
     for i, key1 in enumerate(cat1_keys):  # For each plot of cat1
         # videos = data_obj.meta.index[data_obj.meta['Condition'] == cat1_keys[i]].tolist()
         for j, key2 in enumerate(cat2_keys):  # For each cat2 of cat 1
-            # import pdb; pdb.set_trace()
             # cluster_labels = data_obj.data['Cluster'].values[(data_obj.data[cat1]==key1) & data_obj.data[cat2]==key2]
             # freq = analysis.cluster_freq_from_labels(cluster_labels, num_clusters)
             freq_key = "_".join([key1, key2])
-            # import pdb; pdb.set_trace()
             ax_arr[i].plot(
                 range(num_clusters),
                 np.squeeze(freq[combined_keys == freq_key, :]),
@@ -447,7 +423,6 @@ def cluster_freq(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=False)
     for i, key1 in enumerate(cat1_keys):  # for each condition
         # videos = data.meta.index[data.meta['Condition'] == conditions[j]].tolist()
         key_bool = [True if key.startswith(key1) else False for key in combined_keys]
-        # import pdb; pdb.set_trace()
         ax_arr[j].errorbar(
             range(num_clusters),
             np.mean(freq[key_bool, :], axis=0),
@@ -505,7 +480,6 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
     # Cat1 and cat2 labels for all points
     cat1_labels = data_obj.data[cat1].astype(str).values.tolist()
     cat2_labels = data_obj.data[cat2].astype(str).values.tolist()
-    # import pdb; pdb.set_trace()
 
     combined_labels = np.array(
         ["_".join([label1, label2]) for label1, label2 in zip(cat1_labels, cat2_labels)]
@@ -530,11 +504,9 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
     for i, key1 in enumerate(cat1_keys):  # For each plot of cat1
         # videos = data_obj.meta.index[data_obj.meta['Condition'] == cat1_keys[i]].tolist()
         for j, key2 in enumerate(cat2_keys):  # For each cat2 of cat 1
-            # import pdb; pdb.set_trace()
             # cluster_labels = data_obj.data['Cluster'].values[(data_obj.data[cat1]==key1) & data_obj.data[cat2]==key2]
             # freq = analysis.cluster_freq_from_labels(cluster_labels, num_clusters)
             freq_key = "_".join([key1, key2])
-            # import pdb; pdb.set_trace()s
             ax_arr[1].plot(
                 range(num_clusters),
                 np.squeeze(freq[combined_keys == freq_key, :]),
@@ -583,7 +555,7 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
     for i, key1 in enumerate(cat1_keys):  # for each condition
         # videos = data.meta.index[data.meta['Condition'] == conditions[j]].tolist()
         key_bool = [True if key.startswith(key1) else False for key in combined_keys]
-        # import pdb; pdb.set_trace()
+
         ax_arr[2].errorbar(
             range(num_clusters),
             np.mean(freq[key_bool, :], axis=0),
@@ -712,7 +684,6 @@ def labeled_watershed(watershed, borders, labels_path):
 
     labeled_map = np.zeros(watershed.shape)
     for i, label in enumerate(unique_labels):
-        # import pdb; pdb.set_trace()
         labeled_map[
             np.isin(watershed, labels["Cluster"][labels["Label"] == label].values)
         ] = i
@@ -720,7 +691,6 @@ def labeled_watershed(watershed, borders, labels_path):
     # labeled_map = np.zeros((watershed.shape[0], watershed.shape[1], 3))
     # for i in range(watershed.shape[0]):
     #     for j in range(watershed.shape[1]):
-    #         # import pdb; pdb.set_trace()
     #         # try:
     #         label = labels["Label"].loc[labels["Cluster"] == watershed[i, j]].values[0]
     #         # except:
@@ -730,7 +700,6 @@ def labeled_watershed(watershed, borders, labels_path):
     # fig, ax = plt.subplots()
     sns.set(rc={"figure.figsize": (12, 10)})
     cmap = [(1, 1, 1)] + sns.color_palette("Pastel2", len(unique_labels) - 1)
-    # import pdb; pdb.set_trace()
     ax = sns.heatmap(labeled_map, cmap=cmap)
     plt.colorbar(ax=ax, fraction=0.047 * 0.8)
     colorbar = ax.collections[0].colorbar
