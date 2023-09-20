@@ -591,6 +591,7 @@ class Watershed(GaussDensity):
             self.density
         """
         from skimage.segmentation import watershed
+
         self.density = self.fit_density(data, new=True, map_bin=False)
 
         print("Calculating watershed")

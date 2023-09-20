@@ -30,18 +30,17 @@ def sample3D(
     embed_vals: Optional[np.ndarray] = None,
     filepath: str = "./plot_folder",
 ):
-    
     if pose.shape[0] != len(labels):
         print("Detected labels not the same shape as pose...")
-        downsample = int(np.ceil(pose.shape[0]/len(labels)))
+        downsample = int(np.ceil(pose.shape[0] / len(labels)))
         print("Assuming labels downsampled by {}".format(downsample))
-        assert 0 <= len(labels)*downsample - pose.shape[0] < downsample
+        assert 0 <= len(labels) * downsample - pose.shape[0] < downsample
     else:
         downsample = 1
 
     assert (embed_vals is None) or (embed_vals.shape[0] == len(labels))
-    
-    index = np.arange(len(labels))*downsample
+
+    index = np.arange(len(labels)) * downsample
     unique_labels = np.unique(labels)
 
     for cat in tqdm.tqdm(unique_labels):
@@ -68,7 +67,9 @@ def sample3D(
                 else:
                     sampled_points += [permuted_points[i]]
 
-            assert np.all(labels[(np.array(sampled_points)/downsample).astype(int)] == cat)
+            assert np.all(
+                labels[(np.array(sampled_points) / downsample).astype(int)] == cat
+            )
 
             print(sampled_points)
             if (watershed is not None) and (embed_vals is not None):
@@ -78,7 +79,7 @@ def sample3D(
 
                 arena3D_map(
                     pose,
-                    _mask_density(density, watershed.watershed_map, eps=EPS*1.01),
+                    _mask_density(density, watershed.watershed_map, eps=EPS * 1.01),
                     watershed_borders=watershed.borders,
                     connectivity=connectivity,
                     frames=sampled_points,
@@ -91,7 +92,7 @@ def sample3D(
                 density = np.where(watershed.watershed_map == cat, 1, 0.1)
                 arena3D_map(
                     pose,
-                    _mask_density(density, watershed.watershed_map, eps=EPS*1.01),
+                    _mask_density(density, watershed.watershed_map, eps=EPS * 1.01),
                     watershed_borders=watershed.borders,
                     connectivity=connectivity,
                     frames=sampled_points,

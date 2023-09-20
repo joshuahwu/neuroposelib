@@ -5,7 +5,8 @@ from dappy import read, write, utils
 from dappy.embed import Watershed, Embed
 from pathlib import Path
 
-#TODO: Probably be like a demo/notebook, don't maintain this
+
+# TODO: Probably be like a demo/notebook, don't maintain this
 def standard_features(
     pose,
     connectivity,
@@ -38,8 +39,18 @@ def standard_features(
     return features, labels
 
 
-def run(features, labels, pose, id, connectivity, paths, params, meta, meta_by_frame, standardize=True):
-
+def run(
+    features,
+    labels,
+    pose,
+    id,
+    connectivity,
+    paths,
+    params,
+    meta,
+    meta_by_frame,
+    standardize=True,
+):
     if Path(paths["out_path"] + "pca_feats.h5").exists():
         pc_feats, pc_labels = read.features_h5(
             path="".join([paths["out_path"], "pca_feats.h5"])

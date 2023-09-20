@@ -15,11 +15,11 @@ def by_id(func):
     return wrapper
 
 
-def rolling_window(data:np.ndarray, window:int):
+def rolling_window(data: np.ndarray, window: int):
     """
     Returns a view of data windowed (data.shape, window)
     Pads the ends with the edge values
-    
+
     Implemented based off:
     https://stackoverflow.com/questions/6811183/rolling-window-for-1d-arrays-in-numpy
     """
