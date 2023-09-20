@@ -40,8 +40,6 @@ vis.plt.density_grid(
     filepath="".join([config["out_path"], "/density_grid.png"]),
 )
 
-# vis.plt.scatter_on_watershed(data=data_obj,watershed=data_obj.ws,column="Cluster",path = config["out_path"])
-
 vis.pose.sample3D(
     pose,
     connectivity,
