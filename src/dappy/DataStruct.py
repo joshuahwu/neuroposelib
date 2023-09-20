@@ -3,6 +3,7 @@ import numpy as np
 from typing import Optional, Union, List, Tuple, Type
 from pathlib import Path
 
+
 class DataStruct:
 
     """
@@ -10,7 +11,7 @@ class DataStruct:
 
     TODO: Refactor this class/potentially deprecate
     TODO: If refactor, make categorical meta fields to be sparse matrices.
-    TODO: Another idea is to use this to store analysis transform objects 
+    TODO: Another idea is to use this to store analysis transform objects
     (e.g. pca, umap, t-sne, watershed)
     """
 
@@ -34,7 +35,6 @@ class DataStruct:
         frame: Optional[Union[List, np.ndarray]] = None,
         feature_labels: Optional[List[str]] = None,
     ):
-
         self.data = data
         self.meta = meta
         self.connectivity = connectivity
@@ -124,6 +124,7 @@ class DataStruct:
         # if out_path is None:
         #     out_path = self.out_path
         import pickle
+
         Path(out_path).mkdir(parents=True, exist_ok=True)
 
         pickle.dump(self, open("".join([out_path, "datastruct.p"]), "wb"))

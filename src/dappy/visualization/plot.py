@@ -52,7 +52,7 @@ def scatter(
     ax_label: str = "t-SNE",
     filepath: str = "./results/scatter.png",
     show: bool = False,
-    **kwargs
+    **kwargs,
 ):
     """
     Draw a 2d tSNE plot from zValues.
@@ -77,7 +77,7 @@ def scatter(
         c=color,
         cmap=sns.color_palette("crest", as_cmap=True),
         alpha=0.75,
-        **kwargs
+        **kwargs,
     )
     plt.xlabel(ax_label + " 1")
     plt.ylabel(ax_label + " 2")
@@ -229,7 +229,7 @@ def density(
     plt.close()
 
 
-def _mask_density(density, watershed_map, eps: float = EPS*1.01):
+def _mask_density(density, watershed_map, eps: float = EPS * 1.01):
     mask = watershed_map >= 1
     density[mask] = np.maximum(density[mask], eps)
     density[~mask] = 0
@@ -263,7 +263,7 @@ def density_cat(
         )  # Fit density on old axes
 
         ax.imshow(
-            _mask_density(density, watershed.watershed_map, EPS*1.01),
+            _mask_density(density, watershed.watershed_map, EPS * 1.01),
             vmin=EPS,
             cmap=DEFAULT_VIRIDIS,
         )  # scp.special.softmax(density))
@@ -322,7 +322,7 @@ def density_grid(
 
             # if n_rows == 1:
             ax_arr[idx].imshow(
-                _mask_density(density, watershed.watershed_map, EPS*1.01),
+                _mask_density(density, watershed.watershed_map, EPS * 1.01),
                 vmin=EPS,
                 cmap=DEFAULT_VIRIDIS,
             )
