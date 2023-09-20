@@ -5,6 +5,7 @@ import numpy as np
 import tqdm
 from scipy.interpolate import CubicSpline
 
+
 def expand_meta(meta: pd.DataFrame, ids: pd.DataFrame, reps: int):
     # Tile pandas DataFrame
     meta_expanded = pd.DataFrame(np.tile(meta.values.T, reps).T, columns=meta.columns)
@@ -128,7 +129,7 @@ def speed(
     pose_augmented, ids_expanded = [], []
     for i, id in enumerate(tqdm.tqdm(np.unique(ids))):
         n_frames = np.sum(ids == id)
-        # Fit interpolator to 
+        # Fit interpolator to
         cs = CubicSpline(np.arange(n_frames), pose[ids == id, ...])
         for j, lvl in enumerate(level):
             new_t = np.linspace(0, n_frames - 1, int(n_frames / lvl))
@@ -160,12 +161,12 @@ def pitch(
     spinef_idx: int = 3,
 ):
     pose_augmented = []
-    pitch_level = np.linspace(0, 1, n_levels) # Adjusts pitch by fraction of 1
+    pitch_level = np.linspace(0, 1, n_levels)  # Adjusts pitch by fraction of 1
     pitch = np.arctan2(pose[:, spinef_idx, 2], pose[:, spinef_idx, 0])
     n_joints = pose.shape[1]
 
     for i, level in enumerate(tqdm.tqdm(pitch_level)):
-        pitch_adjusted = pitch*level
+        pitch_adjusted = pitch * level
         rot_mat = np.array(
             [
                 [np.cos(pitch_adjusted), np.zeros(len(pitch)), np.sin(pitch_adjusted)],
@@ -173,7 +174,7 @@ def pitch(
                 [-np.sin(pitch_adjusted), np.zeros(len(pitch)), np.cos(pitch_adjusted)],
             ]
         ).repeat(n_joints, axis=2)
-        
+
         pose_rot = np.einsum("jki,ik->ij", rot_mat, np.reshape(pose, (-1, 3))).reshape(
             pose.shape
         )

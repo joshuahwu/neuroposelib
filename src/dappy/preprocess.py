@@ -7,12 +7,16 @@ from typing import Optional, Union, List, Type
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
 
+
 @by_id
-def align_floor_by_id(pose: np.ndarray,
+def align_floor_by_id(
+    pose: np.ndarray,
     foot_id: Optional[int] = 12,
     head_id: Optional[int] = 0,
-    dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,):
-    return align_floor(pose = pose,foot_id = foot_id, head_id=head_id, dtype=dtype)
+    dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
+):
+    return align_floor(pose=pose, foot_id=foot_id, head_id=head_id, dtype=dtype)
+
 
 def align_floor(
     pose: np.ndarray,
@@ -37,15 +41,11 @@ def align_floor(
     const = np.ones((pose.shape[0], 1))
     coeff = np.linalg.lstsq(np.append(xy, const, axis=1), z, rcond=None)[0]
     z_diff = (
-        pose[:, foot_id, 0] * coeff[0]
-        + pose[:, foot_id, 1] * coeff[1]
-        + coeff[2]
+        pose[:, foot_id, 0] * coeff[0] + pose[:, foot_id, 1] * coeff[1] + coeff[2]
     ) - pose[:, foot_id, 2]
     z_mean = np.mean(z_diff)
     z_range = np.std(z_diff) * np.float32(1.5)
-    mid_foot_vals = np.where(
-        (z_diff > z_mean - z_range) & (z_diff < z_mean + z_range)
-    )[
+    mid_foot_vals = np.where((z_diff > z_mean - z_range) & (z_diff < z_mean + z_range))[
         0
     ]  # Removing outlier values of foot
 
@@ -58,9 +58,7 @@ def align_floor(
     coeff = np.linalg.lstsq(np.append(xy, const, axis=1), z, rcond=None)[0]
 
     # Calculating rotation matrices
-    un = np.array([-coeff[0], -coeff[1], 1]) / np.linalg.norm(
-        [-coeff[0], -coeff[1], 1]
-    )
+    un = np.array([-coeff[0], -coeff[1], 1]) / np.linalg.norm([-coeff[0], -coeff[1], 1])
     vn = np.array([0, 0, 1])
     theta = np.arccos(np.clip(np.dot(un, vn), -1, 1))
     rot_vec = np.cross(un, vn) / np.linalg.norm(np.cross(un, vn)) * theta
@@ -70,9 +68,9 @@ def align_floor(
     )
     pose[:, :, 2] -= coeff[2]  # Fixing intercept to zero
     # Rotating
-    pose_rot = np.einsum(
-        "jki,ik->ij", rot_mat, np.reshape(pose, (-1, 3))
-    ).reshape(pose.shape)
+    pose_rot = np.einsum("jki,ik->ij", rot_mat, np.reshape(pose, (-1, 3))).reshape(
+        pose.shape
+    )
 
     ## Checking to make sure snout is on average above the feet
     assert np.mean(pose_rot[:, head_id, 2]) > np.mean(
@@ -80,6 +78,7 @@ def align_floor(
     )  # checking head is above foot
 
     return pose_rot
+
 
 def vel_filter(
     pose,
@@ -129,7 +128,12 @@ def vel_filter(
     return pose
 
 
-def z_filter(pose: np.ndarray, exp_id: Union[np.ndarray, List], threshold: float = 2500, connectivity=None):
+def z_filter(
+    pose: np.ndarray,
+    exp_id: Union[np.ndarray, List],
+    threshold: float = 2500,
+    connectivity=None,
+):
     """
     Uses the z value to
     """
@@ -184,7 +188,7 @@ def z_filter(pose: np.ndarray, exp_id: Union[np.ndarray, List], threshold: float
     return pose
 
 
-def median_filter(pose: np.ndarray, id:Union[np.ndarray, List], filter_len: int = 5):
+def median_filter(pose: np.ndarray, id: Union[np.ndarray, List], filter_len: int = 5):
     """_summary_
 
     Parameters
@@ -204,9 +208,7 @@ def median_filter(pose: np.ndarray, id:Union[np.ndarray, List], filter_len: int 
     print("Applying Median Filter")
     for _, i in enumerate(tqdm(np.unique(id))):
         pose_exp = pose[id == i, ...]
-        pose[id == i, ...] = scp_ndi.median_filter(
-            pose_exp, (filter_len, 1, 1)
-        )
+        pose[id == i, ...] = scp_ndi.median_filter(pose_exp, (filter_len, 1, 1))
 
     return pose
 
@@ -217,10 +219,9 @@ def anipose_med_filt(
     filter_len: int = 6,
     threshold: float = 5,
 ):
-
     for _, i in enumerate(tqdm(np.unique(exp_id))):
         pose_exp = pose[exp_id == i, :, :]
-        
+
         pose_error = pose_exp - scp_ndi.median_filter(
             pose_exp, (filter_len, 1, 1)
         )  # Median filter 5 frames repeat the ends of video
@@ -257,7 +258,7 @@ def anipose_med_filt(
 def center_spine(pose, keypt_idx=4):
     print("Centering poses to mid spine ...")
     # Center spine_m to (0,0,0)
-    return pose - pose[:, keypt_idx: keypt_idx+1, :]
+    return pose - pose[:, keypt_idx : keypt_idx + 1, :]
 
 
 def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False):
