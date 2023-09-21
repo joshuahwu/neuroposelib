@@ -138,7 +138,7 @@ def arena3D_map(
     writer = FFMpegWriter(fps=fps)
     # Setup figure
     figsize = (24, 12)
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=figsize, layout="constrained")
     gs = fig.add_gridspec(1, 2)
     ax_3d = fig.add_subplot(gs[0, 1], projection="3d")
     ax_dens = fig.add_subplot(gs[0, 0])
@@ -169,110 +169,9 @@ def arena3D_map(
             # grab frame and write to vid
             writer.grab_frame()
             ax_3d.clear()
-        fig.tight_layout
 
     plt.close()
     return
-
-
-# def arena3D_map(
-#     data: Union[ds.DataStruct, np.ndarray],
-#     label: str,
-#     connectivity: Optional[ds.Connectivity] = None,
-#     frames: List = [3000, 100000, 5000000],
-#     N_FRAMES: int = 150,
-#     fps: int = 90,
-#     dpi: int = 100,
-#     VID_NAME: str = "0.mp4",
-#     SAVE_ROOT: str = "./test/skeleton_vids/",
-# ):
-#     pose_3d, limits, links_expand, COLOR = _init_vid3D(
-#         data, connectivity, frames, N_FRAMES, SAVE_ROOT
-#     )
-
-#     # set up video writer
-#     writer = FFMpegWriter(fps=fps)
-
-#     extent = [*data.ws.hist_range[0], *data.ws.hist_range[1]]
-#     embed_vals = data.embed_vals[data.data["Cluster"] == label]
-#     colors = [
-#         "k",
-#         "tab:blue",
-#         "tab:green",
-#         "tab:orange",
-#         "tab:purple",
-#         "tab:brown",
-#         "tab:pink",
-#         "tab:gray",
-#         "tab:olive",
-#         "tab:cyan",
-#         "#dc0ab4",
-#         "#00b7c7",
-#     ]
-
-#     # Setup figure
-#     fig = plt.figure(figsize=(20, 10))
-#     gs = fig.add_gridspec(1, 2)
-#     ax_3d = fig.add_subplot(gs[0, 1], projection="3d")
-#     ax_dens = fig.add_subplot(gs[0, 0])
-
-#     cond_uniq = data.data["Condition"].unique()
-#     frames_meta = data.data[data.data["frame"].isin(frames)]["Condition"].values
-
-#     ax_dens.imshow(data.ws.watershed_map, zorder=0, extent=extent)
-#     ax_dens.plot(
-#         embed_vals[:, 0], embed_vals[:, 1], ".r", markersize=1, alpha=0.1, zorder=1
-#     )
-#     ax_dens.set_aspect("auto")
-#     ax_dens.set_xticks([])
-#     ax_dens.set_yticks([])
-
-#     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
-#         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
-#             # grab frames
-#             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
-#             kpts_3d = np.reshape(
-#                 pose_3d[curr_frames, :, :], (len(frames) * pose_3d.shape[-2], 3)
-#             )
-
-#             # plot 3d moving skeletons
-#             for i in range(len(np.unique(frames_meta))):
-#                 temp_idx = curr_frames[frames_meta == np.unique(frames_meta)[i]]
-#                 temp_kpts = np.reshape(
-#                     [pose_3d[temp_idx, :, :]], (len(temp_idx) * pose_3d.shape[-2], 3)
-#                 )
-#                 ax_3d.scatter(
-#                     temp_kpts[:, 0],
-#                     temp_kpts[:, 1],
-#                     temp_kpts[:, 2],
-#                     marker=".",
-#                     color=colors[i],
-#                     linewidths=0.5,
-#                     label=cond_uniq[i],
-#                 )
-#             ax_3d.legend()
-
-#             for color, (index_from, index_to) in zip(COLOR, links_expand):
-#                 xs, ys, zs = [
-#                     np.array([kpts_3d[index_from, j], kpts_3d[index_to, j]])
-#                     for j in range(3)
-#                 ]
-#                 ax_3d.plot3D(xs, ys, zs, c=color, lw=2)
-
-#             ax_3d.set_xlim(*limits[0, :])
-#             ax_3d.set_ylim(*limits[1, :])
-#             ax_3d.set_zlim(*limits[2, :])
-#             ax_3d.set_xlabel("x")
-#             ax_3d.set_ylabel("y")
-#             ax_3d.set_box_aspect(limits[:, 1] - limits[:, 0])
-
-#             # grab frame and write to vid
-#             writer.grab_frame()
-#             fig.tight_layout()
-#             ax_3d.clear()
-
-#     plt.close()
-#     return 0
 
 
 def get_3d_limits(pose: np.ndarray):
@@ -414,7 +313,7 @@ def arena3D(
     writer = FFMpegWriter(fps=fps)
     # Setup figure
     figsize = (12, 12)
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=figsize, layout="constrained")
     ax_3d = fig.add_subplot(1, 1, 1, projection="3d")
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
@@ -426,7 +325,6 @@ def arena3D(
             # grab frame and write to vid
             writer.grab_frame()
             ax_3d.clear()
-        fig.tight_layout
 
     plt.close()
     return
@@ -494,7 +392,7 @@ def grid3D(
     rows = int(np.sqrt(len(frames)))
     cols = int(np.ceil(len(frames) / rows))
     figsize = (cols * 5, rows * 5)
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=figsize, layout="constrained")
 
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
@@ -511,7 +409,7 @@ def grid3D(
 
             if title is not None:
                 fig.suptitle(title, fontsize=30)
-            fig.tight_layout()
+
             writer.grab_frame()
             fig.clear()
 
@@ -551,7 +449,7 @@ def features3D(
     writer = FFMpegWriter(fps=int(fps / 4))
 
     # Setup figure
-    fig = plt.figure(figsize=(20, 10))
+    fig = plt.figure(figsize=(20, 10), layout="constrained")
     gs = fig.add_gridspec(1, 2)
     ax_3d = fig.add_subplot(gs[0, 1], projection="3d")
     ax_trace = fig.add_subplot(gs[0, 0])
@@ -605,7 +503,6 @@ def features3D(
 
             # grab frame and write to vid
             writer.grab_frame()
-            fig.tight_layout()
             ax_3d.clear()
 
     plt.close()
