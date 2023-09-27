@@ -1,5 +1,5 @@
 import pickle
-from dappy import vis, read
+from dappy import vis, read, preprocess
 import numpy as np
 
 analysis_key = "ensemble_healthy"
@@ -11,6 +11,21 @@ connectivity = read.connectivity(
     path=config["skeleton_path"], skeleton_name=config["skeleton_name"]
 )
 data_obj = pickle.load(open("".join([config["out_path"], "/datastruct.p"]), "rb"))
+
+vis.pose.sample_grid3D(
+    pose-pose.mean(axis=-2, keepdims=True),
+    connectivity=connectivity,
+    labels=data_obj.data["Cluster"],
+    n_samples=9,
+    centered=True,
+    N_FRAMES=100,
+    fps=90,
+    dpi=100,
+    watershed=data_obj.ws,
+    embed_vals=None,
+    VID_NAME = "cluster",
+    filepath=config["out_path"],
+)
 
 vis.plt.density(
     data_obj.ws.density,
@@ -38,20 +53,6 @@ vis.plt.density_grid(
     cat2="id",
     watershed=data_obj.ws,
     filepath="".join([config["out_path"], "/density_grid.png"]),
-)
-
-vis.pose.sample3D(
-    pose,
-    connectivity,
-    labels=data_obj.data["Cluster"],
-    n_samples=9,
-    vid_label="cluster",
-    centered="True",
-    N_FRAMES=100,
-    fps=90,
-    watershed=data_obj.ws,
-    embed_vals=None,
-    filepath=config["out_path"],
 )
 
 import pdb

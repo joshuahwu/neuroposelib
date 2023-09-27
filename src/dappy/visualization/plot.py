@@ -230,7 +230,7 @@ def density(
 
 
 def _mask_density(density, watershed_map, eps: float = EPS * 1.01):
-    mask = watershed_map >= 1
+    mask = watershed_map > 0
     density[mask] = np.maximum(density[mask], eps)
     density[~mask] = 0
     return density

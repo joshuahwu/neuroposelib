@@ -6,6 +6,7 @@ from matplotlib.lines import Line2D
 import matplotlib
 
 from pathlib import Path
+import functools
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -15,103 +16,211 @@ from dappy.embed import Watershed
 from dappy import DataStruct as ds
 from dappy.visualization.constants import PALETTE, EPS, DEFAULT_BONE
 from dappy.visualization.plot import _mask_density
+import copy
 
 
-def sample3D(
+def sample(func):
+    @functools.wraps(func)
+    def wrapper(
+        pose: np.ndarray,
+        connectivity: ds.Connectivity,
+        labels: Union[np.ndarray, List],
+        VID_NAME: str = "cluster",
+        centered: bool = True,
+        n_samples: int = 9,
+        N_FRAMES: int = 100,
+        watershed: Optional[Watershed] = None,
+        embed_vals: Optional[np.ndarray] = None,
+        **kwargs,
+    ):
+        if pose.shape[0] != len(labels):
+            print("Detected labels not the same shape as pose...")
+            downsample = int(np.ceil(pose.shape[0] / len(labels)))
+            print("Assuming labels downsampled by {}".format(downsample))
+            assert 0 <= len(labels) * downsample - pose.shape[0] < downsample
+        else:
+            downsample = 1
+        assert (embed_vals is None) or (embed_vals.shape[0] == len(labels))
+
+        index = np.arange(len(labels)) * downsample
+        unique_labels = np.unique(labels)
+
+        for cat in tqdm.tqdm(unique_labels):
+            label_idx = index[labels == cat]
+            if len(label_idx) == 0:
+                continue
+            else:
+                num_points = min(len(label_idx), n_samples)
+                permuted_points = np.random.permutation(
+                    label_idx
+                )  # b/c moving frames filter
+                sampled_points = []
+                for i in range(len(permuted_points)):
+                    if len(sampled_points) == num_points:  # sampled enough points
+                        break
+                    elif any(
+                        np.abs(permuted_points[i] - np.array(sampled_points)) < 200
+                    ):  # point is not far enough from previous points
+                        continue
+                    elif permuted_points[i] < (N_FRAMES / 2):
+                        continue
+                    elif permuted_points[i] > (pose.shape[0] - N_FRAMES / 2):
+                        continue
+                    else:
+                        sampled_points += [permuted_points[i]]
+
+                assert np.all(
+                    labels[(np.array(sampled_points) / downsample).astype(int)] == cat
+                )
+
+                print(sampled_points)
+
+                sampled_slice = np.add.outer(
+                    sampled_points, np.arange(N_FRAMES)
+                ).flatten()
+
+                if centered:
+                    sampled_slice -= N_FRAMES // 2
+
+                cat_embed_vals = (
+                    None if embed_vals is None else embed_vals[labels == cat, :]
+                )
+                cat_watershed = copy.deepcopy(watershed)
+                if cat_watershed is not None:
+                    cat_watershed.watershed_map = np.where(
+                        watershed.watershed_map == cat, 1, 0.1
+                    )
+                    cat_watershed.watershed_map = np.where(
+                        watershed.watershed_map == 0, 0, cat_watershed.watershed_map
+                    )
+
+                func(
+                    pose=pose[sampled_slice, ...],
+                    connectivity=connectivity,
+                    VID_NAME=VID_NAME + str(cat),
+                    embed_vals=cat_embed_vals,
+                    watershed=cat_watershed,
+                    n_samples=num_points,
+                    N_FRAMES=N_FRAMES,
+                    **kwargs,
+                )
+
+    return wrapper
+
+
+@sample
+def sample_arena3D(
     pose: np.ndarray,
     connectivity: ds.Connectivity,
-    labels: Union[np.ndarray, List],
     n_samples: int = 9,
-    vid_label: str = "cluster",
-    centered: bool = True,
+    VID_NAME: str = "cluster",
     N_FRAMES: int = 100,
-    fps: int = 90,
     watershed: Optional[Watershed] = None,
     embed_vals: Optional[np.ndarray] = None,
     filepath: str = "./plot_folder",
+    **kwargs,
 ):
-    if pose.shape[0] != len(labels):
-        print("Detected labels not the same shape as pose...")
-        downsample = int(np.ceil(pose.shape[0] / len(labels)))
-        print("Assuming labels downsampled by {}".format(downsample))
-        assert 0 <= len(labels) * downsample - pose.shape[0] < downsample
-    else:
-        downsample = 1
-
-    assert (embed_vals is None) or (embed_vals.shape[0] == len(labels))
-
-    index = np.arange(len(labels)) * downsample
-    unique_labels = np.unique(labels)
-
-    for cat in tqdm.tqdm(unique_labels):
-        label_idx = index[labels == cat]
-        if len(label_idx) == 0:
-            continue
+    if watershed is not None:
+        if embed_vals is not None:
+            density = watershed.fit_density(
+                embed_vals, new=False
+            )  # Fit density on old axes
         else:
-            num_points = min(len(label_idx), n_samples)
-            permuted_points = np.random.permutation(
-                label_idx
-            )  # b/c moving frames filter
-            sampled_points = []
-            for i in range(len(permuted_points)):
-                if len(sampled_points) == num_points:  # sampled enough points
-                    break
-                elif any(
-                    np.abs(permuted_points[i] - np.array(sampled_points)) < 200
-                ):  # point is not far enough from previous points
-                    continue
-                elif permuted_points[i] < (N_FRAMES / 2):
-                    continue
-                elif permuted_points[i] > (pose.shape[0] - N_FRAMES / 2):
-                    continue
-                else:
-                    sampled_points += [permuted_points[i]]
+            density = watershed.watershed_map
 
-            assert np.all(
-                labels[(np.array(sampled_points) / downsample).astype(int)] == cat
-            )
+        arena3D_map(
+            pose=pose,
+            density=_mask_density(density, watershed.watershed_map, eps=EPS * 1.01),
+            watershed_borders=watershed.borders,
+            connectivity=connectivity,
+            frames=np.arange(n_samples) * N_FRAMES,
+            centered=False,
+            N_FRAMES=N_FRAMES,
+            VID_NAME=VID_NAME + ".mp4",
+            SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
+            **kwargs,
+        )
+    else:
+        arena3D(
+            pose=pose,
+            connectivity=connectivity,
+            frames=np.arange(n_samples) * N_FRAMES,
+            centered=False,
+            N_FRAMES=N_FRAMES,
+            VID_NAME=VID_NAME + ".mp4",
+            SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
+            **kwargs,
+        )
 
-            print(sampled_points)
-            if (watershed is not None) and (embed_vals is not None):
-                density = watershed.fit_density(
-                    embed_vals[labels == cat, :], new=False
-                )  # Fit density on old axes
+    return
 
-                arena3D_map(
-                    pose,
-                    _mask_density(density, watershed.watershed_map, eps=EPS * 1.01),
-                    watershed_borders=watershed.borders,
-                    connectivity=connectivity,
-                    frames=sampled_points,
-                    N_FRAMES=N_FRAMES,
-                    fps=fps,
-                    VID_NAME="".join([vid_label, str(cat), ".mp4"]),
-                    SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
-                )
-            elif (watershed is not None) and (embed_vals is None):
-                density = np.where(watershed.watershed_map == cat, 1, 0.1)
-                arena3D_map(
-                    pose,
-                    _mask_density(density, watershed.watershed_map, eps=EPS * 1.01),
-                    watershed_borders=watershed.borders,
-                    connectivity=connectivity,
-                    frames=sampled_points,
-                    N_FRAMES=N_FRAMES,
-                    fps=fps,
-                    VID_NAME="".join([vid_label, str(cat), ".mp4"]),
-                    SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
-                )
-            else:
-                arena3D(
-                    pose,
-                    connectivity=connectivity,
-                    frames=sampled_points,
-                    centered=centered,
-                    N_FRAMES=N_FRAMES,
-                    fps=fps,
-                    VID_NAME="".join([vid_label, str(cat), ".mp4"]),
-                    SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
-                )
+
+@sample
+def sample_grid3D(
+    pose: np.ndarray,
+    connectivity: ds.Connectivity,
+    n_samples: int = 9,
+    VID_NAME: str = "cluster",
+    N_FRAMES: int = 100,
+    watershed: Optional[Watershed] = None,
+    embed_vals: Optional[np.ndarray] = None,
+    filepath: str = "./plot_folder",
+    **kwargs,
+):
+    if watershed is not None:
+        if embed_vals is not None:
+            density = watershed.fit_density(
+                embed_vals, new=False
+            )  # Fit density on old axes
+        else:
+            density = watershed.watershed_map
+
+        grid3D_map(
+            pose=pose,
+            density=_mask_density(density, watershed.watershed_map, eps=EPS * 1.01),
+            watershed_borders=watershed.borders,
+            connectivity=connectivity,
+            frames=np.arange(n_samples) * N_FRAMES,
+            centered=False,
+            N_FRAMES=N_FRAMES,
+            VID_NAME=VID_NAME + ".mp4",
+            SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
+            **kwargs,
+        )
+    else:
+        grid3D(
+            pose=pose,
+            connectivity=connectivity,
+            frames=np.arange(n_samples) * N_FRAMES,
+            centered=False,
+            N_FRAMES=N_FRAMES,
+            VID_NAME=VID_NAME + ".mp4",
+            SAVE_ROOT="".join([filepath, "/skeleton_vids/"]),
+            **kwargs,
+        )
+
+    return
+
+
+def _plot_density(
+    ax: matplotlib.axes.Axes, density: np.ndarray, watershed_borders: np.ndarray
+):
+    ax.imshow(
+        density,
+        vmin=EPS,
+        cmap=DEFAULT_BONE,
+    )
+
+    ax.plot(
+        watershed_borders[:, 0],
+        watershed_borders[:, 1],
+        ".k",
+        markersize=0.1,
+    )
+
+    ax.set_aspect(0.9)
+    ax.axis("off")
+    return ax
 
 
 def arena3D_map(
@@ -142,22 +251,7 @@ def arena3D_map(
     gs = fig.add_gridspec(1, 2)
     ax_3d = fig.add_subplot(gs[0, 1], projection="3d")
     ax_dens = fig.add_subplot(gs[0, 0])
-    ax_dens.imshow(
-        density,
-        vmin=EPS,
-        cmap=DEFAULT_BONE,
-    )
-
-    ax_dens.plot(
-        watershed_borders[:, 0],
-        watershed_borders[:, 1],
-        ".k",
-        markersize=0.1,
-    )
-
-    ax_dens.set_aspect(0.9)
-    ax_dens.set_title("Map")
-    ax_dens.axis("off")
+    ax_dens = _plot_density(ax_dens, density, watershed_borders)
 
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
@@ -169,6 +263,68 @@ def arena3D_map(
             # grab frame and write to vid
             writer.grab_frame()
             ax_3d.clear()
+
+    plt.close()
+    return
+
+
+def grid3D_map(
+    pose: np.ndarray,
+    density: np.ndarray,
+    watershed_borders: np.ndarray,
+    connectivity: ds.Connectivity,
+    frames: Union[List[int], int] = [3000, 100000, 5000000],
+    centered: bool = True,
+    subtitles: Optional[List] = None,
+    title: Optional[str] = None,
+    N_FRAMES: int = 150,
+    fps: int = 90,
+    dpi: int = 100,
+    VID_NAME: str = "0.mp4",
+    SAVE_ROOT: str = "./test/pose_vids/",
+):
+    if isinstance(frames, int):
+        frames = [frames]
+    # Reshape pose and other variables
+    pose_3d, limits, links, COLOR = _init_vid3D(
+        pose, connectivity, np.array(frames, dtype=int), centered, N_FRAMES, SAVE_ROOT
+    )
+
+    # Set up video writer
+    writer = FFMpegWriter(fps=fps)
+    # Set up figure
+    rows = int(np.sqrt(len(frames)))
+    cols = int(np.ceil(len(frames) / rows))
+    figsize = (cols * 8, rows * 4)
+    fig = plt.figure(figsize=figsize, layout="constrained")
+    subfig = fig.subfigures(1, 2)
+    # import pdb; pdb.set_trace()
+    # gs = fig.add_gridspec(1,2)
+
+    ax_dens = subfig[0].add_subplot(1, 1, 1)
+    ax_dens = _plot_density(ax_dens, density, watershed_borders)
+
+    with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
+        for curr_frame in tqdm.tqdm(range(N_FRAMES)):
+            curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
+
+            # ax_dens = fig.add_subplot(rows, cols, 1)
+            # ax_dens = _plot_density(ax_dens, density, watershed_borders)
+            subfig[1] = _pose3D_grid(
+                subfig[1],
+                pose_3d,
+                connectivity,
+                curr_frames,
+                limits,
+                size=(rows, cols),
+                subtitles=subtitles,
+            )
+
+            if title is not None:
+                subfig[1].suptitle(title, fontsize=30)
+
+            writer.grab_frame()
+            subfig[1].clear()
 
     plt.close()
     return
@@ -240,7 +396,7 @@ def _init_vid3D(
     Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
 
     if centered:
-        frames = frames - int(N_FRAMES / 2) + 1
+        frames = frames - N_FRAMES // 2
 
     COLOR = np.moveaxis(
         np.tile(connectivity.colors[..., None], len(frames)), -1, 0
@@ -337,11 +493,12 @@ def _pose3D_grid(
     frames: np.ndarray,
     limits: np.ndarray,
     size: Tuple[int],
-    labels: Optional[List[str]] = None,
+    subtitles: Optional[List[str]] = None,
 ):
     (rows, cols) = size
     for i, curr_frame in enumerate(frames):
         temp_kpts = data[curr_frame, :, :]
+        # ax_3d = ax_3d[i//cols, i%cols]
 
         ax_3d = fig.add_subplot(rows, cols, i + 1, projection="3d")
         ax_3d = _pose3D_frame(
@@ -360,8 +517,8 @@ def _pose3D_grid(
             xyz_ax.set_pane_color((1, 1, 1, 0))
             xyz_ax._axinfo["grid"]["color"] = (1, 1, 1, 0)
 
-        if labels is not None:
-            ax_3d.set_title(str(labels[i]), fontsize=20, y=0.9)
+        if subtitles is not None:
+            ax_3d.set_title(str(subtitles[i]), fontsize=20, y=0.9)
 
     return fig
 
@@ -371,7 +528,7 @@ def grid3D(
     connectivity: ds.Connectivity,
     frames: Union[List[int], int] = [3000, 100000, 5000000],
     centered: bool = True,
-    labels: Optional[List] = None,
+    subtitles: Optional[List] = None,
     title: Optional[str] = None,
     N_FRAMES: int = 150,
     fps: int = 90,
@@ -404,7 +561,7 @@ def grid3D(
                 curr_frames,
                 limits,
                 size=(rows, cols),
-                labels=labels,
+                subtitles=subtitles,
             )
 
             if title is not None:
