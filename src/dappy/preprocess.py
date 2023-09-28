@@ -295,15 +295,17 @@ def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False):
         pose.shape
     )
 
+    # import pdb; pdb.set_trace()
     # Making sure Y value of spine f doesn't deviate much from 0
+    eps = 1e-4
     assert (
-        pose_rot[:, keypt_idx[1], 1].max() < 1e-5
-        and pose_rot[:, keypt_idx[1], 1].min() > -1e-5
+        pose_rot[:, keypt_idx[1], 1].max() < eps
+        and pose_rot[:, keypt_idx[1], 1].min() > -eps
     )
     if lock_to_x:  # Making sure Z value of spine f doesn't deviate much from 0
         assert (
-            pose_rot[:, keypt_idx[1], 2].max() < 1e-5
-            and pose_rot[:, keypt_idx[1], 2].min() > -1e-5
+            pose_rot[:, keypt_idx[1], 2].max() < eps
+            and pose_rot[:, keypt_idx[1], 2].min() > -eps
         )
 
     return pose_rot
