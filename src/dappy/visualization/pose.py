@@ -223,26 +223,52 @@ def _plot_density(
     return ax
 
 
+def init_vid3D(func):
+    @functools.wraps(func)
+    def wrapper(
+        pose: np.ndarray,
+        connectivity: ds.Connectivity,
+        frames: Union[List[int], int] = [3000, 100000, 500000],
+        centered: bool = True,
+        N_FRAMES: int = 300,
+        SAVE_ROOT: str = "./test/pose_vids/",
+        **kwargs,
+    ):
+        if isinstance(frames, int):
+            frames = [frames]
+
+        pose_3d, limits, links, COLORS = _init_vid3D(
+            pose,
+            connectivity,
+            np.array(frames, dtype=int),
+            centered,
+            N_FRAMES,
+            SAVE_ROOT,
+        )
+
+        func(
+            pose=pose_3d,
+            limits=limits,
+            links=links,
+            colors=COLORS,
+        )
+
+    return wrapper
+
+
+@init_vid3D
 def arena3D_map(
     pose: np.ndarray,
     density: np.ndarray,
     watershed_borders: np.ndarray,
-    connectivity: ds.Connectivity,
     frames: Union[List[int], int] = [3000, 100000, 500000],
-    centered: bool = True,
     N_FRAMES: int = 300,
     fps: int = 90,
     dpi: int = 200,
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
+    **kwargs,
 ):
-    if isinstance(frames, int):
-        frames = [frames]
-
-    pose_3d, limits, links, COLORS = _init_vid3D(
-        pose, connectivity, np.array(frames, dtype=int), centered, N_FRAMES, SAVE_ROOT
-    )
-
     # Set up video writer
     writer = FFMpegWriter(fps=fps)
     # Setup figure
@@ -257,7 +283,13 @@ def arena3D_map(
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
             ax_3d = _pose3D_arena(
-                ax_3d, pose_3d, COLORS, links, curr_frames, limits, figsize
+                ax_3d,
+                pose,
+                kwargs["COLORS"],
+                kwargs["links"],
+                curr_frames,
+                kwargs["limits"],
+                figsize,
             )
 
             # grab frame and write to vid
