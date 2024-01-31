@@ -1,24 +1,20 @@
-import os
 import numpy as np
-import scipy as scp
 import tqdm
 
 import pandas as pd
 import seaborn as sns
 from matplotlib.lines import Line2D
 import matplotlib
-
 from pathlib import Path
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from typing import Optional, Union, List, Tuple
+from typing import Optional, Union, List
 
 from dappy import DataStruct as ds
 from dappy.embed import Watershed, GaussDensity
 from dappy.analysis import cluster_freq_by_cat
 from dappy.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
-
 
 def scatter_by_cat(
     data: np.ndarray,

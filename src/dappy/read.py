@@ -190,8 +190,11 @@ def connectivity_config(path: str):
     joint_names = skeleton_config["LABELS"]
     colors = skeleton_config["COLORS"]
     links = skeleton_config["SEGMENTS"]
+    keypt_colors = skeleton_config["KEYPT_COLORS"]
 
-    connectivity = Connectivity(joint_names=joint_names, colors=colors, links=links)
+    connectivity = Connectivity(
+        joint_names=joint_names, colors=colors, links=links, keypt_colors=keypt_colors
+    )
 
     return connectivity
 

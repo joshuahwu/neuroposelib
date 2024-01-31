@@ -166,6 +166,9 @@ class Connectivity:
         colors: Union[np.ndarray, List[Tuple[float, float, float, float]]],
         links: Union[np.ndarray, List[Tuple[int, int]]],
         angles: Optional[Union[np.ndarray, List[Tuple[int, int, int]]]] = None,
+        keypt_colors: Optional[
+            Union[np.ndarray, List[Tuple[float, float, float, float]]]
+        ] = None,
     ):
         """Initializes instance of Connectivity class
 
@@ -185,6 +188,8 @@ class Connectivity:
         self.joint_names = joint_names
         self.colors = self._check_type(colors, np.float32)
         self.links = self._check_type(links, np.uint16)
+        if keypt_colors is not None:
+            self.keypt_colors = self._check_type(keypt_colors, np.float32)
         if angles is not None:
             self.angles = self._check_type(angles, np.uint16)
 

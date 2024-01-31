@@ -280,6 +280,7 @@ def grid3D_map(
     N_FRAMES: int = 150,
     fps: int = 90,
     dpi: int = 100,
+    figsize: Optional[Tuple[int]] = None,
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
 ):
@@ -295,7 +296,7 @@ def grid3D_map(
     # Set up figure
     rows = int(np.sqrt(len(frames)))
     cols = int(np.ceil(len(frames) / rows))
-    figsize = (cols * 8, rows * 4)
+    figsize = (cols * 8, rows * 4) if figsize is None else figsize
     fig = plt.figure(figsize=figsize, layout="constrained")
     subfig = fig.subfigures(1, 2)
     # import pdb; pdb.set_trace()
@@ -384,7 +385,6 @@ def _pose3D_frame(
     ax_3d.set_box_aspect(limits[:, 1] - limits[:, 0])
     return ax_3d
 
-
 def _init_vid3D(
     data: np.ndarray,
     connectivity: ds.Connectivity,
@@ -440,6 +440,16 @@ def _pose3D_arena(
     ax_3d = _pose3D_frame(
         ax_3d, kpts_3d, COLORS, links, limits  # , figsize=(cols * 5, rows * 5)
     )
+    ax_3d.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+    ax_3d.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+    # ax_3d.w_zaxis.set_pane_color((0.75, 0.75, 0.75, 0.75))
+    ax_3d.w_xaxis.line.set_lw(0.)
+    ax_3d.w_yaxis.line.set_lw(0.)
+    ax_3d.w_zaxis.line.set_lw(0.)
+    ax_3d.grid(False)
+    ax_3d.set_xticks([])
+    ax_3d.set_yticks([])
+    ax_3d.set_zticks([])
 
     if title is not None:
         ax_3d.set_title(title, fontsize=20, y=0.9)
@@ -533,6 +543,7 @@ def grid3D(
     N_FRAMES: int = 150,
     fps: int = 90,
     dpi: int = 100,
+    figsize: Optional[Tuple[int]] = None,
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
 ):
@@ -548,7 +559,7 @@ def grid3D(
     # Set up figure
     rows = int(np.sqrt(len(frames)))
     cols = int(np.ceil(len(frames) / rows))
-    figsize = (cols * 5, rows * 5)
+    figsize = (cols * 5, rows * 5) if figsize is None else figsize
     fig = plt.figure(figsize=figsize, layout="constrained")
 
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
