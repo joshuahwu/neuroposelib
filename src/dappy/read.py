@@ -215,8 +215,13 @@ def connectivity_config(path: str):
     links = skeleton_config["SEGMENTS"]
     keypt_colors = skeleton_config["KEYPT_COLORS"]
 
+    if "JOINT_ANGLES" in skeleton_config.keys():
+        angles = skeleton_config["JOINT_ANGLES"]
+    else:
+        angles = None
+    
     connectivity = Connectivity(
-        joint_names=joint_names, colors=colors, links=links, keypt_colors=keypt_colors
+        joint_names=joint_names, colors=colors, links=links, angles=angles, keypt_colors=keypt_colors
     )
 
     return connectivity

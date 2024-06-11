@@ -42,7 +42,7 @@ $RECYCLE.BIN/
 /tutorials/data/*
 !/tutorials/results/
 !/tutorials/data/
-!tutorials/data/demo_meta.csv
+# !tutorials/data/demo_meta.csv
 *.egg-info
 
 # Windows shortcuts
