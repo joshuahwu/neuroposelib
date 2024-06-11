@@ -35,6 +35,8 @@ $RECYCLE.BIN/
 !/tutorials/automated_pipeline.py
 /configs/*
 !/configs/tutorial.yaml
+!/configs/skeletons/demo_mouse.yaml
+!/configs/skeletons/
 
 /tutorials/results/*
 /tutorials/data/*

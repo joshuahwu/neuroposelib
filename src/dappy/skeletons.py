@@ -1,3 +1,5 @@
+## DEPRECATING
+
 CONNECTIVITY_DICT = {
     "mouse22": [
         (0, 1),

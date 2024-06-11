@@ -6,7 +6,8 @@ import pandas as pd
 import numpy as np
 from dappy.DataStruct import Connectivity
 from tqdm import tqdm
-
+from scipy.io import loadmat as scipyloadmat
+import numpy as np
 
 def config(path: str):
     """
@@ -25,7 +26,7 @@ def config(path: str):
     return config_dict
 
 
-def meta(path, id: List[Union[str, int]]):
+def meta(path: str, id: List[Union[str, int]]):
     meta = pd.read_csv(path)
     meta_by_frame = meta.iloc[id].reset_index().rename(columns={"index": "id"})
     meta = meta.reset_index().rename(columns={"index": "id"})
@@ -40,7 +41,14 @@ def features_mat(
     downsample: int = 20,
 ):
     """
-    Load in data (we only care about id, frames_with_good_tracking and jt_features)
+    DEPRECATING
+    -----------
+    Load in data outputs from CAPTURE
+
+    Marshall, Jesse D., et al. "Continuous whole-body 3D kinematic recordings 
+    across the rodent behavioral repertoire." Neuron 109.3 (2021): 420-437.
+     
+    (we only care about id, frames_with_good_tracking and jt_features)
 
     IN:
         analysis_path - Path to MATLAB analysis struct with jt_features included
@@ -151,7 +159,10 @@ def ids(path: str, key: str):
 
 
 def connectivity(path: str, skeleton_name: str):
-    """_summary_
+    """ 
+    DEPRECATED
+
+    Reads in connectivity from skeleton.py file
 
     Parameters
     ----------
@@ -185,6 +196,18 @@ def connectivity(path: str, skeleton_name: str):
 
 
 def connectivity_config(path: str):
+    """_summary_
+
+    Parameters
+    ----------
+    path : str
+        Path to skeleton/connectivity config file.
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
     skeleton_config = config(path)
 
     joint_names = skeleton_config["LABELS"]
@@ -282,6 +305,7 @@ def pose_from_meta(
     path: str,
     connectivity: Connectivity,
     key: Optional[str] = "ClusterDirectory",
+    file_type: Optional[str] = "dannce",
     dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,
 ):
     """
@@ -293,7 +317,12 @@ def pose_from_meta(
     id = np.empty((0))
     for i, row in tqdm(meta.iterrows()):
         pose_path = row[key]
-        meta_pose = pose_mat(pose_path, connectivity, dtype=dtype)
+        
+        if file_type == "dannce":
+            meta_pose = dannce_mat(pose_path,dtype=dtype)
+        else:
+            meta_pose = pose_mat(pose_path, connectivity, dtype=dtype)
+
         merged_pose = np.append(merged_pose, meta_pose, axis=0)
         id = np.append(id, i * np.ones((meta_pose.shape[0])))
 
@@ -301,3 +330,12 @@ def pose_from_meta(
     meta = meta.reset_index().rename(columns={"index": "id"})
 
     return merged_pose, id, meta, meta_by_frame
+
+def dannce_mat(
+    path: str,
+    dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32
+):
+    mat_file = scipyloadmat(path, variable_names="pred")
+    pose = np.moveaxis(mat_file["pred"],-1,-2).astype(dtype)
+    
+    return pose
