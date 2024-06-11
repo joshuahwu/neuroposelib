@@ -5,7 +5,7 @@ data_path: "./data/"
 out_path: "./results/tutorial/"
 
 # File path of skeletal specifications
-skeleton_path: "../src/dappy/skeletons.py"
+skeleton_path: "../config/skeletons/demo_mouse.yaml"
 
 # Key of skeleton in the skeletons file
 skeleton_name: "mouse20_notail"
