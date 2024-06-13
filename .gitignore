@@ -33,6 +33,7 @@ $RECYCLE.BIN/
 /tutorials/*
 !/tutorials/tutorial.ipynb
 !/tutorials/automated_pipeline.py
+!/tutorials/set_up.ipynb
 /configs/*
 !/configs/tutorial.yaml
 !/configs/skeletons/demo_mouse.yaml
