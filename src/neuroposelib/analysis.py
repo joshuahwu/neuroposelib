@@ -1,7 +1,7 @@
-# from dappy.features import *
-# from dappy import DataStruct as ds
-# from dappy import visualization as vis
-# from dappy import interface as itf
+# from neuroposelib.features import *
+# from neuroposelib import DataStruct as ds
+# from neuroposelib import visualization as vis
+# from neuroposelib import interface as itf
 import numpy as np
 from tqdm import tqdm
 from typing import Union, List, Optional
@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score
 from sklearn.ensemble import RandomForestRegressor
 import seaborn as sns
-from dappy.embed import Watershed
+from neuroposelib.embed import Watershed
 import faiss
 import time
 from scipy.sparse import csr_matrix

@@ -3,7 +3,7 @@ from scipy.signal import morlet2, cwt
 import numpy as np
 from typing import Optional, Union, List, Tuple, Type
 from tqdm import tqdm
-from dappy.utils import by_id, rolling_window, get_frame_diff
+from neuroposelib.utils import by_id, rolling_window, get_frame_diff
 
 
 def get_lengths(pose: np.ndarray, links: np.ndarray):

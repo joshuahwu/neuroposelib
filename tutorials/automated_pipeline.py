@@ -1,8 +1,8 @@
-from dappy.features import *
-from dappy import DataStruct as ds
+from neuroposelib.features import *
+from neuroposelib import DataStruct as ds
 import numpy as np
-from dappy import read, write, utils
-from dappy.embed import Watershed, Embed
+from neuroposelib import read, write, utils
+from neuroposelib.embed import Watershed, Embed
 from pathlib import Path
 
 

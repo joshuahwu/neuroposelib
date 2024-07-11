@@ -2,7 +2,7 @@ import functools
 import numpy as np
 import time
 
-from dappy import DataStruct as ds
+from neuroposelib import DataStruct as ds
 from typing import Optional, Union, List
 import faiss
 import tqdm

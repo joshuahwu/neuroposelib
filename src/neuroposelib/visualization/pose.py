@@ -12,10 +12,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 from typing import Optional, Union, List, Tuple
-from dappy.embed import Watershed
-from dappy import DataStruct as ds
-from dappy.visualization.constants import PALETTE, EPS, DEFAULT_BONE
-from dappy.visualization.plot import _mask_density
+from neuroposelib.embed import Watershed
+from neuroposelib import DataStruct as ds
+from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_BONE
+from neuroposelib.visualization.plot import _mask_density
 import copy
 
 
