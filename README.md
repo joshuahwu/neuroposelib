@@ -13,8 +13,8 @@ Use `environment.yml` if you're on a Linux machine, and `environment_osx.yml` fo
 ```
 git clone https://github.com/joshuahwu/dappy.git
 cd dappy
-conda env create -n dappy -f environment.yml
-conda activate dappy
+conda env create -n neuroposelib -f environment.yml
+conda activate neuroposelib
 conda install -c conda-forge opentsne
 pip install -e .
 ```
