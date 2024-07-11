@@ -1,6 +1,6 @@
 [project]
-name = "dappy"
-version = "0.1_dev"
+name = "neuroposelib"
+version = "0.2_dev"
 authors = [
   { name="Joshua H. Wu", email="joshua.wu@duke.edu" },
 ]
