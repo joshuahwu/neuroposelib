@@ -4,7 +4,7 @@ import hdf5storage
 from typing import Optional, Union, List, Tuple, Type
 import pandas as pd
 import numpy as np
-from dappy.DataStruct import Connectivity
+from neuroposelib.DataStruct import Connectivity
 from tqdm import tqdm
 from scipy.io import loadmat as scipyloadmat
 import numpy as np

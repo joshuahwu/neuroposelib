@@ -6,13 +6,13 @@ Module for analysis of 3D animal pose sequences. Based on work by [Berman et al.
 
 Install the latest version of [Miniconda](https://docs.conda.io/en/latest/miniconda.html) on your machine.
 
-The following steps will clone this repository, set up your conda environment, and install dappy.
+The following steps will clone this repository, set up your conda environment, and install neuroposelib.
 
 Use `environment.yml` if you're on a Linux machine, and `environment_osx.yml` for Mac.
 
 ```
-git clone https://github.com/joshuahwu/dappy.git
-cd dappy
+git clone https://github.com/joshuahwu/neuroposelib.git
+cd neuroposelib
 conda env create -n neuroposelib -f environment.yml
 conda activate neuroposelib
 conda install -c conda-forge opentsne
@@ -24,7 +24,7 @@ Note that `pip` and `setuptools` must be updated to the most recent versions.
 To begin gaining familiarity with the functionality of this package, download the demo dataset at [this link](https://duke.box.com/v/demo-mouse-poses) or with the command line as follows:
 
 ```
-cd dappy
+cd neuroposelib
 wget -v -O ./tutorials/data/demo_mouse.h5 -L https://duke.box.com/shared/static/zprn76pl31a9u1pp6gvxbmehn7p9zmbx.h5 
 ```
  and run through the code in `/tutorials/tutorial.ipynb`.

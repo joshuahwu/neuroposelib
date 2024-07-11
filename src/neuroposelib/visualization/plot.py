@@ -11,10 +11,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from typing import Optional, Union, List
 
-from dappy import DataStruct as ds
-from dappy.embed import Watershed, GaussDensity
-from dappy.analysis import cluster_freq_by_cat
-from dappy.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
+from neuroposelib import DataStruct as ds
+from neuroposelib.embed import Watershed, GaussDensity
+from neuroposelib.analysis import cluster_freq_by_cat
+from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
 
 def scatter_by_cat(
     data: np.ndarray,

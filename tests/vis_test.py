@@ -1,5 +1,5 @@
 import pickle
-from dappy import vis, read, preprocess
+from neuroposelib import vis, read, preprocess
 import numpy as np
 
 analysis_key = "ensemble_healthy"

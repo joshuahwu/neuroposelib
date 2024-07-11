@@ -1,1 +1,1 @@
-import dappy.analysis
+import neuroposelib.analysis
