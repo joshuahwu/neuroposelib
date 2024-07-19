@@ -1,5 +1,5 @@
 # Folder path of data location
-data_path: "./data/"
+data_path: "./demo_mouse/"
 
 # Output folder of all plots
 out_path: "./results/tutorial/"

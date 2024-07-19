@@ -25,7 +25,9 @@ To begin gaining familiarity with the functionality of this package, download th
 
 ```
 cd neuroposelib
-wget -v -O ./tutorials/data/demo_mouse.h5 -L https://duke.box.com/shared/static/zprn76pl31a9u1pp6gvxbmehn7p9zmbx.h5 
+wget -v -O ./tutorials/demo_mouse.zip -L https://duke.box.com/shared/static/2ypagjda3gws3m0yqzzdrszb79yfznz8.zip
+unzip ./tutorials/demo_mouse.zip -d ./tutorials/
+rm ./tutorials/demo_mouse.zip
 ```
  and run through the code in `/tutorials/tutorial.ipynb`.
 

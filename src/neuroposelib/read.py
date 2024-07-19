@@ -276,9 +276,13 @@ def pose_h5(
     """
     hf = h5py.File(path, "r")
     pose = np.array(hf.get("pose"), dtype=dtype)
-    id = np.array(hf.get("id"), dtype=np.int16)
-    hf.close()
-    return pose, id
+    if "id" in hf.keys():
+        id = np.array(hf.get("id"), dtype=np.int16)
+        hf.close()
+        return pose, id
+    else:
+        hf.close()
+        return pose
 
 
 def features_extended_h5(
