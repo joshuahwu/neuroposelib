@@ -18,7 +18,6 @@ from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_BONE
 from neuroposelib.visualization.plot import _mask_density
 import copy
 
-
 def sample(func):
     @functools.wraps(func)
     def wrapper(
