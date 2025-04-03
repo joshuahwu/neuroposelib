@@ -435,18 +435,18 @@ def _pose3D_arena(
     title: Optional[str] = None,
 ):
     (rows, cols) = size
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     kpts_3d = np.reshape(data[frames, :, :], (len(frames) * data.shape[-2], 3))
 
     ax_3d = _pose3D_frame(
         ax_3d, kpts_3d, COLORS, links, limits  # , figsize=(cols * 5, rows * 5)
     )
-    ax_3d.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-    ax_3d.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+    ax_3d.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+    ax_3d.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
     # ax_3d.w_zaxis.set_pane_color((0.75, 0.75, 0.75, 0.75))
-    ax_3d.w_xaxis.line.set_lw(0.)
-    ax_3d.w_yaxis.line.set_lw(0.)
-    ax_3d.w_zaxis.line.set_lw(0.)
+    ax_3d.xaxis.line.set_lw(0.)
+    ax_3d.yaxis.line.set_lw(0.)
+    ax_3d.zaxis.line.set_lw(0.)
     ax_3d.grid(False)
     ax_3d.set_xticks([])
     ax_3d.set_yticks([])
