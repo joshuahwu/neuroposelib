@@ -442,10 +442,15 @@ def _pose3D_arena(
     )
     ax_3d.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
     ax_3d.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-    # ax_3d.w_zaxis.set_pane_color((0.75, 0.75, 0.75, 0.75))
-    ax_3d.xaxis.line.set_lw(0.)
-    ax_3d.yaxis.line.set_lw(0.)
-    ax_3d.zaxis.line.set_lw(0.)
+    ax_3d.zaxis.set_pane_color((0.75, 0.75, 0.75, 0.75))
+    """
+    ax_3d.w_xaxis.line.set_lw(0.)
+    ax_3d.w_yaxis.line.set_lw(0.)
+    ax_3d.w_zaxis.line.set_lw(0.)
+    """
+    for axis in [ax_3d.xaxis, ax_3d.yaxis, ax_3d.zaxis]:
+        axis.line.set_linewidth(0.)
+
     ax_3d.grid(False)
     ax_3d.set_xticks([])
     ax_3d.set_yticks([])
