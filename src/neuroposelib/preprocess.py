@@ -1,7 +1,7 @@
 import scipy.ndimage as scp_ndi
 from scipy.interpolate import CubicSpline
 import numpy as np
-
+import numpy.typing as npt
 from neuroposelib.utils import by_id, get_frame_diff
 from typing import Optional, Union, List, Type
 from tqdm import tqdm
@@ -10,29 +10,61 @@ from scipy.spatial.transform import Rotation as R
 
 @by_id
 def align_floor_by_id(
-    pose: np.ndarray,
-    foot_id: Optional[int] = 12,
-    head_id: Optional[int] = 0,
-    dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
-):
-    return align_floor(pose=pose, foot_id=foot_id, head_id=head_id, dtype=dtype)
-
-
-def align_floor(
-    pose: np.ndarray,
+    pose: npt.NDArray,
     foot_id: Optional[int] = 12,
     head_id: Optional[int] = 0,
     dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
 ):
     """
-    Due to calibration, predictions may be rotated on different axes
-    Rotates floor to same x-y plane per video
-    IN:
-        pose: 3d matrix of (#frames x #joints x #coords)
-        exp_id: Video ids per frame
-        foot_id: ID of foot to find floor
-    OUT:
-        pose_rot: Floor aligned poses (#frames x #joints x #coords)
+    Due to the camera calibration, predictions may be rotated to different world coordinates. 
+    Rotates the floor to same x-y plane per video ID given.
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    ids : npt.ArrayLike
+        Id label for each frame in pose, e.g. video id (# frames).
+    foot_id : Optional[int], optional
+        Index of the foot keypoint used to fit to the floor plane, by default 12
+    head_id : Optional[int], optional
+        Index of the head keypoint used double check that foot keypoints are below head keypoints after rotation, by default None
+    dtype : Optional[Type[Union[np.DTypeLike]]], optional
+        Desired data type of output array.
+
+    Returns
+    -------
+    pose : npt.NDArray
+        Array of floor-aligned 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    """
+    return align_floor(pose=pose, foot_id=foot_id, head_id=head_id, dtype=dtype)
+
+
+def align_floor(
+    pose: npt.NDArray,
+    foot_id: Optional[int] = 12,
+    head_id: Optional[int] = None,
+    dtype: Optional[npt.DTypeLike] = np.float32,
+):
+    """
+    Due to the camera calibration, predictions may be rotated to different world coordinates. 
+    Rotates the floor to same x-y plane for one video.
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    foot_id : Optional[int], optional
+        Index of the foot keypoint used to fit to the floor plane, by default 12
+    head_id : Optional[int], optional
+        Index of the head keypoint used double check that foot keypoints are below head keypoints after rotation, by default None
+    dtype : Optional[Type[Union[np.DTypeLike]]], optional
+        Desired data type of output array.
+
+    Returns
+    -------
+    pose : npt.NDArray
+        Array of floor-aligned 3D pose values of shape (# frames, # keypoints, 3 coordinates).
     """
     print("Fitting and rotating the floor for each video to alignment ... ")
 
@@ -129,8 +161,8 @@ def vel_filter(
 
 
 def z_filter(
-    pose: np.ndarray,
-    exp_id: Union[np.ndarray, List],
+    pose: npt.NDArray,
+    exp_id: Union[npt.NDArray, List],
     threshold: float = 2500,
     connectivity=None,
 ):
@@ -188,14 +220,14 @@ def z_filter(
     return pose
 
 
-def median_filter(pose: np.ndarray, id: Union[np.ndarray, List], filter_len: int = 5):
+def median_filter(pose: npt.NDArray, id: Union[npt.NDArray, List], filter_len: int = 5):
     """_summary_
 
     Parameters
     ----------
-    pose : np.ndarray
+    pose : npt.NDArray
         _description_
-    id : Union[np.ndarray, List]
+    id : Union[npt.NDArray, List]
         _description_
     filter_len : int, optional
         _description_, by default 5
@@ -208,14 +240,16 @@ def median_filter(pose: np.ndarray, id: Union[np.ndarray, List], filter_len: int
     print("Applying Median Filter")
     for _, i in enumerate(tqdm(np.unique(id))):
         pose_exp = pose[id == i, ...]
-        pose[id == i, ...] = scp_ndi.median_filter(pose_exp, (filter_len, 1, 1))
+        pose[id == i, ...] = scp_ndi.median_filter(
+            pose_exp, (filter_len, 1, 1), mode="nearest"
+        )
 
     return pose
 
 
 def anipose_med_filt(
-    pose: np.ndarray,
-    exp_id: Union[List, np.ndarray],
+    pose: npt.NDArray,
+    exp_id: Union[List, npt.NDArray],
     filter_len: int = 6,
     threshold: float = 5,
 ):

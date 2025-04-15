@@ -1,4 +1,4 @@
-# 3D Animal Pose Analysis in Python
+# neuroposelib - 3D Animal Pose Analysis in Python
 
 Module for analysis of 3D animal pose sequences. Based on work by [Berman et al. (2014)](https://royalsocietypublishing.org/doi/full/10.1098/rsif.2014.0672) and [Marshall et al. (2020)](https://www.sciencedirect.com/science/article/pii/S0896627320308941).
 

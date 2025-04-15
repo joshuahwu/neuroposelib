@@ -4,11 +4,24 @@ import numpy as np
 from typing import Optional, Union, List, Tuple, Type
 from tqdm import tqdm
 from neuroposelib.utils import by_id, rolling_window, get_frame_diff
+import pywt
+import numpy.typing as npt
 
 
-def get_lengths(pose: np.ndarray, links: np.ndarray):
-    """
-    Get lengths of all linkages
+def get_lengths(pose: npt.NDArray, links: npt.ArrayLike) -> npt.NDArray:
+    """Get lengths of all defined segments.
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    links : npt.ArrayLike
+        Indices of segment links in pose array (# segments, 2)
+
+    Returns
+    -------
+    lengths : npt.NDArray
+        Array of segment lengths (# frames, # segments)
     """
     print("Calculating length of all linkages ... ")
     lengths = np.square(pose[:, links[:, 1], :] - pose[:, links[:, 0], :])
@@ -17,27 +30,44 @@ def get_lengths(pose: np.ndarray, links: np.ndarray):
 
 
 def get_velocities(
-    pose: np.ndarray,
-    ids: Union[np.ndarray, List],
+    pose: npt.NDArray,
+    ids: npt.ArrayLike,
     joint_names: List[str],
-    joints: List[int] = [0, 3, 5],
-    widths=[3, 31, 89],
+    joints: npt.ArrayLike = [0, 3, 5],
+    widths: npt.ArrayLike = [3, 31, 89],
     abs_val: bool = False,
-    f_s: int = 90,
+    fs: int = 90,
     std: bool = True,
-):
-    """
-    Returns absolute velocity, as well as x, y, and z velocities over varying widths
-    Takes distance at (t+width) from (t-width)
-    Also returns the standard deviation of these velocities over varying widths
-    IN:
-        pose: Non-centered and and optional rotated pose (#frames, #joints, #xyz)
-        ids: Video ids per frame
-        joints: joints to calculate absolute velocities
-        widths: Number of frames to average velocity over (must be odd)
-        f_s: Sampling frequency of the videos
-    OUT:
-        vel: velocity features (#frames x #joints*#widths)
+) -> tuple[npt.NDArray, List[str]]:
+    """Returns absolute velocity, as well as x, y, and z velocities over varying widths
+    Takes distance at (t+width) from (t-width).
+    Also returns the standard deviation of these velocities over varying widths.
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    ids : npt.ArrayLike
+        Id label for each frame in pose, e.g. video id (# frames).
+    joint_names : List[str]
+        List of labels for keypoints/joints ordered by the indices in the pose array.
+    joints : npt.ArrayLike, optional
+        Keypoints/joints for which to calculate speed.
+    widths : npt.ArrayLike, optional
+        Size of windows for average speed calculation (must be odd).
+    abs_val : bool, optional
+        If True, will output the absolute value of the per frame displacement.
+    fs : int, optional
+        Frame rate per second.
+    std : bool, optional
+        If True, will calculate speed standard deviations within windows.
+
+    Returns
+    -------
+    velocity: npt.NDArray
+        Array of velocity features per frame (# frames, # velocity features)
+    labels: List[str]]
+        List of labels for velocity features in columns of velocity array.
     """
     if np.any(np.sum(pose, axis=(0, 2)) == 0):
         print("Detected centered pose input - calculating relative velocities ... ")
@@ -65,7 +95,7 @@ def get_velocities(
             # Appending Euclidean vector magnitude of distance and multiplying by sample_freq to get final velocities
             dv = (
                 np.append(np.linalg.norm(dxyz, axis=-1)[:, :, None], dxyz, axis=-1)
-                * f_s
+                * fs
                 / (width * 2 + 1)
             )
             dv = np.reshape(dv, (pose_exp.shape[0], -1))
@@ -85,18 +115,16 @@ def get_velocities(
         if std:
             dxyz = get_frame_diff(pose_exp, time=1, idx_center=False)
             # import pdb; pdb.set_trace()
-            dv = (
-                np.append(np.linalg.norm(dxyz, axis=-1)[..., None], dxyz, axis=-1) * f_s
-            )
+            dv = np.append(np.linalg.norm(dxyz, axis=-1)[..., None], dxyz, axis=-1) * fs
             dv = np.reshape(dv, (pose_exp.shape[0], -1))
             if abs_val:
                 dv = np.abs(dv)
             for j, width in enumerate(widths):
                 # if i==49:
                 #     import pdb; pdb.set_trace()
-                vel_stds[
-                    ids == i, j * len(joints) * 4 : (j + 1) * len(joints) * 4
-                ] = np.std(rolling_window(dv, 2 * width + 1), axis=-1)
+                vel_stds[ids == i, j * len(joints) * 4 : (j + 1) * len(joints) * 4] = (
+                    np.std(rolling_window(dv, 2 * width + 1), axis=-1)
+                )
 
                 if i == np.unique(ids)[0]:
                     std_labels += [
@@ -113,9 +141,29 @@ def get_velocities(
         return vel, vel_labels
 
 
-def get_ego_pose(pose: np.ndarray, joint_names: List[str]):
-    """
-    Takes centered spine rotated pose - reshapes and converts to pandas dataframe
+def get_ego_pose(
+    pose: npt.NDArray, joint_names: List[str]
+) -> tuple[npt.NDArray, List[str]]:
+    """Takes centered, forward-rotated pose array and reshapes to tabular data.
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    joint_names : List[str]
+        List of labels for keypoints/joints ordered by the indices in the pose array.
+
+    Returns
+    -------
+    ego_pose: npt.NDArray
+        Array of egocentric pose coordinates per frame (# frames, # keypoints * 3)
+    labels: List[str]]
+        List of labels for pose features in columns of ego_pose array.
+
+    Raises
+    ------
+    ValueError
+        If input pose is not centered or rotated to be facing forward.
     """
     print("Reformatting pose to egocentric pose features ... ")
     is_centered = np.any(np.sum(pose, axis=(0, 2)) == 0)
@@ -134,17 +182,26 @@ def get_ego_pose(pose: np.ndarray, joint_names: List[str]):
     return pose, labels
 
 
-def get_euler_angles(pose: np.ndarray, links: np.ndarray):
-    """
-    Calculates 3 angles for pairs of linkage vectors
-    Angles calculated are those between projections of each vector onto the 3 xyz planes
-    IN:
-        pose: Centered and rotated pose (#frames, #joints, #xyz)
-        link_pairs: List of tuples with 3 points between which to calculate angles
-    OUT:
-        angles: returns 3 angles between link pairs
+def get_euler_angles(
+    pose: npt.NDArray, links: npt.ArrayLike
+) -> tuple[npt.NDArray, List[str]]:
+    """Calculates 3 angles for pairs of segment vectors. Angles calculated are those between projections of each vector onto the 3 xyz planes.
 
-    ** Currently doing unsigned
+    * Currently using unsigned angles
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    links : npt.ArrayLike
+        List of tuples with 3 points representing two vectors between which to calculate (# segment pairs, 3).
+
+    Returns
+    -------
+    angles: npt.NDArray
+        Array of angle features per frame (# frames, # angles)
+    labels: List[str]]
+        List of labels for angle features in columns of angles array.
     """
     print("Calculating joint angles - Euler ... ")
     angles = np.zeros((pose.shape[0], len(links), 3))
@@ -179,7 +236,25 @@ def get_euler_angles(pose: np.ndarray, links: np.ndarray):
     return angles, feat_labels
 
 
-def get_angles(pose: np.ndarray, links: np.ndarray):
+def get_angles(
+    pose: npt.NDArray, links: npt.ArrayLike
+) -> tuple[npt.NDArray, List[str]]:
+    """Calculates angles between pairs of segment vectors. Angle calculated is the unsigned shortest angle between two vectors.
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    links : npt.ArrayLike
+        List of tuples with 3 points representing two vectors between which to calculate (# angles, 3).
+
+    Returns
+    -------
+    angles: npt.NDArray
+        Array of angle features per frame (# frames, # angles)
+    labels: List[str]]
+        List of labels for angle features in columns of angles array.
+    """
     angles, labels = [], []
     print("Calculating joint angles ... ")
     for i, pair in enumerate(tqdm(links)):
@@ -197,16 +272,33 @@ def get_angles(pose: np.ndarray, links: np.ndarray):
 
 
 def get_angular_vel(
-    angles: np.ndarray,
+    angles: npt.NDArray,
     angle_labels: List[str],
-    ids: Union[np.ndarray, List],
-    widths: List[int] = [1, 15, 45],
-    f_s: int = 90,
-):
-    """
-    Calculates angular velocity of previously defined angles
-    IN:
-        angles: Pandas dataframe of angles ()
+    ids: npt.ArrayLike,
+    widths: npt.ArrayLike = [1, 15, 45],
+    fs: int = 90,
+) -> tuple[npt.NDArray, List[str]]:
+    """Calculates angular velocity of an angular velocity array and standard deviation of velocities over defined windows.
+
+    Parameters
+    ----------
+    angles : npt.NDArray
+        Array of angle features per frame (# frames, # angles)
+    angle_labels: List[str]]
+        List of labels for angle features in columns of angles array.
+    ids : npt.ArrayLike
+        Id label for each frame in pose, e.g. video id (# frames).
+    widths : widths : npt.ArrayLike, optional
+        Size of windows for average speed calculation (must be odd).
+    fs : int, optional
+        Frame rate per second.
+
+    Returns
+    -------
+    angular_velocity: npt.NDArray
+        Array of angular velocity features per frame (# frames, # angular velocity features)
+    labels: List[str]]
+        List of labels for velocity features in columns of angular velocity array.
     """
     print("Calculating velocities of angles ... ")
     num_ang = angles.shape[1]
@@ -218,7 +310,7 @@ def get_angular_vel(
         for j, width in enumerate(widths):
             dtheta = (
                 get_frame_diff(ang_exp, time=width, idx_center=True)
-                * f_s
+                * fs
                 / (width * 2 + 1)
             )
             avel[ids == i, j * num_ang : (j + 1) * num_ang] = dtheta
@@ -233,7 +325,7 @@ def get_angular_vel(
                     for label in angle_labels
                 ]
 
-        dtheta = get_frame_diff(ang_exp, time=1, idx_center=False) * f_s
+        dtheta = get_frame_diff(ang_exp, time=1, idx_center=False) * fs
         for j, width in enumerate(widths):
             avel_stds[ids == i, j * num_ang : (j + 1) * num_ang] = np.std(
                 rolling_window(dtheta, 2 * width + 1), axis=-1
@@ -244,12 +336,30 @@ def get_angular_vel(
     return np.hstack((avel, avel_stds)), avel_labels + std_labels
 
 
-def get_head_angular(
-    pose: np.ndarray,
-    ids: Union[np.ndarray, List],
-    widths: Union[List[int], np.ndarray] = [5, 10, 50],
-    link: Union[List[int], np.ndarray] = [0, 3, 4],
-):
+def _get_head_angular(
+    pose: npt.NDArray,
+    ids: npt.ArrayLike,
+    widths: npt.ArrayLike = [5, 10, 50],
+    link: npt.ArrayLike = [0, 3, 4],
+) -> npt.NDArray:
+    """_summary_
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        _description_
+    ids : npt.ArrayLike
+        _description_
+    widths : npt.ArrayLike, optional
+        _description_, by default [5, 10, 50]
+    link : npt.ArrayLike, optional
+        _description_, by default [0, 3, 4]
+
+    Returns
+    -------
+    angular velocity: npt.NDArray
+        Array of angular velocities of the head.
+    """    
     """
     Getting x-y angular velocity of head
     IN:
@@ -273,16 +383,42 @@ def get_head_angular(
 
 
 def wavelet(
-    features: np.ndarray,
+    features: npt.NDArray,
     labels: List[str],
-    ids: Union[np.ndarray, List],
-    f_s: int = 90,
-    freq: Union[List, np.ndarray] = np.linspace(1, 25, 25),
-    w0: float = 5,
-):
-    # scp.signal.morlet2(500, )
+    ids: npt.ArrayLike,
+    fs: int = 90,
+    freq: npt.ArrayLike = np.geomspace(1, 25, 25),
+    bw: float = 1.0,
+) -> tuple[npt.NDArray, List[str]]:
+    """Applies complex Morlet wavlet transform over feature array. 
+    
+    Built on [PyWavelet](https://pywavelets.readthedocs.io/en/latest/index.html).
+
+    Parameters
+    ----------
+    features : npt.NDArray
+        2D array of features (# frames, # features).
+    labels : List[str]
+        List of labels for features in columns of features array.
+    ids : npt.ArrayLike
+        Id label for each frame in pose, e.g. video id (# frames).
+    fs : int, optional
+        Frame rate per second.
+    freq : npt.ArrayLike, optional
+        Frequencies to evaluate.
+    bw : float, optional
+        Bandwidth of complex Morlet wavelet, by default 1.0
+
+    Returns
+    -------
+    wavelet: npt.NDArray
+        Array of wavelet features per frame (# frames, # features * len(freq))
+    labels: List[str]]
+        List of labels for wavelet features in columns of wavelet array.
+    """    
+
     print("Calculating wavelets ... ")
-    widths = (w0 * f_s / (2 * freq * np.pi)).astype(features.dtype)
+    # widths = (w0 * fs / (2 * freq * np.pi)).astype(features.dtype)
     wlet_feats = np.zeros(
         (features.shape[0], len(freq) * features.shape[1]), features.dtype
     )
@@ -293,23 +429,58 @@ def wavelet(
 
     for i in np.unique(ids):
         print("Calculating wavelets for video " + str(i))
-        for j in tqdm(range(features.shape[1])):
-            wlet_feats[ids == i, j * len(freq) : (j + 1) * len(freq)] = np.abs(
-                cwt(features[ids == i, j], morlet2, widths, w=w0).T
-            )
+        wlets_i_f = np.abs(
+            pywt.cwt(
+                features[ids == i],
+                scales=pywt.frequency2scale("cmor{:.1f}-{:.1f}".format(bw, 1.0), freq)
+                * fs,
+                wavelet="cmor{:.1f}-{:.1f}".format(bw, 1.0),
+                sampling_period=1 / fs,
+                method="fft",
+                axis=0,
+            )[0]
+        )
+
+        wlet_feats[ids == i] = np.swapaxes(wlets_i_f, 0, 1).reshape(
+            wlets_i_f.shape[1], -1
+        )
+
     return wlet_feats, wlet_labels
 
 
 def pca(
-    features: np.ndarray,
-    labels: List,
+    features: npt.NDArray,
+    labels: List[str],
     categories: List[str] = ["vel", "ego_euc", "ang", "avel"],
     n_pcs: int = 10,
-    downsample: int = 1,
-    method="fbpca",
-):
-    print("Calculating principal components ... ")
+    max_frames: int = 2e7,
+    method: str = "fbpca",
+) -> tuple[npt.NDArray, List[str]]:
+    """Transforms feature array into principal component scores.
 
+    Parameters
+    ----------
+    features : npt.NDArray
+        2D array of features (# frames, # features).
+    labels : List[str]
+        List of labels for features in columns of features array.
+    categories : List[str], optional
+        Category labels of features on which to separately calculate PCs.
+    n_pcs : int, optional
+        Number of principal components.
+    max_frames : int, optional
+        Maximum number of frames on which to calculate PCs. Will evenly downsample feature array when exceeded.
+    method : str, optional
+        Method to use in calculating PCs.
+
+    Returns
+    -------
+    scores: npt.NDArray
+        Array of PC transformed features per frame (# frames, # categories * n_pcs)
+    labels: List[str]]
+        List of labels for PC transformed features in columns of scores array.
+    """    
+    print("Calculating principal components ... ")
     # Initializing the PCA method
     # if method.startswith("torch"):
     #     import torch
@@ -319,6 +490,7 @@ def pca(
     # else:
     # Centering the features if not torch (pytorch does it itself)
     features = features - features.mean(axis=0)
+    features /= features.std(axis=0) + 1e-8
     pca_feats = np.zeros(
         (features.shape[0], len(categories) * n_pcs), dtype=features.dtype
     )
@@ -369,6 +541,8 @@ def pca(
         #         )
 
         elif method == "fbpca":
+            downsample = int(np.ceil(len(features) / max_frames))
+            assert downsample > 0
             (_, _, V) = fbpca.pca(
                 features[::downsample, cols_idx].astype(np.float64), k=n_pcs
             )

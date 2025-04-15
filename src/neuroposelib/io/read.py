@@ -1,64 +1,84 @@
 import yaml
 import h5py
 import hdf5storage
-from typing import Optional, Union, List, Tuple, Type
+from typing import Optional, Union, List, Tuple, Type, Dict
 import pandas as pd
 import numpy as np
 from neuroposelib.DataStruct import Connectivity
 from tqdm import tqdm
 from scipy.io import loadmat as scipyloadmat
 import numpy as np
+import numpy.typing as npt
 
-def config(path: str):
+
+def config(path: str) -> dict:
+    """Read configuration `.yaml` file and set instance attributes
+    based on key, value pairs in the config file.
+
+    Parameters
+    ----------
+    path : str
+        Path to file.
+
+    Returns
+    -------
+    config: dict
+        Parameters from configuration file.
     """
-    Read configuration file and set instance attributes
-    based on key, value pairs in the config file
-
-    IN:
-        filepath - Path to configuration file
-    OUT:
-        config_dict - Dict of path variables to data in config file
-    """
-
     with open(path) as f:
-        config_dict = yaml.safe_load(f)
+        config = yaml.safe_load(f)
 
-    return config_dict
+    return config
 
 
-def meta(path: str, id: List[Union[str, int]]):
+def meta(path: str, ids: List[Union[str, int]]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Read in metadata `.csv` file.
+
+    Parameters
+    ----------
+    path : str
+        Path to file.
+    ids : List[Union[str, int]]
+        Id label for each frame in pose, e.g. video id (# frames).
+
+    Returns
+    -------
+    meta : pd.DataFrame
+        Metadata for each id, e.g. animal identity, treatment, sex (# ids, # metadata).
+    meta_by_frame : pd.DataFrame
+        Metadata for each frame (# frames, # metadata).
+    """
     meta = pd.read_csv(path)
-    meta_by_frame = meta.iloc[id].reset_index().rename(columns={"index": "id"})
-    meta = meta.reset_index().rename(columns={"index": "id"})
+    meta_by_frame = meta.iloc[ids].reset_index().rename(columns={"index": "ids"})
+    meta = meta.reset_index().rename(columns={"index": "ids"})
 
     return meta, meta_by_frame
 
 
-def features_mat(
+def _features_mat(
     analysis_path: Optional[str] = None,
     pose_path: Optional[str] = None,
     exp_key: Optional[str] = None,
     downsample: int = 20,
 ):
-    """
-    DEPRECATING
+    """DEPRECATING
     -----------
     Load in data outputs from CAPTURE
 
-    Marshall, Jesse D., et al. "Continuous whole-body 3D kinematic recordings 
+    Marshall, Jesse D., et al. "Continuous whole-body 3D kinematic recordings
     across the rodent behavioral repertoire." Neuron 109.3 (2021): 420-437.
-     
-    (we only care about id, frames_with_good_tracking and jt_features)
+
+    (we only care about ids, frames_with_good_tracking and jt_features)
 
     IN:
         analysis_path - Path to MATLAB analysis struct with jt_features included
-        pose_path - Path to predictions .mat file
+        pose_path - Path to predictions `.mat` file
         exp_key - Name of category to separate by experiment
         downsample - Factor by which to downsample features and IDs for analysis
 
     OUT:
-        features - Numpy array of features for each frame for analysis (frames x features)
-        id - List of labels for categories based on the exp_key
+        features - Numpy array of features for each frame for analysis (# frames, # features)
+        ids - List of labels for categories based on the exp_key
         frames_with_good_tracking - Indices in merged predictions file to keep track of downsampling
     """
 
@@ -86,41 +106,40 @@ def features_mat(
     if np.min(ids_full) != 0:
         ids_full -= np.min(ids_full)
 
-    id = ids_full[frames_with_good_tracking]  # Indexing out batch IDs
+    ids = ids_full[frames_with_good_tracking]  # Indexing out batch IDs
 
     print("Size of dataset: ", np.shape(features))
 
     # downsample
     frames_with_good_tracking = frames_with_good_tracking[::downsample]
     features = features[::downsample]
-    id = id[::downsample]
+    ids = ids[::downsample]
 
     downsample = downsample * int(analysisstruct["tsnegranularity"])
 
-    return features, id, frames_with_good_tracking
+    return features, ids, frames_with_good_tracking
 
 
 def pose_mat(
     path: str,
     connectivity: Connectivity,
-    dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,
-) -> np.ndarray:  ## TODO: Use output docstrings
-    """Reads 3D pose data from .mat files.
-
+    dtype: Optional[npt.DTypeLike] = np.float32,
+) -> npt.NDArray:
+    """Read pose array from `.mat` file.
 
     Parameters
     ----------
     path : str
-        Path to pose `.mat` file.
+        Path to file.
     connectivity : Connectivity
         Connectivity object containing keypoint/joint/skeletal information.
-    dtype : Optional[Type[Union[np.float64, np.float32]]], optional
-        Desired output data type, by default np.float32
+    dtype : Optional[npt.DTypeLike], optional
+        Desired data type of output array.
 
     Returns
     -------
-    pose : np.ndarray
-        NumPy array (# frames x # keypoints x 3 coordinates)
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
     """
 
     try:
@@ -150,7 +169,21 @@ def pose_mat(
     return pose
 
 
-def ids(path: str, key: str):
+def ids(path: str, key: str) -> npt.NDArray:
+    """Read in ids from `.mat` pose files.
+
+    Parameters
+    ----------
+    path : str
+        Path to file.
+    key : str
+        Key in `.mat` file for ids.
+
+    Returns
+    -------
+    ids : npt.NDArray
+        Id label for each frame in pose, e.g. video id (# frames).
+    """
     ids = np.squeeze(hdf5storage.loadmat(path, variable_names=[key])[key].astype(int))
 
     if np.min(ids) != 0:
@@ -158,23 +191,22 @@ def ids(path: str, key: str):
     return ids
 
 
-def connectivity(path: str, skeleton_name: str):
-    """ 
-    DEPRECATED
+def connectivity(path: str, skeleton_name: str) -> Connectivity:
+    """DEPRECATING
 
-    Reads in connectivity from skeleton.py file
+    Reads in connectivity from skeleton.py file.
 
     Parameters
     ----------
     path : str
-        Path to skeleton/connectivity Python file.
+        Path to file.
     skeleton_name : str
         Name of skeleton type to load in.
 
     Returns
     -------
-    connectivity: Connectivity object
-        Connectivity class object containing designated skeleton information
+    connectivity: Connectivity
+        Connectivity object containing keypoint/joint/skeletal information.
     """
     if path.endswith(".py"):
         import importlib.util
@@ -195,18 +227,18 @@ def connectivity(path: str, skeleton_name: str):
     return connectivity
 
 
-def connectivity_config(path: str):
-    """_summary_
+def connectivity_config(path: str) -> Connectivity:
+    """Read in skeleton connectivity from skeleton config `.yaml` file.
 
     Parameters
     ----------
     path : str
-        Path to skeleton/connectivity config file.
+        Path to file.
 
     Returns
     -------
-    _type_
-        _description_
+    Connectivity
+        Connectivity object containing keypoint/joint/skeletal information.
     """
     skeleton_config = config(path)
 
@@ -219,32 +251,36 @@ def connectivity_config(path: str):
         angles = skeleton_config["JOINT_ANGLES"]
     else:
         angles = None
-    
+
     connectivity = Connectivity(
-        joint_names=joint_names, colors=colors, links=links, angles=angles, keypt_colors=keypt_colors
+        joint_names=joint_names,
+        colors=colors,
+        links=links,
+        angles=angles,
+        keypt_colors=keypt_colors,
     )
 
     return connectivity
 
 
 def features_h5(
-    path, dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32
-):
+    path: str, dtype: Optional[npt.DTypeLike] = np.float32
+) -> tuple[npt.NDArray, List[str]]:
     """Reads feature array from an `.h5` file.
 
     Parameters
     ----------
     path : str
         Path to file.
-    dtype : Optional[Type[Union[np.float64, np.float32]]], optional
-        Desired data type of feature array. Can only be `np.float64` or `np.float32`, by default `np.float32`
+    dtype : Optional[npt.DTypeLike], optional
+        Desired data type of output array.
 
     Returns
     -------
-    features: np.ndarray
-        2D array of features (# frames x # features).
-    labels: List[str]
-        List of labels for each column of features.
+    features : npt.NDArray
+        2D array of features (# frames, # features).
+    labels : List[str]
+        Labels for features in columns of features array.
     """
     hf = h5py.File(path, "r")
     features = np.array(hf.get("features"), dtype=dtype)
@@ -256,52 +292,56 @@ def features_h5(
 
 def pose_h5(
     path: str,
-    dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,
-):
+    dtype: Optional[npt.DTypeLike] = np.float32,
+) -> tuple[npt.NDArray, npt.NDArray]:
     """Reads 3D poses from an `.h5` file.
 
     Parameters
     ----------
     path : str
         Path to file.
-    dtype : Optional[Type[Union[np.float64, np.float32]]], optional
-        Desired data type of pose array. Can only be `np.float64` or `np.float32`, by default `np.float32`
+    dtype : Optional[npt.DTypeLike], optional
+        Desired data type of output array.
 
     Returns
     -------
-    pose : np.ndarray
-        NumPy array of 3D pose values of shape (# frames x # joints x 3 coordinates).
-    id : np.ndarray
-        Id label for each frame in pose, e.g. video id.
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    ids : npt.NDArray
+        Id label for each frame in pose, e.g. video id (# frames).
     """
     hf = h5py.File(path, "r")
     pose = np.array(hf.get("pose"), dtype=dtype)
-    if "id" in hf.keys():
-        id = np.array(hf.get("id"), dtype=np.int16)
+    if "ids" in hf.keys():
+        ids = np.array(hf.get("ids"), dtype=np.int16)
         hf.close()
-        return pose, id
+        return pose, ids
+    elif "id" in hf.keys():
+        ids = np.array(hf.get("id"), dtype=np.int16)
+        hf.close()
+        return pose, ids
     else:
         hf.close()
         return pose
 
 
-def features_extended_h5(
+def _features_extended_h5(
     path: str,
     meta_dtype: Optional[Type] = str,
-    dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,
+    dtype: Optional[npt.DTypeLike] = np.float32,
 ):
     hf = h5py.File(path, "r")
     features = np.array(hf.get("features"), dtype=dtype)
     labels = np.array(hf.get("labels"), dtype=str).tolist()
-    id = np.array(hf.get("id"), dtype=np.int16)
+    ids = np.array(hf.get("ids"), dtype=np.int16)
     meta = np.array(hf.get("meta"), dtype=meta_dtype).tolist()
     clusters = np.array(hf.get("clusters"), dtype=np.int16)
     hf.close()
     print("Extended features loaded at path " + path)
-    return features, labels, id, meta, clusters
+    return features, labels, ids, meta, clusters
 
 
-def heuristics(path: str):
+def _heuristics(path: str):
     import importlib.util
 
     mod_spec = importlib.util.spec_from_file_location("heuristics", path)
@@ -315,36 +355,74 @@ def pose_from_meta(
     connectivity: Connectivity,
     key: Optional[str] = "ClusterDirectory",
     file_type: Optional[str] = "dannce",
-    dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32,
-):
-    """
-    IN:
-        path: path to metadata.csv file
+    dtype: Optional[npt.DTypeLike] = np.float32,
+) -> tuple[npt.NDArray, npt.NDArray, pd.DataFrame, pd.DataFrame]:
+    """Read pose array from a metadata file in which there are paths to individual pose files.
+
+    Parameters
+    ----------
+    path : str
+        Path to file.
+    connectivity : Connectivity
+        Connectivity object containing keypoint/joint/skeletal information.
+    key : Optional[str], optional
+        Column label in metadata corresponding to individual pose file paths.
+    file_type : Optional[str], optional
+        Origin of file type.
+    dtype : Optional[npt.DTypeLike], optional
+        Desired data type of output array.
+
+    Returns
+    -------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    ids : npt.NDArray
+        Id label for each frame in pose, e.g. video id (# frames).
+    meta : pd.DataFrame
+        Metadata for each id, e.g. animal identity, treatment, sex (# ids, # metadata).
+    meta_by_frame : pd.DataFrame
+        Metadata for each frame (# frames, # metadata).
+
     """
     meta = pd.read_csv(path)
     merged_pose = np.empty((0, len(connectivity.joint_names), 3), dtype=dtype)
-    id = np.empty((0))
+    ids = np.empty((0))
     for i, row in tqdm(meta.iterrows()):
         pose_path = row[key]
-        
+
         if file_type == "dannce":
-            meta_pose = dannce_mat(pose_path,dtype=dtype)
+            meta_pose = dannce_mat(pose_path, dtype=dtype)
         else:
             meta_pose = pose_mat(pose_path, connectivity, dtype=dtype)
 
         merged_pose = np.append(merged_pose, meta_pose, axis=0)
-        id = np.append(id, i * np.ones((meta_pose.shape[0])))
+        ids = np.append(ids, i * np.ones((meta_pose.shape[0])))
 
-    meta_by_frame = meta.iloc[id].reset_index().rename(columns={"index": "id"})
-    meta = meta.reset_index().rename(columns={"index": "id"})
+    meta_by_frame = meta.iloc[ids].reset_index().rename(columns={"index": "ids"})
+    meta = meta.reset_index().rename(columns={"index": "ids"})
 
-    return merged_pose, id, meta, meta_by_frame
+    return merged_pose, ids, meta, meta_by_frame
+
 
 def dannce_mat(
     path: str,
-    dtype: Optional[Type[Union[np.float64, np.float32]]] = np.float32
-):
+    dtype: Optional[npt.DTypeLike] = np.float32,
+) -> npt.NDArray:
+    """Read pose array from [DANNCE](https://github.com/spoonsso/dannce) output file.
+
+    Parameters
+    ----------
+    path : str
+        Path to file.
+    dtype : Optional[npt.DTypeLike], optional
+        Desired data type of output array.
+
+    Returns
+    -------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    """
     mat_file = scipyloadmat(path, variable_names="pred")
-    pose = np.moveaxis(mat_file["pred"],-1,-2).astype(dtype)
-    
+    pose = np.moveaxis(mat_file["pred"], -1, -2).astype(dtype)
+
     return pose

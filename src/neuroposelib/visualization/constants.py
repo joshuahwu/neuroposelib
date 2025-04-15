@@ -31,7 +31,7 @@ PALETTE = [
 
 DEFAULT_VIRIDIS = matplotlib.cm.get_cmap("viridis")
 DEFAULT_VIRIDIS.set_under("white")
-EPS = 0.99e-3
+EPS = 0.99e-6
 
 DEFAULT_BONE = matplotlib.colors.ListedColormap(
     matplotlib.colormaps["bone_r"](np.linspace(0.05, 0.4, 256))

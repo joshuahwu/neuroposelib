@@ -2,7 +2,7 @@ import numpy as np
 import tqdm
 
 import pandas as pd
-import seaborn as sns
+# import seaborn as sns
 from matplotlib.lines import Line2D
 import matplotlib
 from pathlib import Path
@@ -10,35 +10,37 @@ from pathlib import Path
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from typing import Optional, Union, List
+from scipy.special import softmax
 
 from neuroposelib import DataStruct as ds
 from neuroposelib.embed import Watershed, GaussDensity
-from neuroposelib.analysis import cluster_freq_by_cat
+from neuroposelib.analysis import hist_cluster_by_cat
 from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
 
-def scatter_by_cat(
-    data: np.ndarray,
-    cat: np.ndarray,
-    label: str,
-    size=3,
-    color=None,
-    filepath: str = "./",
-):
-    if color == None:
-        color = PALETTE
-    ax = sns.scatterplot(
-        x=data[:, 0],
-        y=data[:, 1],
-        marker=".",
-        hue=cat,
-        palette=color,
-        s=size,
-    )
-    # ax.set(xlabel="t-SNE 1", ylabel="t-SNE 2")
-    ax.set_box_aspect(0.9)
-    ax.figure.savefig("".join([filepath, "scatter_by_", label, ".png"]))
-    plt.close()
-    # plt.savefig(''.join([filepath, 'scatter_by_', label, '.png']))
+
+# def scatter_by_cat(
+#     data: np.ndarray,
+#     cat: np.ndarray,
+#     label: str,
+#     size=3,
+#     color=None,
+#     filepath: str = "./",
+# ):
+#     if color == None:
+#         color = PALETTE
+#     ax = sns.scatterplot(
+#         x=data[:, 0],
+#         y=data[:, 1],
+#         marker=".",
+#         hue=cat,
+#         palette=color,
+#         s=size,
+#     )
+#     # ax.set(xlabel="t-SNE 1", ylabel="t-SNE 2")
+#     ax.set_box_aspect(0.9)
+#     ax.figure.savefig("".join([filepath, "scatter_by_", label, ".png"]))
+#     plt.close()
+#     # plt.savefig(''.join([filepath, 'scatter_by_', label, '.png']))
 
 
 def scatter(
@@ -71,7 +73,7 @@ def scatter(
         s=marker_size,
         linewidths=0,
         c=color,
-        cmap=sns.color_palette("crest", as_cmap=True),
+        # cmap=sns.color_palette("crest", as_cmap=True),
         alpha=0.75,
         **kwargs,
     )
@@ -90,15 +92,18 @@ def scatter(
 def watershed(
     ws_map: np.ndarray,
     ws_borders: Optional[np.ndarray] = None,
+    cmap: Optional[str] = None,
     filepath: str = "./results/watershed.png",
 ):
     """
     Plotting a watershed map with clusters colored
 
     """
+    if cmap == None:
+        cmap = DEFAULT_VIRIDIS
     f = plt.figure()
     ax = f.add_subplot(111)
-    ax.imshow(ws_map, vmin=EPS, cmap=DEFAULT_VIRIDIS)
+    ax.imshow(ws_map, vmin=EPS, cmap=cmap)
     ax.set_aspect(0.9)
     if ws_borders is not None:
         ax.plot(ws_borders[:, 0], ws_borders[:, 1], ".k", markersize=0.05)
@@ -208,12 +213,15 @@ def density(
     ws_borders: Optional[np.ndarray] = None,
     filepath: str = "./results/density.png",
     show: bool = False,
+    vmax: float = None,
 ):
+    vmin = 0.99 * 15/density.shape[0]**2
     f = plt.figure()
     ax = f.add_subplot(111)
     if ws_borders is not None:
         ax.plot(ws_borders[:, 0], ws_borders[:, 1], ".k", markersize=0.1)
-    ax.imshow(density, vmin=EPS, cmap=DEFAULT_VIRIDIS)
+
+    ax.imshow(density, vmin=vmin, vmax=vmax, cmap=DEFAULT_VIRIDIS)
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_aspect(0.9)
@@ -231,13 +239,13 @@ def _mask_density(density, watershed_map, eps: float = EPS * 1.01):
     density[~mask] = 0
     return density
 
-
 def density_cat(
     data: ds.DataStruct,
     column: str,
     watershed: Watershed,
     filepath: str = "./results/density_by_label.png",
     show: bool = False,
+    vmax: float = None,
 ):
     """
     Plot densities by a category label
@@ -261,6 +269,7 @@ def density_cat(
         ax.imshow(
             _mask_density(density, watershed.watershed_map, EPS * 1.01),
             vmin=EPS,
+            vmax=vmax,
             cmap=DEFAULT_VIRIDIS,
         )  # scp.special.softmax(density))
 
@@ -273,6 +282,8 @@ def density_cat(
             )
         ax.set_aspect(0.9)
         ax.set_title(label)
+
+    for ax in ax_arr.reshape(-1):
         ax.set_xticks([])
         ax.set_yticks([])
         ax.axis("off")
@@ -293,6 +304,7 @@ def density_grid(
     watershed: Watershed,
     filepath: str = "./results/density_by_label.png",
     show: bool = False,
+    vmax: float = 3.5,
 ):
     """
     Plot densities by a category label
@@ -315,11 +327,11 @@ def density_grid(
                 embed_vals, new=False
             )  # Fit density on old axes
             idx = i * len(np.unique(labels2)) + j
-
             # if n_rows == 1:
             ax_arr[idx].imshow(
                 _mask_density(density, watershed.watershed_map, EPS * 1.01),
                 vmin=EPS,
+                vmax=vmax,
                 cmap=DEFAULT_VIRIDIS,
             )
 
@@ -379,7 +391,7 @@ def cluster_freq(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=False)
         ["_".join([label1, label2]) for label1, label2 in zip(cat1_labels, cat2_labels)]
     )
 
-    freq, combined_keys = cluster_freq_by_cat(
+    freq, combined_keys = hist_cluster_by_cat(
         data_obj.data["Cluster"].values, cat=combined_labels
     )
 
@@ -481,7 +493,7 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
         ["_".join([label1, label2]) for label1, label2 in zip(cat1_labels, cat2_labels)]
     )
 
-    freq, combined_keys = cluster_freq_by_cat(
+    freq, combined_keys = hist_cluster_by_cat(
         data_obj.data["Cluster"].values, cat=combined_labels
     )
 
@@ -643,141 +655,141 @@ def heuristics(features, labels, data_obj, heuristics, filepath):
         # )
 
 
-def labeled_watershed(watershed, borders, labels_path):
-    labels = pd.read_csv(labels_path)
+# def labeled_watershed(watershed, borders, labels_path):
+#     labels = pd.read_csv(labels_path)
 
-    behavior_cats = set(labels["Label"])
+#     behavior_cats = set(labels["Label"])
 
-    color_dict = {
-        "Background": np.array([0, 0, 0]),
-        "Crouched Idle": np.array([241, 194, 50]),
-        "Face Groom": np.array([106, 168, 79]),
-        "Body Groom": np.array([106, 168, 79]),
-        "High Rear": np.array([69, 129, 142]),
-        "Low Rear": np.array([106, 168, 79]),
-        "Investigate": np.array([106, 168, 79]),
-        "Walk/Rear": np.array([106, 168, 79]),
-        "Walk": np.array([103, 78, 167]),
-    }
+#     color_dict = {
+#         "Background": np.array([0, 0, 0]),
+#         "Crouched Idle": np.array([241, 194, 50]),
+#         "Face Groom": np.array([106, 168, 79]),
+#         "Body Groom": np.array([106, 168, 79]),
+#         "High Rear": np.array([69, 129, 142]),
+#         "Low Rear": np.array([106, 168, 79]),
+#         "Investigate": np.array([106, 168, 79]),
+#         "Walk/Rear": np.array([106, 168, 79]),
+#         "Walk": np.array([103, 78, 167]),
+#     }
 
-    colors = [
-        "#FFFFFF",
-        "tab:gray",
-        "tab:green",
-        "tab:blue",
-        "tab:orange",
-        "tab:red",
-        "tab:purple",
-        "tab:brown",
-        "tab:pink",
-        "tab:olive",
-        "tab:cyan",
-        "#dc0ab4",
-        "#00b7c7",
-    ]
+#     colors = [
+#         "#FFFFFF",
+#         "tab:gray",
+#         "tab:green",
+#         "tab:blue",
+#         "tab:orange",
+#         "tab:red",
+#         "tab:purple",
+#         "tab:brown",
+#         "tab:pink",
+#         "tab:olive",
+#         "tab:cyan",
+#         "#dc0ab4",
+#         "#00b7c7",
+#     ]
 
-    unique_labels = labels["Label"].unique()
+#     unique_labels = labels["Label"].unique()
 
-    labeled_map = np.zeros(watershed.shape)
-    for i, label in enumerate(unique_labels):
-        labeled_map[
-            np.isin(watershed, labels["Cluster"][labels["Label"] == label].values)
-        ] = i
+#     labeled_map = np.zeros(watershed.shape)
+#     for i, label in enumerate(unique_labels):
+#         labeled_map[
+#             np.isin(watershed, labels["Cluster"][labels["Label"] == label].values)
+#         ] = i
 
-    # labeled_map = np.zeros((watershed.shape[0], watershed.shape[1], 3))
-    # for i in range(watershed.shape[0]):
-    #     for j in range(watershed.shape[1]):
-    #         # try:
-    #         label = labels["Label"].loc[labels["Cluster"] == watershed[i, j]].values[0]
-    #         # except:
-    #         #     import pdb; pdb.set_trace()
-    #         labeled_map[i, j, :] = np.array(color_dict[label])
+#     # labeled_map = np.zeros((watershed.shape[0], watershed.shape[1], 3))
+#     # for i in range(watershed.shape[0]):
+#     #     for j in range(watershed.shape[1]):
+#     #         # try:
+#     #         label = labels["Label"].loc[labels["Cluster"] == watershed[i, j]].values[0]
+#     #         # except:
+#     #         #     import pdb; pdb.set_trace()
+#     #         labeled_map[i, j, :] = np.array(color_dict[label])
 
-    # fig, ax = plt.subplots()
-    sns.set(rc={"figure.figsize": (12, 10)})
-    cmap = [(1, 1, 1)] + sns.color_palette("Pastel2", len(unique_labels) - 1)
-    ax = sns.heatmap(labeled_map, cmap=cmap)
-    plt.colorbar(ax=ax, fraction=0.047 * 0.8)
-    colorbar = ax.collections[0].colorbar
-    # colorbar.fraction = 0.047*0.8
-    r = colorbar.vmax - 1
-    colorbar.set_ticks(
-        [
-            0 + r / (len(unique_labels) - 1) * (0.5 + i)
-            for i in range(1, len(unique_labels))
-        ]
-    )
-    colorbar.set_ticklabels(unique_labels[1:])
+#     # fig, ax = plt.subplots()
+#     sns.set(rc={"figure.figsize": (12, 10)})
+#     cmap = [(1, 1, 1)] + sns.color_palette("Pastel2", len(unique_labels) - 1)
+#     ax = sns.heatmap(labeled_map, cmap=cmap)
+#     plt.colorbar(ax=ax, fraction=0.047 * 0.8)
+#     colorbar = ax.collections[0].colorbar
+#     # colorbar.fraction = 0.047*0.8
+#     r = colorbar.vmax - 1
+#     colorbar.set_ticks(
+#         [
+#             0 + r / (len(unique_labels) - 1) * (0.5 + i)
+#             for i in range(1, len(unique_labels))
+#         ]
+#     )
+#     colorbar.set_ticklabels(unique_labels[1:])
 
-    # ax.set(xlabel="t-SNE 1", ylabel="t-SNE 2")
-    ax.get_xaxis().set_ticks([])
-    ax.get_yaxis().set_ticks([])
-    ax.set_box_aspect(0.8)
+#     # ax.set(xlabel="t-SNE 1", ylabel="t-SNE 2")
+#     ax.get_xaxis().set_ticks([])
+#     ax.get_yaxis().set_ticks([])
+#     ax.set_box_aspect(0.8)
 
-    ax.plot(borders[:, 0], borders[:, 1], "k.", markersize=0.5)
+#     ax.plot(borders[:, 0], borders[:, 1], "k.", markersize=0.5)
 
-    # handles = [
-    #     Line2D(
-    #         [0], [0], marker="o", color="w", markerfacecolor=v, label=k, markersize=8
-    #     )
-    #     for k, v in color_dict.items() if k!="Background"
-    # ]
-    # ax.legend(
-    #     title="color", handles=handles, bbox_to_anchor=(1.05, 1), loc="upper left"
-    # )
-    plt.savefig("./labeled_map.png")
-    plt.close()
+#     # handles = [
+#     #     Line2D(
+#     #         [0], [0], marker="o", color="w", markerfacecolor=v, label=k, markersize=8
+#     #     )
+#     #     for k, v in color_dict.items() if k!="Background"
+#     # ]
+#     # ax.legend(
+#     #     title="color", handles=handles, bbox_to_anchor=(1.05, 1), loc="upper left"
+#     # )
+#     plt.savefig("./labeled_map.png")
+#     plt.close()
 
 
-def feature_ridge(
-    feature: np.ndarray,
-    labels: Union[List, np.ndarray],
-    xlabel: str,
-    ylabel: str,
-    path: str = "./",
-):
-    df = pd.DataFrame({xlabel: feature, ylabel: labels})
-    pal = sns.cubehelix_palette(10, rot=-0.25, light=0.7)
-    grid = sns.FacetGrid(df, row=ylabel, hue=ylabel, aspect=15, height=0.5, palette=pal)
+# def feature_ridge(
+#     feature: np.ndarray,
+#     labels: Union[List, np.ndarray],
+#     xlabel: str,
+#     ylabel: str,
+#     path: str = "./",
+# ):
+#     df = pd.DataFrame({xlabel: feature, ylabel: labels})
+#     pal = sns.cubehelix_palette(10, rot=-0.25, light=0.7)
+#     grid = sns.FacetGrid(df, row=ylabel, hue=ylabel, aspect=15, height=0.5, palette=pal)
 
-    # Draw the densities in a few steps
-    grid.map(
-        sns.kdeplot,
-        xlabel,
-        bw_adjust=0.5,
-        clip_on=False,
-        fill=True,
-        alpha=1,
-        linewidth=1.5,
-    )
-    grid.map(sns.kdeplot, xlabel, clip_on=False, color="w", lw=2, bw_adjust=0.5)
+#     # Draw the densities in a few steps
+#     grid.map(
+#         sns.kdeplot,
+#         xlabel,
+#         bw_adjust=0.5,
+#         clip_on=False,
+#         fill=True,
+#         alpha=1,
+#         linewidth=1.5,
+#     )
+#     grid.map(sns.kdeplot, xlabel, clip_on=False, color="w", lw=2, bw_adjust=0.5)
 
-    # passing color=None to refline() uses the hue mapping
-    grid.refline(y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
+#     # passing color=None to refline() uses the hue mapping
+#     grid.refline(y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
 
-    # Define and use a simple function to label the plot in axes coordinates
-    def labelax(x, color, label):
-        ax = plt.gca()
-        ax.text(
-            0,
-            0.2,
-            label,
-            fontweight="bold",
-            color=color,
-            ha="left",
-            va="center",
-            transform=ax.transAxes,
-        )
+#     # Define and use a simple function to label the plot in axes coordinates
+#     def labelax(x, color, label):
+#         ax = plt.gca()
+#         ax.text(
+#             0,
+#             0.2,
+#             label,
+#             fontweight="bold",
+#             color=color,
+#             ha="left",
+#             va="center",
+#             transform=ax.transAxes,
+#         )
 
-    grid.map(labelax, xlabel)
+#     grid.map(labelax, xlabel)
 
-    # Set the subplots to overlap
-    grid.figure.subplots_adjust(hspace=-0.25)
+#     # Set the subplots to overlap
+#     grid.figure.subplots_adjust(hspace=-0.25)
 
-    # Remove axes details that don't play well with overlap
-    grid.set_titles("")
-    grid.set(yticks=[], ylabel="")
-    grid.despine(bottom=True, left=True)
+#     # Remove axes details that don't play well with overlap
+#     grid.set_titles("")
+#     grid.set(yticks=[], ylabel="")
+#     grid.despine(bottom=True, left=True)
 
-    Path(path).mkdir(parents=True, exist_ok=True)
-    plt.savefig(path + "{}_{}_ridge.png".format(xlabel, ylabel))
+#     Path(path).mkdir(parents=True, exist_ok=True)
+#     plt.savefig(path + "{}_{}_ridge.png".format(xlabel, ylabel))

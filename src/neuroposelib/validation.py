@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold
-from embed import Embed, BatchEmbed, Watershed
+from neuroposelib.embed import Embed, BatchEmbed, Watershed
 import matplotlib.pyplot as plt
 
 import tqdm

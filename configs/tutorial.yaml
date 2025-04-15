@@ -16,6 +16,7 @@ single_embed:
   perplexity: 50
   lr: "auto"
   sigma: 15
+  density_thresh: 17
 
 # Parameters for embedding new data into an existing t-SNE embedding
 transform_embed:

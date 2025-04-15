@@ -2,18 +2,81 @@ import pandas as pd
 import numpy as np
 from typing import Optional, Union, List, Tuple, Type
 from pathlib import Path
+import numpy.typing as npt
 
+class Connectivity:
+    """
+    Class for storing keypoint and linkage settings for 3D pose estimation skeletons
+    """
+
+    def __init__(
+        self,
+        joint_names: List[str],
+        colors: Union[npt.ArrayLike, List[Tuple[float, float, float, float]]],
+        links: Union[npt.ArrayLike, List[Tuple[int, int]]],
+        angles: Optional[Union[npt.ArrayLike, List[Tuple[int, int, int]]]] = None,
+        keypt_colors: Optional[
+            Union[npt.ArrayLike, List[Tuple[float, float, float, float]]]
+        ] = None,
+    ):
+        """Initializes instance of Connectivity class
+
+        Parameters
+        ----------
+        joint_names : List[str]
+            List of names of all joints/keypoints in skeleton.
+        colors : Union[npt.ArrayLike, List[Tuple[float, float, float, float]]]
+            RGB+A color values by which to plot each linkage.
+        links : Union[npt.ArrayLike, List[Tuple[int, int]]]
+            Identifies skeletal links between joints/keypoints by index within joint_names
+        angles : Union[npt.ArrayLike, List[Tuple[int, int, int]]]
+            Designations of 3 joints between which a vector angle is formed. Middle value indicates
+             common point from which 2 vectors are formed.
+        """
+
+        self.joint_names = joint_names
+        self.colors = self._check_type(colors, np.float32)
+        self.links = self._check_type(links, np.uint16)
+        if keypt_colors is not None:
+            self.keypt_colors = self._check_type(keypt_colors, np.float32)
+        if angles is not None:
+            self.angles = self._check_type(angles, np.uint16)
+
+    def _check_type(
+        self,
+        in_arr: Union[npt.ArrayLike, List[Tuple]],
+        dtype: npt.DTypeLike,
+    ) -> npt.ArrayLike:
+        """Checks the type of input and converts to NumPy array of desired data type.
+
+        Parameters
+        ----------
+        in_arr : Union[npt.ArrayLike, List[Tuple]]
+            Input to convert.
+        dtype : npt.DTypeLike
+            Data type to which input should be converted.
+
+        Returns
+        -------
+        npt.ArrayLike(dtype=dtype)
+            NumPy array with specified data type.
+        """
+        if isinstance(in_arr, list):
+            return np.array(in_arr, dtype=dtype)
+        elif in_arr.dtype != dtype:
+            return in_arr.astype(dtype)
+        else:
+            return in_arr
 
 class DataStruct:
-
-    """
+    """DEPRECATING
     Class for organizing and linking metadata to features and pose data
-
-    TODO: Refactor this class/potentially deprecate
-    TODO: If refactor, make categorical meta fields to be sparse matrices.
-    TODO: Another idea is to use this to store analysis transform objects
-    (e.g. pca, umap, t-sne, watershed)
     """
+
+    # TODO: Refactor this class/potentially deprecate
+    # TODO: If refactor, make categorical meta fields to be sparse matrices.
+    # TODO: Another idea is to use this to store analysis transform objects
+    # (e.g. pca, umap, t-sne, watershed)
 
     _props = [
         "embed_vals",
@@ -27,12 +90,12 @@ class DataStruct:
     def __init__(
         self,
         data: pd.DataFrame = pd.DataFrame(),
-        id: Optional[Union[List, np.ndarray]] = None,
+        id: Optional[Union[List, npt.ArrayLike]] = None,
         meta: pd.DataFrame = pd.DataFrame(),
         meta_by_frame: pd.DataFrame = pd.DataFrame(),
-        pose: np.ndarray = None,
+        pose: npt.ArrayLike = None,
         connectivity=None,
-        frame: Optional[Union[List, np.ndarray]] = None,
+        frame: Optional[Union[List, npt.ArrayLike]] = None,
         feature_labels: Optional[List[str]] = None,
     ):
         self.data = data
@@ -153,68 +216,3 @@ class DataStruct:
         freq = freq / np.expand_dims(frame_totals, axis=1)
 
         return freq
-
-
-class Connectivity:
-    """
-    Class for storing keypoint and linkage settings for 3D pose estimation skeletons
-    """
-
-    def __init__(
-        self,
-        joint_names: List[str],
-        colors: Union[np.ndarray, List[Tuple[float, float, float, float]]],
-        links: Union[np.ndarray, List[Tuple[int, int]]],
-        angles: Optional[Union[np.ndarray, List[Tuple[int, int, int]]]] = None,
-        keypt_colors: Optional[
-            Union[np.ndarray, List[Tuple[float, float, float, float]]]
-        ] = None,
-    ):
-        """Initializes instance of Connectivity class
-
-        Parameters
-        ----------
-        joint_names : List[str]
-            List of names of all joints/keypoints in skeleton.
-        colors : Union[np.ndarray, List[Tuple[float, float, float, float]]]
-            RGB+A color values by which to plot each linkage.
-        links : Union[np.ndarray, List[Tuple[int, int]]]
-            Identifies skeletal links between joints/keypoints by index within joint_names
-        angles : Union[np.ndarray, List[Tuple[int, int, int]]]
-            Designations of 3 joints between which a vector angle is formed. Middle value indicates
-             common point from which 2 vectors are formed.
-        """
-
-        self.joint_names = joint_names
-        self.colors = self._check_type(colors, np.float32)
-        self.links = self._check_type(links, np.uint16)
-        if keypt_colors is not None:
-            self.keypt_colors = self._check_type(keypt_colors, np.float32)
-        if angles is not None:
-            self.angles = self._check_type(angles, np.uint16)
-
-    def _check_type(
-        self,
-        in_arr: Union[np.ndarray, List[Tuple]],
-        dtype: Type[Union[np.float32, np.uint16]],
-    ):
-        """Checks the type of input and converts to NumPy array of desired data type
-
-        Parameters
-        ----------
-        in_arr : Union[np.ndarray, List[Tuple]]
-            Input to convert.
-        dtype : Type[Union[np.float32, np.uint16]]
-            Data type to which input should be converted.
-
-        Returns
-        -------
-        np.ndarray(dtype=dtype)
-            NumPy array with specified data type.
-        """
-        if isinstance(in_arr, list):
-            return np.array(in_arr, dtype=dtype)
-        elif in_arr.dtype != dtype:
-            return in_arr.astype(dtype)
-        else:
-            return in_arr

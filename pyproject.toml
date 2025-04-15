@@ -6,15 +6,29 @@ authors = [
 ]
 description = "3D Behavioral Analysis of Action Skeletons"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license ={file = "LICENSE"}
 classifiers = [
     "Development Status :: 1 - Planning",
     "Intended Audience :: Science/Research",
     "Operating System :: POSIX :: Linux",
-    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.10",
 ]
-dependencies = []
+dependencies = [
+    "numpy",
+    "Pywavelets",
+    "scikit-learn",
+    "scikit-image",
+    "fbpca",
+    "numba",
+    "matplotlib",
+    "seaborn",
+    "hdf5storage",
+    "umap-learn",
+    "pandas",
+    "ffmpeg",
+    "opentsne",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/joshuahwu/neuroposelib"
@@ -23,12 +37,30 @@ dependencies = []
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
-# [project.optional-dependencies]
-# docs = [
-#     "mkdocs",
-#     "mkdocstrings[python]",
-#     "mkdocs_section_index",
-#     "mkdocs_gen_files",
-#     "mkdocs_literate_nav",
-#     "mkdocs-gallery",
-# ]
+[project.optional-dependencies]
+docs = [
+    "mkdocs",
+    "mkdocstrings[python]",
+    "mkdocs_section_index",
+    "mkdocs_gen_files",
+    "mkdocs_literate_nav",
+    "mkdocs-gallery",
+    "mkdocs-macros-plugin",
+]
+
+[tool.setuptools_scm]
+write_to = "src/neuroposelib/version.py"
+version_scheme = 'python-simplified-semver'
+local_scheme = 'no-local-version'
+
+[tool.black]
+exclude = '/version\.py$'
+
+[tool.coverage.report]
+exclude_lines = [
+    "if __name__ == .__main__.:"    # Exclude from coverage
+]
+
+[tool.pydocstyle]
+convention = "numpy"                   # Convention for linting (numpy, google, pep257)
+match = "^(?!version\\.py$).*\\.py$"   # This matches everything that ends with .py, except for version.py

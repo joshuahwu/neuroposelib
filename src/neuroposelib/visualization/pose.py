@@ -18,7 +18,6 @@ from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_BONE
 from neuroposelib.visualization.plot import _mask_density
 import copy
 
-
 def sample(func):
     @functools.wraps(func)
     def wrapper(
@@ -435,6 +434,7 @@ def _pose3D_arena(
     title: Optional[str] = None,
 ):
     (rows, cols) = size
+    # import pdb; pdb.set_trace()
     kpts_3d = np.reshape(data[frames, :, :], (len(frames) * data.shape[-2], 3))
 
     ax_3d = _pose3D_frame(
@@ -450,7 +450,6 @@ def _pose3D_arena(
     """
     for axis in [ax_3d.xaxis, ax_3d.yaxis, ax_3d.zaxis]:
         axis.line.set_linewidth(0.)
-
     ax_3d.grid(False)
     ax_3d.set_xticks([])
     ax_3d.set_yticks([])
