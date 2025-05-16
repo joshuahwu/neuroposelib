@@ -1,12 +1,15 @@
 site_name: neuroposelib
 repo_url: https://github.com/joshuahwu/neuroposelib
+site_url: https://neuroposelib.readthedocs.io/
 
 theme:
   name: 'material'
   palette:
-    primary: 'gray'
-    features:
-      - navigation.tabs
+    primary: grey
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - toc.follow
 plugins:
     - search                           # make sure the search plugin is enabled
     - mkdocstrings:                    # plugin for generating documentation from Python docstrings

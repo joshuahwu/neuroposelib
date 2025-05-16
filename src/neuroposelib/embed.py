@@ -4,12 +4,14 @@ import time
 
 from neuroposelib import DataStruct as ds
 from typing import Optional, Union, List
+
 # import faiss
 import tqdm
 
 # import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
 from skimage import measure
+
 import pickle
 
 
@@ -583,7 +585,7 @@ class Watershed(GaussDensity):
 
         self.density = None  # TODO: Consider more when this saves and doesn't
 
-    def fit(self, data: np.ndarray):
+    def fit(self, data: np.ndarray, merge_cluster_area: Optional[int] = 0):
         """
         Running watershed clustering on data
         IN:
