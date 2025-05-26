@@ -9,7 +9,7 @@ from typing import Optional, Union, List, Tuple
 import pandas as pd
 from tqdm import tqdm
 from scipy.interpolate import CubicSpline, splprep, splev
-import dappy.visualization as vis
+import neuroposelib.visualization as vis
 
 
 def vel_filter(

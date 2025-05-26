@@ -1,12 +1,12 @@
-from dappy import read
-from dappy import vis
-from dappy import preprocess
-from dappy import write
-from dappy import features
-from dappy import analysis
-from dappy import DataStruct as ds
-from dappy.embed import Embed
-from dappy.embed import Watershed
+from neuroposelib import read
+from neuroposelib import vis
+from neuroposelib import preprocess
+from neuroposelib import write
+from neuroposelib import features
+from neuroposelib import analysis
+from neuroposelib import DataStruct as ds
+from neuroposelib.embed import Embed
+from neuroposelib.embed import Watershed
 import pandas as pd
 import numpy as np
 
@@ -18,7 +18,7 @@ def get_data_obj(
                 method="fbpca", 
                 fps = 90,
                 ):
-    from dappy import DataStruct as dsnew
+    from neuroposelib import DataStruct as dsnew
     pc_feats, pc_labels = features.pca(
                                         ego_pose, labels, categories=["ego_euc"], n_pcs=n_pcs, method=method
                                     )
@@ -26,7 +26,7 @@ def get_data_obj(
     del ego_pose, labels
 
     wlet_feats, wlet_labels = features.wavelet(
-        pc_feats, pc_labels, ids, f_s=fps, freq=np.linspace(1, 25, 25), w0=5
+        pc_feats, pc_labels, ids, fs=fps, freq=np.linspace(1, 25, 25), bw=5
     )
 
     # PCA on wavelet features

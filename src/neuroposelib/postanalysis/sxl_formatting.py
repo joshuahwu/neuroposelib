@@ -1,10 +1,10 @@
 from features import *
-import dappy.DataStruct as ds
-import dappy.visualization as vis
+import neuroposelib.DataStruct as ds
+import neuroposelib.visualization as vis
 import numpy as np
 import pandas as pd
-from dappy import read, write
-from dappy.embed import Watershed, Embed
+from neuroposelib import read, write
+from neuroposelib.embed import Watershed, Embed
 import pickle
 # import analysis
 

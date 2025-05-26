@@ -14,8 +14,9 @@ def align_floor_by_id(
     foot_id: Optional[int] = 12,
     head_id: Optional[int] = 0,
     dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
+    **kwargs
 ):
-    return align_floor(pose=pose, foot_id=foot_id, head_id=head_id, dtype=dtype)
+    return align_floor(pose=pose, foot_id=foot_id, head_id=head_id, dtype=dtype,**kwargs)
 
 
 def align_floor(
@@ -23,6 +24,7 @@ def align_floor(
     foot_id: Optional[int] = 12,
     head_id: Optional[int] = 0,
     dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
+    is_whole_body: Optional[bool] = True,
 ):
     """
     Due to calibration, predictions may be rotated on different axes
@@ -73,9 +75,10 @@ def align_floor(
     )
 
     ## Checking to make sure snout is on average above the feet
-    assert np.mean(pose_rot[:, head_id, 2]) > np.mean(
-        pose_rot[:, foot_id, 2]
-    )  # checking head is above foot
+    if is_whole_body:
+        assert np.mean(pose_rot[:, head_id, 2]) > np.mean(
+            pose_rot[:, foot_id, 2]
+        )  # checking head is above foot
 
     return pose_rot
 

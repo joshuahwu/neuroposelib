@@ -1,12 +1,12 @@
 ### Dappy Utilities
-import dappy.DataStruct as ds
-import dappy.visualization as vis
-from dappy import read, write
-from dappy import preprocess
-from dappy import write
-from dappy import features
-from dappy import analysis
-from dappy.embed import Watershed, Embed
+import neuroposelib.DataStruct as ds
+import neuroposelib.visualization as vis
+from neuroposelib import read, write
+from neuroposelib import preprocess
+from neuroposelib import write
+from neuroposelib import features
+from neuroposelib import analysis
+from neuroposelib.embed import Watershed, Embed
 
 import numpy as np
 import pandas as pd
@@ -77,7 +77,7 @@ def get_freq_df(config, file_name, idx_ax_name='Clusters', col_ax_name='id'):
 
     return cf
 
-def get_data_obj(
+def get_data_obj_from_file(
     config,
     file_name,
     col_renames = None,
@@ -85,10 +85,34 @@ def get_data_obj(
     ):
     with open(''.join([config['out_path'], f"/{file_name}"]), "rb") as dobj:
         data_obj = pickle.load(dobj)
+    return process_data_obj(config, data_obj, col_renames, group_id_col), data_obj
+
     
-    df = data_obj.data
-    mf = data_obj.meta
-    mff = data_obj.meta_by_frame
+def process_data_obj(
+                    config,
+                    data_obj,
+                    col_renames = None,
+                    group_id_col = 'Timepoint',
+                    ):
+    
+    # try: 
+    #     df = data_obj.data
+    #     mf = data_obj.meta
+    #     mff = data_obj.meta_by_frame
+    # except AttributeError as ae:
+    #     if "dict" in str(ae):
+    #         df = data_obj['data']
+    #         mf = data_obj['meta']
+    #         mff = data_obj['meta_by_frame']
+    
+    if isinstance(data_obj, dict):
+        df = data_obj['data']
+        mf = data_obj['meta']
+        mff = data_obj['meta_by_frame']
+    else:
+        df = data_obj.data
+        mf = data_obj.meta
+        mff = data_obj.meta_by_frame
 
     dfs_to_map = [df, mf, mff]
     if col_renames is not None:
@@ -248,3 +272,23 @@ def do_pairwise_tests(pvt_tab,
     else:
         return heatmap
     
+class RenamingUnpickler(pickle.Unpickler):
+    """
+    Unpickler for backward compatibility with DANNCE
+    """
+    def find_class(self, module, name):
+        # print(f'module = {module}, name = {name}')
+        if 'dappy' in module:
+            module = module.replace('dappy','neuroposelib')
+        return super().find_class(module, name)
+
+def read_datastruct(config):
+    """
+    Function to enable loading a datastruct (or any pickle file) containing 
+    dappy based data types to neuroposelib based datatypes.
+    For backward compatibility with dappy 
+    """
+    with open(config['out_path'] + "/datastruct.p", "rb") as file:
+        unpickler = RenamingUnpickler(file)
+        data_obj = unpickler.load()
+        return data_obj
