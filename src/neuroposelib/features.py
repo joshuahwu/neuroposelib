@@ -6,6 +6,7 @@ from tqdm import tqdm
 from neuroposelib.utils import by_id, rolling_window, get_frame_diff
 import pywt
 import numpy.typing as npt
+from sklearn.preprocessing import StandardScaler
 
 
 def get_lengths(pose: npt.NDArray, links: npt.ArrayLike) -> npt.NDArray:
@@ -481,16 +482,9 @@ def pca(
         List of labels for PC transformed features in columns of scores array.
     """
     print("Calculating principal components ... ")
-    # Initializing the PCA method
-    # if method.startswith("torch"):
-    #     import torch
-
-    #     pca_feats = torch.zeros(features.shape[0], len(categories) * n_pcs)
-    #     features = torch.tensor(features)
-    # else:
-    # Centering the features if not torch (pytorch does it itself)
-    features = features - features.mean(axis=0)
-    features /= features.std(axis=0) + 1e-8
+    
+    features = StandardScaler().fit_transform(features)# - features.mean(axis=0)
+    # features /= features.std(axis=0) + 1e-8
     pca_feats = np.zeros(
         (features.shape[0], len(categories) * n_pcs), dtype=features.dtype
     )
@@ -518,28 +512,6 @@ def pca(
                 features[:, cols_idx]
             )
 
-        # elif method.startswith("torch"):
-        #     feat_cat = features[:, cols_idx]
-        #     if method.endswith("_gpu"):
-        #         feat_cat = feat_cat.cuda()
-
-        #     if "pca" in method:
-        #         (_, _, V) = torch.pca_lowrank(feat_cat)
-        #     elif "svd" in method:
-        #         feat_cat -= feat_cat.mean()
-        #         (_, _, V) = torch.linalg.svd(feat_cat)
-
-        #     if method.endswith("_gpu"):
-        #         pca_feats[:, i * n_pcs : (i + 1) * n_pcs] = (
-        #             torch.matmul(feat_cat, V[:, :n_pcs]).detach().cpu()
-        #         )
-        #         feat_cat.detach().cpu()
-        #         V.detach().cpu()
-        #     else:
-        #         pca_feats[:, i * n_pcs : (i + 1) * n_pcs] = torch.matmul(
-        #             feat_cat, V[:, :n_pcs]
-        #         )
-
         elif method == "fbpca":
             downsample = int(np.ceil(len(features) / max_frames))
             assert downsample > 0
@@ -549,11 +521,6 @@ def pca(
             pca_feats[:, i * n_pcs : (i + 1) * n_pcs] = np.matmul(
                 features[:, cols_idx], V.astype(features.dtype).T
             )
-
-    # if method.startswith("torch_pca"):
-    #     pca_feats = pca_feats.numpy()
-
-    # assert num_cols == features.shape[1]
 
     pc_labels = [
         "_".join([cat, "pc" + str(i)]) for cat in categories for i in range(n_pcs)

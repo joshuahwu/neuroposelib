@@ -1,14 +1,10 @@
 import functools
 import numpy as np
 import time
-
 from neuroposelib import DataStruct as ds
 from typing import Optional, Union, List
-
-# import faiss
+import numpy.typing as npt
 import tqdm
-
-# import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
 from skimage import measure
 
@@ -53,7 +49,7 @@ class Embed:
 
     def embed(
         self,
-        features: Optional[np.ndarray] = None,
+        features: Optional[npt.ArrayLike] = None,
         n_iter: Optional[int] = None,
         n_neighbors: Optional[int] = None,
         perplexity: Optional[Union[str, int]] = None,
@@ -145,12 +141,12 @@ class Embed:
 
     def predict(
         self,
-        data: Union[np.ndarray, ds.DataStruct],
+        data: Union[npt.ArrayLike, ds.DataStruct],
         transform_method: Optional[str] = None,
         n_trees: Optional[int] = None,
         k: Optional[int] = None,
-        template: Optional[np.ndarray] = None,
-        temp_embedding: Optional[np.ndarray] = None,
+        template: Optional[npt.ArrayLike] = None,
+        temp_embedding: Optional[npt.ArrayLike] = None,
     ):
         """
         Uses prediction method to embed points onto template
@@ -178,9 +174,10 @@ class Embed:
 
         elif transform_method == "knn":
             print("Predicting using KNN")
-            print(k)
-            knn = KNNEmbed(k=k).fit(template, temp_embedding)
-            embed_vals = knn.predict_x(data, weights="distance")
+            raise NotImplementedError
+            # print(k)
+            # knn = KNNEmbed(k=k).fit(template, temp_embedding)
+            # embed_vals = knn.predict_x(data, weights="distance")
 
         # elif transform_method == "xgboost":
         #     import xgboost as xgb
@@ -252,8 +249,8 @@ class BatchEmbed(Embed):
 
     def fit(
         self,
-        data: Union[np.ndarray, ds.DataStruct],
-        batch_id: Optional[Union[np.ndarray, List[Union[int, str]]]] = None,
+        data: Union[npt.ArrayLike, ds.DataStruct],
+        batch_id: Optional[Union[npt.ArrayLike, List[Union[int, str]]]] = None,
         # save_batchmaps: Optional[str] = None,
         embed_temp: bool = True,
     ):
@@ -305,8 +302,8 @@ class BatchEmbed(Embed):
 
     def fit_predict(
         self,
-        data: Union[np.ndarray, ds.DataStruct],
-        batch_id: Optional[Union[np.ndarray, List[Union[int, str]]]] = None,
+        data: Union[npt.ArrayLike, ds.DataStruct],
+        batch_id: Optional[Union[npt.ArrayLike, List[Union[int, str]]]] = None,
         save_batchmaps: Optional[str] = None,
     ):
         self.fit(
@@ -319,7 +316,7 @@ class BatchEmbed(Embed):
     def __sample_clusters(
         self,
         data,
-        meta_name: Union[np.ndarray, List[Union[int, str]]],
+        meta_name: Union[npt.ArrayLike, List[Union[int, str]]],
         sample_size: int = 20,
     ):
         """
@@ -446,13 +443,14 @@ class GaussDensity:
         self.log_out = log_out
         self.pad_factor = pad_factor
 
+        # [[xmin, xmax], [ymin, ymax]]
         self.hist_range = None
 
         # TODO: More consideration for when these save
         self.density = None
         self.data_in_bin = None
 
-    def hist(self, data: np.ndarray, new: bool = True):
+    def hist(self, data: npt.ArrayLike, new: bool = True):
         """
         Run 2D histogram
 
@@ -488,7 +486,7 @@ class GaussDensity:
 
         return hist
 
-    def fit_density(self, data: np.ndarray, new: bool = True, map_bin: bool = True):
+    def fit_density(self, data: npt.ArrayLike, new: bool = True, map_bin: bool = True):
         """
         Calculate Gaussian density for 2D embedding
 
@@ -519,7 +517,7 @@ class GaussDensity:
 
         return density
 
-    def map_bins(self, data: np.ndarray):
+    def map_bins(self, data: npt.ArrayLike):
         """
         Find which bin in histogram/density map each data point is a part of
         IN:
@@ -585,7 +583,7 @@ class Watershed(GaussDensity):
 
         self.density = None  # TODO: Consider more when this saves and doesn't
 
-    def fit(self, data: np.ndarray, merge_cluster_area: Optional[int] = 0):
+    def fit(self, data: npt.ArrayLike, sav_threshold: Optional[float] = 0):
         """
         Running watershed clustering on data
         IN:
@@ -602,15 +600,66 @@ class Watershed(GaussDensity):
             -self.density, mask=self.density > self.density_thresh, watershed_line=False
         )
         self.watershed_map[self.density < self.density_thresh] = 0
-        self.borders = np.empty((0, 2), dtype=data.dtype)
+        self.borders = {}#np.empty((0, 2), dtype=data.dtype)
+        for i in range(1, self.watershed_map.max() + 1):
+            self.borders[i] = measure.find_contours(self.watershed_map.T == i, 0.5)[0]
+            # self.borders[i] = np.append(self.borders, contour, axis=0)
 
-        for i in range(1, len(np.unique(self.watershed_map))):
-            contour = measure.find_contours(self.watershed_map.T == i, 0.5)[0]
-            self.borders = np.append(self.borders, contour, axis=0)
+        if sav_threshold > 0:
+            self.merge_clusters(sav_threshold=sav_threshold)
 
         return self
 
-    def predict(self, data: Optional[Union[ds.DataStruct, np.ndarray]] = None):
+    def merge_clusters(self, sav_threshold: float):
+
+        print("Merging thin clusters ...")
+        original_borders = self.borders.copy()
+        n_clusters = self.watershed_map.max() + 1
+        slim_clusters = [0, 0]  # placeholder with len>1
+        counter = 0
+        while (len(slim_clusters) > 1) and (counter < 100):
+            sav = np.array(
+                [
+                    int(np.sum(self.watershed_map == i)) / len(original_borders[i])
+                    for i in range(1, n_clusters)
+                ]
+            )
+            slim_clusters = np.where((sav < sav_threshold) & (sav > 0))[0] + 1
+            smallest_cluster = slim_clusters[np.argmin(sav[slim_clusters - 1])]
+            border_set = set(map(tuple, self.borders[smallest_cluster]))
+            len_overlaps = [
+                (
+                    len(border_set & set(map(tuple, self.borders[i])))
+                    if i in self.borders.keys()
+                    else 0
+                )
+                for i in range(1, n_clusters)
+            ]
+
+            len_overlaps[smallest_cluster - 1] = 0
+            self.watershed_map = np.where(
+                self.watershed_map == smallest_cluster,
+                np.argmax(len_overlaps) + 1,
+                self.watershed_map,
+            )
+            self.borders = {}
+            for i in range(1, n_clusters):
+                bool_map = self.watershed_map.T == i
+                if bool_map.sum() > 0:
+                    self.borders[i] = measure.find_contours(
+                        self.watershed_map.T == i, 0.5
+                    )[0]
+            counter += 1
+
+        # Fixing cluster labels so that there are no skipped values
+        self.borders = dict(sorted(self.borders.items()))
+        border_keys = list(self.borders.keys())
+        for i, k in enumerate(border_keys):
+            self.borders[i+1] = self.borders.pop(k)
+            self.watershed_map[self.watershed_map == k] = i+1
+        return self
+
+    def predict(self, data: Optional[Union[ds.DataStruct, npt.ArrayLike]] = None):
         """
         Predicts the cluster label of data
 
@@ -633,8 +682,12 @@ class Watershed(GaussDensity):
 
         return cluster_labels
 
-    def fit_predict(self, data: Optional[Union[ds.DataStruct, np.ndarray]] = None):
-        self.fit(data)
+    def fit_predict(
+        self,
+        data: Optional[Union[ds.DataStruct, npt.ArrayLike]] = None,
+        sav_threshold: Optional[float] = 0,
+    ):
+        self.fit(data, sav_threshold=sav_threshold)
         cluster_labels = self.predict(data)
         return cluster_labels
 

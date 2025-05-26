@@ -2,6 +2,7 @@ import numpy as np
 import tqdm
 
 import pandas as pd
+
 # import seaborn as sns
 from matplotlib.lines import Line2D
 import matplotlib
@@ -9,7 +10,7 @@ from pathlib import Path
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Dict
 from scipy.special import softmax
 from sklearn.preprocessing import MinMaxScaler
 
@@ -17,7 +18,7 @@ from neuroposelib import DataStruct as ds
 from neuroposelib.embed import Watershed, GaussDensity
 from neuroposelib.analysis import hist_cluster_by_cat
 from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
-
+import numpy.typing as npt
 
 # def scatter_by_cat(
 #     data: np.ndarray,
@@ -46,7 +47,7 @@ from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
 
 def scatter(
     data: np.ndarray,
-    color: Optional[Union[List, np.ndarray]] = None,
+    color: Optional[npt.ArrayLike] = None,
     marker_size: int = 3,
     ax_label: str = "t-SNE",
     filepath: str = "./results/scatter.png",
@@ -92,7 +93,7 @@ def scatter(
 
 def watershed(
     ws_map: np.ndarray,
-    ws_borders: Optional[np.ndarray] = None,
+    ws_borders: Optional[Dict] = None,
     cmap: Optional[str] = None,
     filepath: str = "./results/watershed.png",
 ):
@@ -104,10 +105,15 @@ def watershed(
         cmap = DEFAULT_VIRIDIS
     f = plt.figure()
     ax = f.add_subplot(111)
-    ax.imshow(ws_map, vmin=EPS, cmap=cmap)
+    # ax.imshow(ws_map, vmin=EPS, cmap=cmap)
     ax.set_aspect(0.9)
     if ws_borders is not None:
-        ax.plot(ws_borders[:, 0], ws_borders[:, 1], ".k", markersize=0.05)
+        for k,v in ws_borders.items():
+            ax.plot(v[:,0], v[:,1], "k", markersize=0, lw=0.25)
+            cluster_loc = np.where(ws_map == k)
+            cluster_loc = (np.mean(inds) for inds in cluster_loc)
+            ax.text(cluster_loc[0], cluster_loc[1], str(k))
+
 
     ax.axis("off")
     plt.savefig("".join([filepath, "_watershed.png"]), dpi=200)
@@ -216,11 +222,12 @@ def density(
     show: bool = False,
     vmax: float = None,
 ):
-    vmin = 0.99 * 15/density.shape[0]**2
+    vmin = 0.99 * 15 / density.shape[0] ** 2
     f = plt.figure()
     ax = f.add_subplot(111)
     if ws_borders is not None:
-        ax.plot(ws_borders[:, 0], ws_borders[:, 1], ".k", markersize=0.1)
+        for k,v in ws_borders.items():
+            ax.plot(v[:,0], v[:,1], "k", markersize=0, lw=0.25)
 
     ax.imshow(density, vmin=vmin, vmax=vmax, cmap=DEFAULT_VIRIDIS)
     ax.set_xticks([])
@@ -239,6 +246,7 @@ def _mask_density(density, watershed_map, eps: float = EPS * 1.01):
     density[mask] = np.maximum(density[mask], eps)
     density[~mask] = 0
     return density
+
 
 def density_cat(
     data: ds.DataStruct,
@@ -275,12 +283,8 @@ def density_cat(
         )  # scp.special.softmax(density))
 
         if watershed is not None:
-            ax.plot(
-                watershed.borders[:, 0],
-                watershed.borders[:, 1],
-                ".k",
-                markersize=0.1,
-            )
+            for k,v in watershed.borders.items():
+                ax.plot(v[:,0], v[:,1], "k", markersize=0, lw=0.25)
         ax.set_aspect(0.9)
         ax.set_title(label)
 
@@ -329,7 +333,7 @@ def density_grid(
             )  # Fit density on old axes
             idx = i * len(np.unique(labels2)) + j
             # if n_rows == 1:
-            ax_arr[idx].imshow(
+            ax_arr.ravel()[idx].imshow(
                 _mask_density(density, watershed.watershed_map, EPS * 1.01),
                 vmin=EPS,
                 vmax=vmax,
@@ -337,24 +341,20 @@ def density_grid(
             )
 
             if watershed is not None:
-                ax_arr[idx].plot(
-                    watershed.borders[:, 0],
-                    watershed.borders[:, 1],
-                    ".k",
-                    markersize=0.1,
-                )
-            ax_arr[idx].set_aspect(0.9)
+                for k,v in watershed.borders.items():
+                    ax_arr.ravel()[idx].plot(v[:,0], v[:,1], "k", markersize=0, lw=0.25)
+            ax_arr.ravel()[idx].set_aspect(0.9)
             # ax_arr[idx].axis("off")
-            ax_arr[idx].set_xticks([])
-            ax_arr[idx].set_yticks([])
-            for spine in ax_arr[idx].spines.values():
+            ax_arr.ravel()[idx].set_xticks([])
+            ax_arr.ravel()[idx].set_yticks([])
+            for spine in ax_arr.ravel()[idx].spines.values():
                 spine.set_visible(False)
 
             if j == 0:
-                ax_arr[idx].set_ylabel(label1)
+                ax_arr.ravel()[idx].set_ylabel(label1)
 
             if i == 0:
-                ax_arr[idx].set_title(label2)
+                ax_arr.ravel()[idx].set_title(label2)
 
     f.tight_layout()
     plt.savefig(filepath, dpi=200)
@@ -656,21 +656,23 @@ def heuristics(features, labels, data_obj, heuristics, filepath):
         # )
 
 
-def plot_tsne_circle_timepoint_condition(timepoint, condition, df, ws_borders, ax, behavior_colors, scale_factor):
+def plot_tsne_circle_timepoint_condition(
+    timepoint, condition, df, ws_borders, ax, behavior_colors, scale_factor
+):
     """
     conditions: list of the conditions, usually only ["stroke"] or ["healthy"]
     df: original dataset
     """
     # group by clusters
-    filtered_df = df[(df['Condition'] == condition) & (df['Timepoint'] == timepoint)]
-    cluster_stats = filtered_df.groupby('Cluster').agg(
-        timepoints=('Timepoint', 'first'),
-        Cluster=('Cluster', 'first'),
-        Condition=('Condition', 'first'),
-        Behavior=('Behavior', 'first'),
-        x_mean=('embed_x', 'mean'),
-        y_mean=('embed_y', 'mean'),
-        count=('frame', 'size'),  # Count the number of data points in each cluster
+    filtered_df = df[(df["Condition"] == condition) & (df["Timepoint"] == timepoint)]
+    cluster_stats = filtered_df.groupby("Cluster").agg(
+        timepoints=("Timepoint", "first"),
+        Cluster=("Cluster", "first"),
+        Condition=("Condition", "first"),
+        Behavior=("Behavior", "first"),
+        x_mean=("embed_x", "mean"),
+        y_mean=("embed_y", "mean"),
+        count=("frame", "size"),  # Count the number of data points in each cluster
     )
     # Plot
     # fig, ax = plt.subplots(figsize=(8, 6))
@@ -678,48 +680,68 @@ def plot_tsne_circle_timepoint_condition(timepoint, condition, df, ws_borders, a
         ax = plt.gca()
     # plt.plot(ws_borders[::30][:, 0], ws_borders[::30][:, 1], ".k", markersize=0.05, zorder=1)
     ax.scatter(
-        ws_borders[::20][:, 0], ws_borders[::20][:, 1], 
-        color='black', s=1.0, zorder=1  # Small dots (s=0.1 controls size)
+        ws_borders[::20][:, 0],
+        ws_borders[::20][:, 1],
+        color="black",
+        s=1.0,
+        zorder=1,  # Small dots (s=0.1 controls size)
     )
 
     # Loop through each cluster to draw circles
     legend_handles = []  # Collect handles for legend
     for idx, row in cluster_stats.iterrows():
-        x_mean = row['x_mean']
-        y_mean = row['y_mean']
-        count = row['count']
-        cluster = row['Cluster']
-        behavior = row['Behavior']
-        if behavior == 'blank':
+        x_mean = row["x_mean"]
+        y_mean = row["y_mean"]
+        count = row["count"]
+        cluster = row["Cluster"]
+        behavior = row["Behavior"]
+        if behavior == "blank":
             continue
         color = behavior_colors[behavior]
-        
-        
+
         # Define the radius proportional to the count
         radius = count * scale_factor
         # print(radius, x_mean, y_mean)
-        circle = plt.Circle((x_mean, y_mean), radius, facecolor = color, alpha=1.0, edgecolor='black', linewidth=1.2)
+        circle = plt.Circle(
+            (x_mean, y_mean),
+            radius,
+            facecolor=color,
+            alpha=1.0,
+            edgecolor="black",
+            linewidth=1.2,
+        )
         ax.add_patch(circle)
         # plt.text(x_mean, y_mean, cluster, fontsize=10, ha='center', va='center')
 
         if behavior not in [h.get_label() for h in legend_handles]:
             legend_handles.append(
-                plt.Line2D([0], [0], marker='o', color='w', 
-                           markerfacecolor=color, markersize=20, 
-                           label=behavior)  # Use Line2D to mimic legend entry
+                plt.Line2D(
+                    [0],
+                    [0],
+                    marker="o",
+                    color="w",
+                    markerfacecolor=color,
+                    markersize=20,
+                    label=behavior,
+                )  # Use Line2D to mimic legend entry
             )
 
-
     # Set equal scaling for x and y axes
-    ax.set_aspect('equal', 'box')
+    ax.set_aspect("equal", "box")
 
     # Show the plot
     ax.set_xticks([])
     ax.set_yticks([])
     # ax.set_xlabel('')
-    ax.axis('off')
+    ax.axis("off")
 
-def tsne_bubble_condition(data_obj, label_file_path, condition_ls = ['stroke', 'healthy'], timepoints_ls = ["d-1", "d4", "w1", "w2", "w3", "w4", "w6", "w10", "w12", "w16" ]):
+
+def bubble_map(
+    data_obj,
+    label_file_path,
+    condition_ls=["stroke", "healthy"],
+    timepoints_ls=["d-1", "d4", "w1", "w2", "w3", "w4", "w6", "w10", "w12", "w16"],
+):
     """
     label_file_path: path_to_labels.txt, each line will be the label for that cluster (e.g. line 1 is "rear" for cluster 1), with no blank line at the end.
     condition_ls: list of the values you are processing in "Condition" column.
@@ -728,61 +750,76 @@ def tsne_bubble_condition(data_obj, label_file_path, condition_ls = ['stroke', '
     print(data_obj.data.columns.values)
 
     ws_borders = data_obj.ws.borders
-    tsne_embeddings = np.array(data_obj.data['embed_vals'].tolist())
+    tsne_embeddings = np.array(data_obj.data["embed_vals"].tolist())
 
     # process tsne and ws border after discussing with Josh
-    tsne_embeddings[:, 0] = (data_obj.ws.hist_range[0][1] - tsne_embeddings[:, 0])/(data_obj.ws.hist_range[0][1] - data_obj.ws.hist_range[0][0])
+    tsne_embeddings[:, 0] = (data_obj.ws.hist_range[0][1] - tsne_embeddings[:, 0]) / (
+        data_obj.ws.hist_range[0][1] - data_obj.ws.hist_range[0][0]
+    )
 
     scaler = MinMaxScaler()
-    tsne_embeddings = scaler.fit_transform(tsne_embeddings)* 1000
+    tsne_embeddings = scaler.fit_transform(tsne_embeddings) * 1000
     # breakpoint()
     ws_borders = 1000 - ws_borders
     ws_borders = scaler.fit_transform(ws_borders) * 1000
     watershed_map = 1000 - data_obj.ws.watershed_map
     watershed_map = scaler.fit_transform(watershed_map) * 1000
-    # np.save("ws_borders_afterMinMax.npy", ws_borders)
-    # breakpoint()
-
 
     # save the data back to df
     result = {
-        'frame': data_obj.data['frame'],
-        'AnimalID': data_obj.data['AnimalID'],
-        'Timepoint': data_obj.data['Timepoint'],
-        'Condition': data_obj.data['Condition'],
-        'Cluster': data_obj.data['Cluster'],
-        'embed_x': tsne_embeddings[:, 0],
-        'embed_y': tsne_embeddings[:, 1],
+        "frame": data_obj.data["frame"],
+        "AnimalID": data_obj.data["AnimalID"],
+        "Timepoint": data_obj.data["Timepoint"],
+        "Condition": data_obj.data["Condition"],
+        "Cluster": data_obj.data["Cluster"],
+        "embed_x": tsne_embeddings[:, 0],
+        "embed_y": tsne_embeddings[:, 1],
     }
     df = pd.DataFrame.from_dict(result)
 
     # add labels
     # label_file_path = root + '/behavior_labels.txt' # label TXT file path
-    with open(label_file_path, 'r') as file:
+    with open(label_file_path, "r") as file:
         behavior_list = file.read().splitlines()
-    if len(behavior_list) != df['Cluster'].max():
-        print(len(behavior_list), df['Cluster'].max())
-        raise ValueError("The length of the behavior list should be at max(Cluster) + 1")
-    df['Behavior'] = df['Cluster'].apply(lambda x: behavior_list[x-1])
-
+    if len(behavior_list) != df["Cluster"].max():
+        print(len(behavior_list), df["Cluster"].max())
+        raise ValueError(
+            "The length of the behavior list should be at max(Cluster) + 1"
+        )
+    df["Behavior"] = df["Cluster"].apply(lambda x: behavior_list[x - 1])
 
     behavior_colors = {
-        'rear': (50/255, 205/255, 50/255),                # limegreen
-        'groom': (0.996, 0.894, 0.251),  # (255/255, 165/255, 0),                   # orange
-        'investigate': (100/255, 149/255, 237/255),       # cornflowerblue
-        'static': (255/255, 105/255, 180/255),            # hotpink
-        'investigate & rear': (0/255, 206/255, 209/255),  # darkturquoise
-        'groom & rear': (154/255, 205/255, 50/255),       # yellowgreen
+        "rear": (50 / 255, 205 / 255, 50 / 255),  # limegreen
+        "groom": (
+            0.996,
+            0.894,
+            0.251,
+        ),  # (255/255, 165/255, 0),                   # orange
+        "investigate": (100 / 255, 149 / 255, 237 / 255),  # cornflowerblue
+        "static": (255 / 255, 105 / 255, 180 / 255),  # hotpink
+        "investigate & rear": (0 / 255, 206 / 255, 209 / 255),  # darkturquoise
+        "groom & rear": (154 / 255, 205 / 255, 50 / 255),  # yellowgreen
     }
-
 
     for condition in condition_ls:
         num_timepoints = len(timepoints_ls)
-        fig, axes = plt.subplots(1, num_timepoints, figsize=(40, 5))  # Adjust figsize as needed
+        fig, axes = plt.subplots(
+            1, num_timepoints, figsize=(40, 5)
+        )  # Adjust figsize as needed
         # Loop through timepoints and plot on subplots
         for i, timepoint in enumerate(timepoints_ls):
-            ax = axes[i] if num_timepoints > 1 else axes  # Ensure it works even with one timepoint
-            plot_tsne_circle_timepoint_condition(timepoint, condition, df, ws_borders, ax=ax, behavior_colors=behavior_colors, scale_factor = 0.08)
+            ax = (
+                axes[i] if num_timepoints > 1 else axes
+            )  # Ensure it works even with one timepoint
+            plot_tsne_circle_timepoint_condition(
+                timepoint,
+                condition,
+                df,
+                ws_borders,
+                ax=ax,
+                behavior_colors=behavior_colors,
+                scale_factor=0.08,
+            )
             # ax.set_title(f"{timepoint}", fontsize=30)  # Add timepoint title
 
         # Add a common title or labels if needed
