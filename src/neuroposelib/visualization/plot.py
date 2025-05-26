@@ -92,7 +92,7 @@ def scatter(
 
 
 def watershed(
-    ws_map: np.ndarray,
+    ws_map: npt.NDArray,
     ws_borders: Optional[Dict] = None,
     cmap: Optional[str] = None,
     filepath: str = "./results/watershed.png",
@@ -105,15 +105,20 @@ def watershed(
         cmap = DEFAULT_VIRIDIS
     f = plt.figure()
     ax = f.add_subplot(111)
-    # ax.imshow(ws_map, vmin=EPS, cmap=cmap)
+    ax.imshow(ws_map, vmin=EPS, cmap=cmap)
     ax.set_aspect(0.9)
     if ws_borders is not None:
-        for k,v in ws_borders.items():
-            ax.plot(v[:,0], v[:,1], "k", markersize=0, lw=0.25)
+        for k, v in ws_borders.items():
+            ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
             cluster_loc = np.where(ws_map == k)
-            cluster_loc = (np.mean(inds) for inds in cluster_loc)
-            ax.text(cluster_loc[0], cluster_loc[1], str(k))
-
+            cluster_loc = [np.mean(inds) for inds in cluster_loc]
+            ax.text(
+                cluster_loc[1],
+                cluster_loc[0],
+                str(k),
+                horizontalalignment="center",
+                verticalalignment="center",
+            )
 
     ax.axis("off")
     plt.savefig("".join([filepath, "_watershed.png"]), dpi=200)
@@ -226,8 +231,8 @@ def density(
     f = plt.figure()
     ax = f.add_subplot(111)
     if ws_borders is not None:
-        for k,v in ws_borders.items():
-            ax.plot(v[:,0], v[:,1], "k", markersize=0, lw=0.25)
+        for k, v in ws_borders.items():
+            ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
 
     ax.imshow(density, vmin=vmin, vmax=vmax, cmap=DEFAULT_VIRIDIS)
     ax.set_xticks([])
@@ -283,8 +288,8 @@ def density_cat(
         )  # scp.special.softmax(density))
 
         if watershed is not None:
-            for k,v in watershed.borders.items():
-                ax.plot(v[:,0], v[:,1], "k", markersize=0, lw=0.25)
+            for k, v in watershed.borders.items():
+                ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
         ax.set_aspect(0.9)
         ax.set_title(label)
 
@@ -328,33 +333,36 @@ def density_grid(
             embed_vals = data.embed_vals[
                 (data.data[cat1] == label1) & (data.data[cat2] == label2)
             ]  # Indexing by label
-            density = watershed.fit_density(
-                embed_vals, new=False
-            )  # Fit density on old axes
-            idx = i * len(np.unique(labels2)) + j
-            # if n_rows == 1:
-            ax_arr.ravel()[idx].imshow(
-                _mask_density(density, watershed.watershed_map, EPS * 1.01),
-                vmin=EPS,
-                vmax=vmax,
-                cmap=DEFAULT_VIRIDIS,
-            )
+            if len(embed_vals) > 0:
+                density = watershed.fit_density(
+                    embed_vals, new=False
+                )  # Fit density on old axes
+                idx = i * len(np.unique(labels2)) + j
+                # if n_rows == 1:
+                ax_arr.ravel()[idx].imshow(
+                    _mask_density(density, watershed.watershed_map, EPS * 1.01),
+                    vmin=EPS,
+                    vmax=vmax,
+                    cmap=DEFAULT_VIRIDIS,
+                )
 
-            if watershed is not None:
-                for k,v in watershed.borders.items():
-                    ax_arr.ravel()[idx].plot(v[:,0], v[:,1], "k", markersize=0, lw=0.25)
-            ax_arr.ravel()[idx].set_aspect(0.9)
-            # ax_arr[idx].axis("off")
-            ax_arr.ravel()[idx].set_xticks([])
-            ax_arr.ravel()[idx].set_yticks([])
-            for spine in ax_arr.ravel()[idx].spines.values():
-                spine.set_visible(False)
+                if watershed is not None:
+                    for k, v in watershed.borders.items():
+                        ax_arr.ravel()[idx].plot(
+                            v[:, 0], v[:, 1], "k", markersize=0, lw=0.25
+                        )
+                ax_arr.ravel()[idx].set_aspect(0.9)
+                # ax_arr[idx].axis("off")
+                ax_arr.ravel()[idx].set_xticks([])
+                ax_arr.ravel()[idx].set_yticks([])
+                for spine in ax_arr.ravel()[idx].spines.values():
+                    spine.set_visible(False)
 
-            if j == 0:
-                ax_arr.ravel()[idx].set_ylabel(label1)
+                if j == 0:
+                    ax_arr.ravel()[idx].set_ylabel(label1)
 
-            if i == 0:
-                ax_arr.ravel()[idx].set_title(label2)
+                if i == 0:
+                    ax_arr.ravel()[idx].set_title(label2)
 
     f.tight_layout()
     plt.savefig(filepath, dpi=200)

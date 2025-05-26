@@ -733,7 +733,7 @@ def trace(
         pose, connectivity, np.array(frames, dtype=int), centered, N_FRAMES, SAVE_ROOT
     )
     pose_rot = pose_vis.reshape((len(frames), N_FRAMES, -1, 3))
-    pose_rot -= pose_rot[:, N_FRAMES // 2, vector[0], :][
+    pose_rot[...,:2] -= pose_rot[:, N_FRAMES // 2, vector[0], :2][
         :, None, None, :
     ]  # Centering based on middle frame
 
