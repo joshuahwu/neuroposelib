@@ -14,9 +14,10 @@ from matplotlib.animation import FFMpegWriter
 from typing import Optional, Union, List, Tuple
 from neuroposelib.embed import Watershed
 from neuroposelib import DataStruct as ds
-from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_BONE
+from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_BONE, _PLANE
 from neuroposelib.visualization.plot import _mask_density
 import copy
+import numpy.typing as npt
 
 
 def sample(func):
@@ -211,12 +212,8 @@ def _plot_density(
         cmap=DEFAULT_BONE,
     )
 
-    ax.plot(
-        watershed_borders[:, 0],
-        watershed_borders[:, 1],
-        ".k",
-        markersize=0.1,
-    )
+    for k, v in watershed_borders.items():
+        ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
 
     ax.set_aspect(0.9)
     ax.axis("off")
@@ -385,6 +382,7 @@ def _pose3D_frame(
     ax_3d.set_box_aspect(limits[:, 1] - limits[:, 0])
     return ax_3d
 
+
 def _init_vid3D(
     data: np.ndarray,
     connectivity: ds.Connectivity,
@@ -443,10 +441,14 @@ def _pose3D_arena(
     )
     ax_3d.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
     ax_3d.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-    # ax_3d.w_zaxis.set_pane_color((0.75, 0.75, 0.75, 0.75))
-    ax_3d.xaxis.line.set_lw(0.)
-    ax_3d.yaxis.line.set_lw(0.)
-    ax_3d.zaxis.line.set_lw(0.)
+    ax_3d.zaxis.set_pane_color((0.75, 0.75, 0.75, 0.75))
+    """
+    ax_3d.w_xaxis.line.set_lw(0.)
+    ax_3d.w_yaxis.line.set_lw(0.)
+    ax_3d.w_zaxis.line.set_lw(0.)
+    """
+    for axis in [ax_3d.xaxis, ax_3d.yaxis, ax_3d.zaxis]:
+        axis.line.set_linewidth(0.0)
     ax_3d.grid(False)
     ax_3d.set_xticks([])
     ax_3d.set_yticks([])
@@ -596,83 +598,225 @@ def feature_hist(feature, label, filepath, range=None):
     return
 
 
-def features3D(
-    pose: np.ndarray,
-    feature: np.ndarray,
-    connectivity: Optional[ds.Connectivity] = None,
-    frames: List = [3000],
-    N_FRAMES: int = 150,
-    fps: int = 90,
+# def features3D(
+#     pose: np.ndarray,
+#     feature: np.ndarray,
+#     connectivity: Optional[ds.Connectivity] = None,
+#     frames: List = [3000],
+#     N_FRAMES: int = 150,
+#     fps: int = 90,
+#     dpi: int = 200,
+#     VID_NAME: str = "0.mp4",
+#     SAVE_ROOT: str = "./test/skeleton_vids/",
+# ):
+#     if isinstance(frames, int):
+#         frames = [frames]
+#     # Reshape pose and other variables
+#     pose_3d, limits, links_expand, COLOR = _init_vid3D(
+#         pose, connectivity, frames, N_FRAMES, SAVE_ROOT
+#     )
+
+#     # set up video writer
+#     writer = FFMpegWriter(fps=int(fps / 4))
+
+#     # Setup figure
+#     fig = plt.figure(figsize=(20, 10), layout="constrained")
+#     gs = fig.add_gridspec(1, 2)
+#     ax_3d = fig.add_subplot(gs[0, 1], projection="3d")
+#     ax_trace = fig.add_subplot(gs[0, 0])
+
+#     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_feat_" + VID_NAME), dpi=dpi):
+#         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
+#             # grab frames
+#             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
+
+#             ax_trace.plot(
+#                 np.arange(curr_frames + 1),
+#                 feature[: curr_frames[0] + 1],
+#                 linestyle="-",
+#                 linewidth=1,
+#             )
+#             ax_trace.plot(
+#                 curr_frames, feature[curr_frames], marker=".", markersize=20, color="k"
+#             )
+
+#             kpts_3d = np.reshape(
+#                 pose_3d[curr_frames, :, :], (len(frames) * num_joints, 3)
+#             )
+
+#             # plot 3d moving skeletons
+#             ax_3d.scatter(
+#                 kpts_3d[:, 0],
+#                 kpts_3d[:, 1],
+#                 kpts_3d[:, 2],
+#                 marker=".",
+#                 color="black",
+#                 linewidths=0.5,
+#             )
+#             for color, (index_from, index_to) in zip(COLOR, links_expand):
+#                 xs, ys, zs = [
+#                     np.array([kpts_3d[index_from, j], kpts_3d[index_to, j]])
+#                     for j in range(3)
+#                 ]
+#                 ax_3d.plot3D(xs, ys, zs, c=color, lw=2)
+
+#             ax_3d.set_xlim(x_min, x_max)
+#             ax_3d.set_ylim(y_min, y_max)
+#             ax_3d.set_zlim(0, 150)
+#             ax_3d.set_xlabel("x")
+#             ax_3d.set_ylabel("y")
+#             # ax_3d.set_xticks([])
+#             # ax_3d.set_yticks([])
+#             # ax_3d.set_zticks([])
+#             # ax_3d.set_title("3D Tracking")
+#             # ax_3d.set_aspect('equal')
+#             ax_3d.set_box_aspect([1, 1, 0.4])
+
+#             # grab frame and write to vid
+#             writer.grab_frame()
+#             ax_3d.clear()
+
+#     plt.close()
+#     return 0
+
+
+def trace(
+    pose: npt.ArrayLike,
+    connectivity: ds.Connectivity,
+    vis_plane: str = "xz",
+    frame: int = 1000,
+    n_full_pose: int = 3,
+    keypts: List[int] = [0, 4, 8, 11, 14, 17],
+    vector: Union[Tuple, npt.ArrayLike] = (4, 3),
+    centered: bool = True,
+    N_FRAMES: int = 300,
     dpi: int = 200,
-    VID_NAME: str = "0.mp4",
-    SAVE_ROOT: str = "./test/skeleton_vids/",
+    FIG_NAME: str = "pose_trace.png",
+    SAVE_ROOT: str = "./test/pose_vids/",
 ):
-    if isinstance(frames, int):
-        frames = [frames]
-    # Reshape pose and other variables
-    pose_3d, limits, links_expand, COLOR = _init_vid3D(
-        pose, connectivity, frames, N_FRAMES, SAVE_ROOT
+    """Plots of movement trace of poses
+
+    Parameters
+    ----------
+    pose : npt.ArrayLike
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    connectivity : ds.Connectivity
+        Connectivity object containing keypoint/joint/skeletal information.
+    vis_plane : str, optional
+        A length-2 string combination of "x", "y", and "z" which denotes the plane 
+        from which to visualize the movement trace, by default "xz"
+    frame : int, optional
+        Index to plot, by default 1000
+    n_full_pose : int, optional
+        Number of full poses to plot within the trace, by default 3
+    keypts : List[int], optional
+        The indices of keypoints to trace, by default [0, 4, 8, 11, 14, 17]
+    vector : Union[Tuple, npt.ArrayLike], optional
+        A tuple of indices referencing the (root, forward) keypoints, by default (4, 3)
+    centered : bool, optional
+        Whether to plot the trace surrounding `frame` or beginning from `frame`, by default True
+    N_FRAMES : int, optional
+        Number of frames to plot, by default 300
+    dpi : int, optional
+        Resolution of saved figure, by default 200
+    FIG_NAME : str, optional
+        Name of save file, by default "pose_trace.png"
+    SAVE_ROOT : str, optional
+        Path to save folder, by default "./test/pose_vids/"
+    """
+    frames = [frame]
+    figsize = (5, 5)
+    n_keypts = pose.shape[-2]
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(1, 1, 1)
+    pose_vis, _, _, _ = _init_vid3D(
+        pose, connectivity, np.array(frames, dtype=int), centered, N_FRAMES, SAVE_ROOT
     )
+    pose_rot = pose_vis.reshape((len(frames), N_FRAMES, -1, 3))
+    pose_rot -= pose_rot[:, N_FRAMES // 2, vector[0], :][
+        :, None, None, :
+    ]  # Centering based on middle frame
 
-    # set up video writer
-    writer = FFMpegWriter(fps=int(fps / 4))
+    forward = (
+        pose_rot[:, N_FRAMES // 2, vector[1], :]
+        - pose_rot[:, N_FRAMES // 2, vector[0], :]
+    )
+    forward = forward / np.linalg.norm(forward, axis=-1)[..., None]
+    yaw = -np.arctan2(forward[:, 1], forward[:, 0])
 
-    # Setup figure
-    fig = plt.figure(figsize=(20, 10), layout="constrained")
-    gs = fig.add_gridspec(1, 2)
-    ax_3d = fig.add_subplot(gs[0, 1], projection="3d")
-    ax_trace = fig.add_subplot(gs[0, 0])
+    # yaw = -get_frame_yaw(pose_rot[:, N_FRAMES // 2, ...], root, 3)
+    len_yaw = len(yaw)
+    rot_mat = np.array(
+        [
+            [np.cos(yaw), -np.sin(yaw), np.zeros(len_yaw)],
+            [np.sin(yaw), np.cos(yaw), np.zeros(len_yaw)],
+            [np.zeros(len_yaw), np.zeros(len_yaw), np.ones(len_yaw)],
+        ],
+        dtype=pose.dtype,
+    )
+    # rot_mat = rot_mat.repeat(n_keypts, axis=-1)
+    pose_rot = np.einsum("ijkl,lmi->ijkm", pose_rot, rot_mat)
 
-    with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_feat_" + VID_NAME), dpi=dpi):
-        for curr_frame in tqdm.tqdm(range(N_FRAMES)):
-            # grab frames
-            curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
+    # if vis_plane == "auto":
+    #     dim_std = pose_rot.std(axis=(1, 2)).squeeze()
+    #     plane_idx = np.argsort(dim_std, axis=-1)[:, :-1]
+    #     # plane_idx = np.zeros(pose_rot.shape,dtype=int)[...,:-1] + plane_idx[:, None, None, :]
+    # else:
+    plane_idx = [_PLANE[k] for k in vis_plane]
 
-            ax_trace.plot(
-                np.arange(curr_frames + 1),
-                feature[: curr_frames[0] + 1],
-                linestyle="-",
-                linewidth=1,
-            )
-            ax_trace.plot(
-                curr_frames, feature[curr_frames], marker=".", markersize=20, color="k"
-            )
+    pose_vis = pose_rot.reshape(-1, n_keypts, 3)
+    pose_vis = pose_vis[..., plane_idx]
+    print(pose_vis.shape)
 
-            kpts_3d = np.reshape(
-                pose_3d[curr_frames, :, :], (len(frames) * num_joints, 3)
-            )
+    full_pose_inds = np.linspace(0, N_FRAMES - 1, n_full_pose).astype(int)
+    for i in full_pose_inds:
+        curr_frames = i + np.arange(len(frames)) * N_FRAMES
 
-            # plot 3d moving skeletons
-            ax_3d.scatter(
-                kpts_3d[:, 0],
-                kpts_3d[:, 1],
-                kpts_3d[:, 2],
-                marker=".",
-                color="black",
-                linewidths=0.5,
-            )
-            for color, (index_from, index_to) in zip(COLOR, links_expand):
-                xs, ys, zs = [
-                    np.array([kpts_3d[index_from, j], kpts_3d[index_to, j]])
-                    for j in range(3)
-                ]
-                ax_3d.plot3D(xs, ys, zs, c=color, lw=2)
+        for index_from, index_to in connectivity.links:
+            xs, ys = [
+                np.array(
+                    [
+                        pose_vis[curr_frames, index_from, j],
+                        pose_vis[curr_frames, index_to, j],
+                    ]
+                )
+                for j in range(2)
+            ]
+            lw_color = np.sqrt(np.linspace(0, 0.75, 10))
+            linewidth = 3.5 - np.linspace(0, 3.1, 10)
+            for co, l in zip(lw_color, linewidth):
+                ax.plot(
+                    xs,
+                    ys,
+                    c=(co, co, co),
+                    lw=l,
+                    alpha=0.2,  # - (i * 0.55 / full_pose_inds[-1])
+                )
 
-            ax_3d.set_xlim(x_min, x_max)
-            ax_3d.set_ylim(y_min, y_max)
-            ax_3d.set_zlim(0, 150)
-            ax_3d.set_xlabel("x")
-            ax_3d.set_ylabel("y")
-            # ax_3d.set_xticks([])
-            # ax_3d.set_yticks([])
-            # ax_3d.set_zticks([])
-            # ax_3d.set_title("3D Tracking")
-            # ax_3d.set_aspect('equal')
-            ax_3d.set_box_aspect([1, 1, 0.4])
+        ax.scatter(
+            pose_vis[curr_frames, :, 0].flatten(),
+            pose_vis[curr_frames, :, 1].flatten(),
+            marker="o",
+            color=np.tile(connectivity.keypt_colors, (len(frames), 1)),
+            s=100,
+            alpha=0.3,  # 1 - (i * 0.75 / full_pose_inds[-1]),
+            zorder=3.5,
+        )
 
-            # grab frame and write to vid
-            writer.grab_frame()
-            ax_3d.clear()
-
+    for keypt in keypts:
+        ax.plot(
+            pose_vis[:, keypt, 0].reshape(len(frames), -1).T,
+            pose_vis[:, keypt, 1].reshape(len(frames), -1).T,
+            marker="o",
+            color=connectivity.keypt_colors[keypt],
+            ms=0,
+            lw=2.5,
+            alpha=0.3,
+        )
+    ax.set_aspect("equal")
+    ax.axis("off")
+    plt.savefig("{}/vis_{}_{}".format(SAVE_ROOT, vis_plane, FIG_NAME), dpi=dpi)
+    plt.show()
     plt.close()
-    return 0
+
+    return

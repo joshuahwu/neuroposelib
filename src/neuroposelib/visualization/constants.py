@@ -37,3 +37,5 @@ DEFAULT_BONE = matplotlib.colors.ListedColormap(
     matplotlib.colormaps["bone_r"](np.linspace(0.05, 0.4, 256))
 )
 DEFAULT_BONE.set_under("white")
+
+_PLANE = {"x": 0, "y": 1, "z": 2}

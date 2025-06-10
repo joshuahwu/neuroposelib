@@ -1,38 +1,70 @@
 import scipy.ndimage as scp_ndi
 from scipy.interpolate import CubicSpline
 import numpy as np
-
+import numpy.typing as npt
 from neuroposelib.utils import by_id, get_frame_diff
-from typing import Optional, Union, List, Type
+from typing import Optional, Union, List, Type, Tuple
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
 
 
 @by_id
 def align_floor_by_id(
-    pose: np.ndarray,
-    foot_id: Optional[int] = 12,
-    head_id: Optional[int] = 0,
-    dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
-):
-    return align_floor(pose=pose, foot_id=foot_id, head_id=head_id, dtype=dtype)
-
-
-def align_floor(
-    pose: np.ndarray,
+    pose: npt.NDArray,
     foot_id: Optional[int] = 12,
     head_id: Optional[int] = 0,
     dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
 ):
     """
-    Due to calibration, predictions may be rotated on different axes
-    Rotates floor to same x-y plane per video
-    IN:
-        pose: 3d matrix of (#frames x #joints x #coords)
-        exp_id: Video ids per frame
-        foot_id: ID of foot to find floor
-    OUT:
-        pose_rot: Floor aligned poses (#frames x #joints x #coords)
+    Due to the camera calibration, predictions may be rotated to different world coordinates.
+    Rotates the floor to same x-y plane per video ID given.
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    ids : npt.ArrayLike
+        Id label for each frame in pose, e.g. video id (# frames).
+    foot_id : Optional[int], optional
+        Index of the foot keypoint used to fit to the floor plane, by default 12
+    head_id : Optional[int], optional
+        Index of the head keypoint used double check that foot keypoints are below head keypoints after rotation, by default None
+    dtype : Optional[Type[Union[np.DTypeLike]]], optional
+        Desired data type of output array.
+
+    Returns
+    -------
+    pose : npt.NDArray
+        Array of floor-aligned 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    """
+    return align_floor(pose=pose, foot_id=foot_id, head_id=head_id, dtype=dtype)
+
+
+def align_floor(
+    pose: npt.NDArray,
+    foot_id: Optional[int] = 12,
+    head_id: Optional[int] = None,
+    dtype: Optional[npt.DTypeLike] = np.float32,
+):
+    """
+    Due to the camera calibration, predictions may be rotated to different world coordinates.
+    Rotates the floor to same x-y plane for one video.
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    foot_id : Optional[int], optional
+        Index of the foot keypoint used to fit to the floor plane, by default 12
+    head_id : Optional[int], optional
+        Index of the head keypoint used double check that foot keypoints are below head keypoints after rotation, by default None
+    dtype : Optional[Type[Union[np.DTypeLike]]], optional
+        Desired data type of output array.
+
+    Returns
+    -------
+    pose : npt.NDArray
+        Array of floor-aligned 3D pose values of shape (# frames, # keypoints, 3 coordinates).
     """
     print("Fitting and rotating the floor for each video to alignment ... ")
 
@@ -129,8 +161,8 @@ def vel_filter(
 
 
 def z_filter(
-    pose: np.ndarray,
-    exp_id: Union[np.ndarray, List],
+    pose: npt.NDArray,
+    exp_id: Union[npt.NDArray, List],
     threshold: float = 2500,
     connectivity=None,
 ):
@@ -188,14 +220,14 @@ def z_filter(
     return pose
 
 
-def median_filter(pose: np.ndarray, id: Union[np.ndarray, List], filter_len: int = 5):
+def median_filter(pose: npt.NDArray, ids: npt.ArrayLike, filter_len: int = 5):
     """_summary_
 
     Parameters
     ----------
-    pose : np.ndarray
+    pose : npt.NDArray
         _description_
-    id : Union[np.ndarray, List]
+    ids : Union[npt.NDArray, List]
         _description_
     filter_len : int, optional
         _description_, by default 5
@@ -206,16 +238,18 @@ def median_filter(pose: np.ndarray, id: Union[np.ndarray, List], filter_len: int
         _description_
     """
     print("Applying Median Filter")
-    for _, i in enumerate(tqdm(np.unique(id))):
-        pose_exp = pose[id == i, ...]
-        pose[id == i, ...] = scp_ndi.median_filter(pose_exp, (filter_len, 1, 1),mode="nearest")
+    for _, i in enumerate(tqdm(np.unique(ids))):
+        pose_exp = pose[ids == i, ...]
+        pose[ids == i, ...] = scp_ndi.median_filter(
+            pose_exp, (filter_len, 1, 1), mode="nearest"
+        )
 
     return pose
 
 
 def anipose_med_filt(
-    pose: np.ndarray,
-    exp_id: Union[List, np.ndarray],
+    pose: npt.NDArray,
+    exp_id: npt.ArrayLike,
     filter_len: int = 6,
     threshold: float = 5,
 ):
@@ -261,24 +295,44 @@ def center_spine(pose, keypt_idx=4):
     return pose - pose[:, keypt_idx : keypt_idx + 1, :]
 
 
-def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False):
+def rotate_spine(
+    pose: npt.NDArray,
+    vector: Union[Tuple, npt.ArrayLike] = (4, 3),
+    lock_to_x: bool = False,
+):
+    """Centers mid spine to (0,0,0) and aligns spine_m -> spine_f to x-z plane
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates). Assumes centered poses.
+    vector : Union[Tuple, npt.ArrayLike], optional
+        Either a tuple of the indices for (root, forward) keypoints,
+        or a precalculated vector per frame, by default (4, 3)
+    lock_to_x : bool, optional
+        If true, rotate completely to the x-axis (yaw and pitch), by default False
+
+    Returns
+    -------
+    pose : npt.NDArray
+        Rotated array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
     """
-    Centers mid spine to (0,0,0) and aligns spine_m -> spine_f to x-z plane
-    IN:
-        pose: 3d matrix of (#frames x #joints x #coords)
-        keypt_idx: List [spine_m idx, spine_f idx]
-        lock_to_x: Also rotates so that spine_m -> spine_f is locked to the x-axis
-    OUT:
-        pose_rot: Centered and rotated pose (#frames x #joints x #coords)
-    """
+
     num_joints = pose.shape[1]
-    yaw = -np.arctan2(
-        pose[:, keypt_idx[1], 1], pose[:, keypt_idx[1], 0]
-    )  # Find angle to rotate to axis
+    if len(vector) == 2:
+        yaw = -np.arctan2(
+            pose[:, vector[1], 1], pose[:, vector[1], 0]
+        )  # Find angle to rotate to axis
+    else:
+        yaw = -np.arctan2(vector[:, 1], vector[:, 0])
+        # Find angle to rotate to axis
 
     if lock_to_x:
         print("Rotating spine to x axis ... ")
-        pitch = np.arctan2(pose[:, keypt_idx[1], 2], pose[:, keypt_idx[1], 0])
+        if len(vector) == 2:
+            pitch = np.arctan2(pose[:, vector[1], 2], pose[:, vector[1], 0])
+        else:
+            pitch = np.arctan2(vector[:, 2], vector[:, 0])
     else:
         print("Rotating spine to xz plane ... ")
         pitch = np.zeros(yaw.shape, dtype=pose.dtype)
@@ -294,18 +348,5 @@ def rotate_spine(pose, keypt_idx=[4, 3], lock_to_x=False):
     pose_rot = np.einsum("jki,ik->ij", rot_mat, np.reshape(pose, (-1, 3))).reshape(
         pose.shape
     )
-
-    # import pdb; pdb.set_trace()
-    # Making sure Y value of spine f doesn't deviate much from 0
-    eps = 1e-4
-    assert (
-        pose_rot[:, keypt_idx[1], 1].max() < eps
-        and pose_rot[:, keypt_idx[1], 1].min() > -eps
-    )
-    if lock_to_x:  # Making sure Z value of spine f doesn't deviate much from 0
-        assert (
-            pose_rot[:, keypt_idx[1], 2].max() < eps
-            and pose_rot[:, keypt_idx[1], 2].min() > -eps
-        )
 
     return pose_rot

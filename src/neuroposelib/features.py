@@ -6,6 +6,7 @@ from tqdm import tqdm
 from neuroposelib.utils import by_id, rolling_window, get_frame_diff
 import pywt
 import numpy.typing as npt
+from sklearn.preprocessing import StandardScaler
 
 
 def get_lengths(pose: npt.NDArray, links: npt.ArrayLike) -> npt.NDArray:
@@ -14,7 +15,7 @@ def get_lengths(pose: npt.NDArray, links: npt.ArrayLike) -> npt.NDArray:
     Parameters
     ----------
     pose : npt.NDArray
-        {{ pose }}
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
     links : npt.ArrayLike
         Indices of segment links in pose array (# segments, 2)
 
@@ -359,7 +360,7 @@ def _get_head_angular(
     -------
     angular velocity: npt.NDArray
         Array of angular velocities of the head.
-    """    
+    """
     """
     Getting x-y angular velocity of head
     IN:
@@ -390,8 +391,8 @@ def wavelet(
     freq: npt.ArrayLike = np.geomspace(1, 25, 25),
     bw: float = 1.0,
 ) -> tuple[npt.NDArray, List[str]]:
-    """Applies complex Morlet wavlet transform over feature array. 
-    
+    """Applies complex Morlet wavlet transform over feature array.
+
     Built on [PyWavelet](https://pywavelets.readthedocs.io/en/latest/index.html).
 
     Parameters
@@ -415,7 +416,7 @@ def wavelet(
         Array of wavelet features per frame (# frames, # features * len(freq))
     labels: List[str]]
         List of labels for wavelet features in columns of wavelet array.
-    """    
+    """
 
     print("Calculating wavelets ... ")
     # widths = (w0 * fs / (2 * freq * np.pi)).astype(features.dtype)
@@ -426,16 +427,16 @@ def wavelet(
     wlet_labels = [
         "_".join(["wlet", label, str(np.round(f, 2))]) for label in labels for f in freq
     ]
-
+    cmor_str = "cmor{:.1f}-{:.1f}".format(bw, 1.0)
+    scales = pywt.frequency2scale(cmor_str, freq) * fs
     for i in np.unique(ids):
         print("Calculating wavelets for video " + str(i))
         wlets_i_f = np.abs(
             pywt.cwt(
                 features[ids == i],
-                scales=pywt.frequency2scale("cmor{:.1f}-{:.1f}".format(bw, 1.0), freq)
-                * fs,
-                wavelet="cmor{:.1f}-{:.1f}".format(bw, 1.0),
-                sampling_period=1 / fs,
+                scales=scales,
+                wavelet=cmor_str,
+                # sampling_period=1 / fs,
                 method="fft",
                 axis=0,
             )[0]
@@ -479,18 +480,11 @@ def pca(
         Array of PC transformed features per frame (# frames, # categories * n_pcs)
     labels: List[str]]
         List of labels for PC transformed features in columns of scores array.
-    """    
+    """
     print("Calculating principal components ... ")
-    # Initializing the PCA method
-    # if method.startswith("torch"):
-    #     import torch
-
-    #     pca_feats = torch.zeros(features.shape[0], len(categories) * n_pcs)
-    #     features = torch.tensor(features)
-    # else:
-    # Centering the features if not torch (pytorch does it itself)
-    features = features - features.mean(axis=0)
-    features /= features.std(axis=0) + 1e-8
+    
+    features = StandardScaler().fit_transform(features)# - features.mean(axis=0)
+    # features /= features.std(axis=0) + 1e-8
     pca_feats = np.zeros(
         (features.shape[0], len(categories) * n_pcs), dtype=features.dtype
     )
@@ -518,28 +512,6 @@ def pca(
                 features[:, cols_idx]
             )
 
-        # elif method.startswith("torch"):
-        #     feat_cat = features[:, cols_idx]
-        #     if method.endswith("_gpu"):
-        #         feat_cat = feat_cat.cuda()
-
-        #     if "pca" in method:
-        #         (_, _, V) = torch.pca_lowrank(feat_cat)
-        #     elif "svd" in method:
-        #         feat_cat -= feat_cat.mean()
-        #         (_, _, V) = torch.linalg.svd(feat_cat)
-
-        #     if method.endswith("_gpu"):
-        #         pca_feats[:, i * n_pcs : (i + 1) * n_pcs] = (
-        #             torch.matmul(feat_cat, V[:, :n_pcs]).detach().cpu()
-        #         )
-        #         feat_cat.detach().cpu()
-        #         V.detach().cpu()
-        #     else:
-        #         pca_feats[:, i * n_pcs : (i + 1) * n_pcs] = torch.matmul(
-        #             feat_cat, V[:, :n_pcs]
-        #         )
-
         elif method == "fbpca":
             downsample = int(np.ceil(len(features) / max_frames))
             assert downsample > 0
@@ -549,11 +521,6 @@ def pca(
             pca_feats[:, i * n_pcs : (i + 1) * n_pcs] = np.matmul(
                 features[:, cols_idx], V.astype(features.dtype).T
             )
-
-    # if method.startswith("torch_pca"):
-    #     pca_feats = pca_feats.numpy()
-
-    # assert num_cols == features.shape[1]
 
     pc_labels = [
         "_".join([cat, "pc" + str(i)]) for cat in categories for i in range(n_pcs)
