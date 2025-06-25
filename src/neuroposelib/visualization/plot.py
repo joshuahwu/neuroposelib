@@ -19,6 +19,7 @@ from neuroposelib.embed import Watershed, GaussDensity
 from neuroposelib.analysis import hist_cluster_by_cat
 from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
 import numpy.typing as npt
+import copy
 
 # def scatter_by_cat(
 #     data: np.ndarray,
@@ -249,9 +250,45 @@ def density(
 def _mask_density(density, watershed_map, eps: float = EPS * 1.01):
     mask = watershed_map > 0
     density[mask] = np.maximum(density[mask], eps)
-    density[~mask] = 0
+    density[~mask] = -np.inf
     return density
 
+def numbered_watershed(
+    ws_map: npt.NDArray,
+    ws_borders: Optional[Dict] = None,
+    cmap: Optional[str] = None,
+    filepath: str = "./results/watershed.svg",
+    show: Optional[bool] = False,
+):
+    """
+    Plotting a watershed map with clusters colored
+    """
+    if cmap == None:
+        cmap = DEFAULT_VIRIDIS
+    f = plt.figure()
+    ax = f.add_subplot(111)
+    ax.imshow(ws_map, vmin=EPS, cmap=cmap)
+    ax.set_aspect(0.9)
+    if ws_borders is not None:
+        for k, v in ws_borders.items():
+            ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
+            cluster_loc = np.where(ws_map == k)
+            cluster_loc = [np.mean(inds) for inds in cluster_loc]
+            ax.text(
+                cluster_loc[1],
+                cluster_loc[0],
+                str(k),
+                horizontalalignment="center",
+                verticalalignment="center",
+            )
+
+    ax.axis("off")
+    plt.savefig("".join([filepath, "_watershed.svg"]), dpi=200)
+
+    if show:
+        plt.show()
+    plt.close()
+    return
 
 def density_cat(
     data: ds.DataStruct,
@@ -312,6 +349,7 @@ def density_grid(
     cat1: str,
     cat2: str,
     watershed: Watershed,
+    col_cmaps: List = [],
     filepath: str = "./results/density_by_label.png",
     show: bool = False,
     vmax: float = 3.5,
@@ -330,9 +368,14 @@ def density_grid(
         #     ax_arr[i, 0].set_title(label1)
 
         for j, label2 in enumerate(np.unique(labels2)):
+            if len(col_cmaps) == 0:
+                cmap = DEFAULT_VIRIDIS
+            else:
+                cmap = col_cmaps[j]
+            # Indexing latent embedding by label
             embed_vals = data.embed_vals[
                 (data.data[cat1] == label1) & (data.data[cat2] == label2)
-            ]  # Indexing by label
+            ]
             if len(embed_vals) > 0:
                 density = watershed.fit_density(
                     embed_vals, new=False
@@ -343,7 +386,7 @@ def density_grid(
                     _mask_density(density, watershed.watershed_map, EPS * 1.01),
                     vmin=EPS,
                     vmax=vmax,
-                    cmap=DEFAULT_VIRIDIS,
+                    cmap=cmap,
                 )
 
                 if watershed is not None:
@@ -663,65 +706,75 @@ def heuristics(features, labels, data_obj, heuristics, filepath):
         #     SAVE_ROOT=filepath,
         # )
 
-
-def plot_tsne_circle_timepoint_condition(
-    timepoint, condition, df, ws_borders, ax, behavior_colors, scale_factor
+def _ax_bubble_map(
+    ax,
+    embed_vals: npt.ArrayLike,
+    borders: npt.ArrayLike,
+    unique_annotations: List[str],
+    clusters: npt.ArrayLike,
+    annotations: npt.ArrayLike,
+    radius: Union[str, npt.ArrayLike] = "frequency",
+    scale_factor: float = 1000,
+    get_legend_handles: bool = True,
 ):
-    """
-    conditions: list of the conditions, usually only ["stroke"] or ["healthy"]
-    df: original dataset
-    """
-    # group by clusters
-    filtered_df = df[(df["Condition"] == condition) & (df["Timepoint"] == timepoint)]
-    cluster_stats = filtered_df.groupby("Cluster").agg(
-        timepoints=("Timepoint", "first"),
-        Cluster=("Cluster", "first"),
-        Condition=("Condition", "first"),
-        Behavior=("Behavior", "first"),
-        x_mean=("embed_x", "mean"),
-        y_mean=("embed_y", "mean"),
-        count=("frame", "size"),  # Count the number of data points in each cluster
-    )
-    # Plot
-    # fig, ax = plt.subplots(figsize=(8, 6))
-    if ax is None:
-        ax = plt.gca()
-    # plt.plot(ws_borders[::30][:, 0], ws_borders[::30][:, 1], ".k", markersize=0.05, zorder=1)
-    ax.scatter(
-        ws_borders[::20][:, 0],
-        ws_borders[::20][:, 1],
-        color="black",
-        s=1.0,
-        zorder=1,  # Small dots (s=0.1 controls size)
-    )
+    n_clusters = len(annotations)
+    n_vals = len(embed_vals)
+
+    for k, v in borders.items():
+        ax.plot(
+            v[:, 0],
+            v[:, 1],
+            color="k",
+            markersize=0,
+            lw=0.25,
+            # s=0.5,
+            zorder=1,  # Small dots (s=0.1 controls size)
+        )
+
+    data_arr = np.concatenate([embed_vals, clusters[:, None]], axis=-1)
+    data_df = pd.DataFrame(data=data_arr, columns=["x", "y", "cluster"])
+    agg_methods = dict(x_mean=("x", "mean"), y_mean=("y", "mean"))
+    if isinstance(radius, str):
+        if radius == "frequency":
+            agg_methods["radius"] = ("cluster", "size")
+    else:
+        if len(radius) == n_vals:
+            agg_methods["radius"] = ("radius", "mean")
+
+    cluster_stats = data_df.groupby("cluster").agg(**agg_methods)
+    # cluster_stats = cluster_stats.drop(index=0)
+    cluster_stats = cluster_stats.reindex(range(1, n_clusters + 1), fill_value=0)
+    cluster_stats["annotations"] = annotations
+
+    if isinstance(radius, str):
+        if radius == "frequency":
+            cluster_stats["radius"] = cluster_stats["radius"] / n_vals
+    else:
+        if len(radius) == len(cluster_stats):
+            cluster_stats["radius"] = radius
 
     # Loop through each cluster to draw circles
     legend_handles = []  # Collect handles for legend
     for idx, row in cluster_stats.iterrows():
-        x_mean = row["x_mean"]
-        y_mean = row["y_mean"]
-        count = row["count"]
-        cluster = row["Cluster"]
-        behavior = row["Behavior"]
-        if behavior == "blank":
-            continue
-        color = behavior_colors[behavior]
+        color = PALETTE[unique_annotations.index(row["annotations"])]
 
         # Define the radius proportional to the count
-        radius = count * scale_factor
-        # print(radius, x_mean, y_mean)
+        radius = row["radius"] * scale_factor
         circle = plt.Circle(
-            (x_mean, y_mean),
+            (row["x_mean"], row["y_mean"]),
             radius,
             facecolor=color,
-            alpha=1.0,
+            alpha=0.75,
             edgecolor="black",
             linewidth=1.2,
+            linestyle="-" if radius >= 0 else "--",
         )
         ax.add_patch(circle)
         # plt.text(x_mean, y_mean, cluster, fontsize=10, ha='center', va='center')
 
-        if behavior not in [h.get_label() for h in legend_handles]:
+        if (
+            row["annotations"] not in [h.get_label() for h in legend_handles]
+        ) & get_legend_handles:
             legend_handles.append(
                 plt.Line2D(
                     [0],
@@ -729,115 +782,71 @@ def plot_tsne_circle_timepoint_condition(
                     marker="o",
                     color="w",
                     markerfacecolor=color,
-                    markersize=20,
-                    label=behavior,
+                    markersize=10,
+                    label=row["annotations"],
                 )  # Use Line2D to mimic legend entry
             )
 
-    # Set equal scaling for x and y axes
-    ax.set_aspect("equal", "box")
+    ax.set_aspect(0.9)
 
     # Show the plot
     ax.set_xticks([])
     ax.set_yticks([])
-    # ax.set_xlabel('')
     ax.axis("off")
+
+    return ax, legend_handles
 
 
 def bubble_map(
-    data_obj,
-    label_file_path,
-    condition_ls=["stroke", "healthy"],
-    timepoints_ls=["d-1", "d4", "w1", "w2", "w3", "w4", "w6", "w10", "w12", "w16"],
+    embed_vals: npt.ArrayLike,
+    watershed: Watershed,
+    clusters: npt.ArrayLike,
+    annotations: Optional[npt.ArrayLike] = None,
+    radius: Union[str, npt.ArrayLike] = "frequency",
+    scale_factor: float = 1000,
+    filepath: Optional[str] = "./bubble_map.svg",
+    show_legend: bool = True,
 ):
-    """
-    label_file_path: path_to_labels.txt, each line will be the label for that cluster (e.g. line 1 is "rear" for cluster 1), with no blank line at the end.
-    condition_ls: list of the values you are processing in "Condition" column.
-    timepoints_ls: list of the values you are processing in "timepoints" column, when you have that column.
-    """
-    print(data_obj.data.columns.values)
+    borders = copy.deepcopy(watershed.borders)
+    watershed_shape = watershed.watershed_map.shape
+    unique_annotations = list(np.unique(annotations))
 
-    ws_borders = data_obj.ws.borders
-    tsne_embeddings = np.array(data_obj.data["embed_vals"].tolist())
+    # Convert embed vals into pixel units
+    for ind in range(2):
+        embed_vals[:, ind] = (
+            (embed_vals[:, ind] - watershed.hist_range[ind][0])
+            / (watershed.hist_range[ind][1] - watershed.hist_range[ind][0])
+            * watershed_shape[ind]
+        )
 
-    # process tsne and ws border after discussing with Josh
-    tsne_embeddings[:, 0] = (data_obj.ws.hist_range[0][1] - tsne_embeddings[:, 0]) / (
-        data_obj.ws.hist_range[0][1] - data_obj.ws.hist_range[0][0]
+    # Border values in imshow coordinates, flipping y values around to match scatterplot
+    for k,v in borders.items():
+        borders[k][:, 1] = watershed_shape[1] - v[:, 1]
+
+    f = plt.figure(figsize=(10, 10))
+    ax = f.add_subplot(1, 1, 1)
+    ax, legend_handles = _ax_bubble_map(
+        ax,
+        embed_vals=embed_vals,
+        borders=borders,
+        unique_annotations=unique_annotations,
+        clusters=clusters,
+        annotations=annotations,
+        radius=radius,
+        scale_factor=scale_factor,
+        get_legend_handles=show_legend,
     )
 
-    scaler = MinMaxScaler()
-    tsne_embeddings = scaler.fit_transform(tsne_embeddings) * 1000
-    # breakpoint()
-    ws_borders = 1000 - ws_borders
-    ws_borders = scaler.fit_transform(ws_borders) * 1000
-    watershed_map = 1000 - data_obj.ws.watershed_map
-    watershed_map = scaler.fit_transform(watershed_map) * 1000
+    if show_legend:
+        plt.legend(handles=legend_handles, ncols=4, loc="upper center")
+    f.tight_layout()
+    f.subplots_adjust(top=0.75, bottom=0.001)
+    plt.savefig(filepath, dpi=400)
 
-    # save the data back to df
-    result = {
-        "frame": data_obj.data["frame"],
-        "AnimalID": data_obj.data["AnimalID"],
-        "Timepoint": data_obj.data["Timepoint"],
-        "Condition": data_obj.data["Condition"],
-        "Cluster": data_obj.data["Cluster"],
-        "embed_x": tsne_embeddings[:, 0],
-        "embed_y": tsne_embeddings[:, 1],
-    }
-    df = pd.DataFrame.from_dict(result)
+    plt.show()
 
-    # add labels
-    # label_file_path = root + '/behavior_labels.txt' # label TXT file path
-    with open(label_file_path, "r") as file:
-        behavior_list = file.read().splitlines()
-    if len(behavior_list) != df["Cluster"].max():
-        print(len(behavior_list), df["Cluster"].max())
-        raise ValueError(
-            "The length of the behavior list should be at max(Cluster) + 1"
-        )
-    df["Behavior"] = df["Cluster"].apply(lambda x: behavior_list[x - 1])
-
-    behavior_colors = {
-        "rear": (50 / 255, 205 / 255, 50 / 255),  # limegreen
-        "groom": (
-            0.996,
-            0.894,
-            0.251,
-        ),  # (255/255, 165/255, 0),                   # orange
-        "investigate": (100 / 255, 149 / 255, 237 / 255),  # cornflowerblue
-        "static": (255 / 255, 105 / 255, 180 / 255),  # hotpink
-        "investigate & rear": (0 / 255, 206 / 255, 209 / 255),  # darkturquoise
-        "groom & rear": (154 / 255, 205 / 255, 50 / 255),  # yellowgreen
-    }
-
-    for condition in condition_ls:
-        num_timepoints = len(timepoints_ls)
-        fig, axes = plt.subplots(
-            1, num_timepoints, figsize=(40, 5)
-        )  # Adjust figsize as needed
-        # Loop through timepoints and plot on subplots
-        for i, timepoint in enumerate(timepoints_ls):
-            ax = (
-                axes[i] if num_timepoints > 1 else axes
-            )  # Ensure it works even with one timepoint
-            plot_tsne_circle_timepoint_condition(
-                timepoint,
-                condition,
-                df,
-                ws_borders,
-                ax=ax,
-                behavior_colors=behavior_colors,
-                scale_factor=0.08,
-            )
-            # ax.set_title(f"{timepoint}", fontsize=30)  # Add timepoint title
-
-        # Add a common title or labels if needed
-        # fig.suptitle(f'Plots for Condition: {condition}', fontsize=16)
-        fig.tight_layout()
-
-        # Save the resulting figure
-        fig.subplots_adjust(left=0.01, wspace=0.02)
-        plt.savefig(f"timepoint_condition/{condition}.png")
-        plt.close()
+    return
+    
 
 
 # def labeled_watershed(watershed, borders, labels_path):

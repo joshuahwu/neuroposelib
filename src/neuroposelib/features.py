@@ -8,7 +8,6 @@ import pywt
 import numpy.typing as npt
 from sklearn.preprocessing import StandardScaler
 
-
 def get_lengths(pose: npt.NDArray, links: npt.ArrayLike) -> npt.NDArray:
     """Get lengths of all defined segments.
 

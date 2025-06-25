@@ -742,7 +742,7 @@ def trace(
         - pose_rot[:, N_FRAMES // 2, vector[0], :]
     )
     forward = forward / np.linalg.norm(forward, axis=-1)[..., None]
-    yaw = -np.arctan2(forward[:, 1], forward[:, 0])
+    yaw = np.arctan2(forward[:, 1], forward[:, 0])
 
     # yaw = -get_frame_yaw(pose_rot[:, N_FRAMES // 2, ...], root, 3)
     len_yaw = len(yaw)
