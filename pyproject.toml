@@ -28,6 +28,7 @@ dependencies = [
     "pandas",
     "ffmpeg",
     "opentsne",
+    "PyYAML",
 ]
 
 [project.urls]
