@@ -502,6 +502,7 @@ class GaussDensity:
         # Calculates density using gaussian filter
         density = gaussian_filter(hist, sigma=self.sigma)
         if self.log_out:
+            print("Calculating log density")
             density = np.log1p(density)
         density = np.clip(
             density, None, np.amax(density) * self.max_clip
