@@ -2,7 +2,9 @@ import scipy.ndimage as scp_ndi
 from scipy.interpolate import CubicSpline
 import numpy as np
 import numpy.typing as npt
+import numpy.typing as npt
 from neuroposelib.utils import by_id, get_frame_diff
+from typing import Optional, Union, List, Type, Tuple
 from typing import Optional, Union, List, Type, Tuple
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
@@ -10,6 +12,7 @@ from scipy.spatial.transform import Rotation as R
 
 @by_id
 def align_floor_by_id(
+    pose: npt.NDArray,
     pose: npt.NDArray,
     foot_id: Optional[int] = 12,
     head_id: Optional[int] = 0,

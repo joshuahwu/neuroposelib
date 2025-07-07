@@ -679,14 +679,15 @@ def feature_hist(feature, label, filepath, range=None):
 #     plt.close()
 #     return 0
 
-
+from neuroposelib import DataStruct as ds
+from typing import Union
 def trace(
     pose: npt.ArrayLike,
     connectivity: ds.Connectivity,
     vis_plane: str = "xz",
     frame: int = 1000,
     n_full_pose: int = 3,
-    keypts: List[int] = [0, 4, 8, 11, 14, 17],
+    # keypts: List[int] = [0, 4, 8, 11, 14, 17],
     vector: Union[Tuple, npt.ArrayLike] = (4, 3),
     centered: bool = True,
     N_FRAMES: int = 300,
@@ -709,8 +710,6 @@ def trace(
         Index to plot, by default 1000
     n_full_pose : int, optional
         Number of full poses to plot within the trace, by default 3
-    keypts : List[int], optional
-        The indices of keypoints to trace, by default [0, 4, 8, 11, 14, 17]
     vector : Union[Tuple, npt.ArrayLike], optional
         A tuple of indices referencing the (root, forward) keypoints, by default (4, 3)
     centered : bool, optional
@@ -729,11 +728,12 @@ def trace(
     n_keypts = pose.shape[-2]
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(1, 1, 1)
+    print(pose.shape)
     pose_vis, _, _, _ = _init_vid3D(
         pose, connectivity, np.array(frames, dtype=int), centered, N_FRAMES, SAVE_ROOT
     )
     pose_rot = pose_vis.reshape((len(frames), N_FRAMES, -1, 3))
-    pose_rot -= pose_rot[:, N_FRAMES // 2, vector[0], :][
+    pose_rot[...,:2] -= pose_rot[:, N_FRAMES // 2, vector[0], :2][
         :, None, None, :
     ]  # Centering based on middle frame
 
@@ -742,7 +742,7 @@ def trace(
         - pose_rot[:, N_FRAMES // 2, vector[0], :]
     )
     forward = forward / np.linalg.norm(forward, axis=-1)[..., None]
-    yaw = -np.arctan2(forward[:, 1], forward[:, 0])
+    yaw = np.arctan2(forward[:, 1], forward[:, 0])
 
     # yaw = -get_frame_yaw(pose_rot[:, N_FRAMES // 2, ...], root, 3)
     len_yaw = len(yaw)
@@ -762,14 +762,19 @@ def trace(
     #     plane_idx = np.argsort(dim_std, axis=-1)[:, :-1]
     #     # plane_idx = np.zeros(pose_rot.shape,dtype=int)[...,:-1] + plane_idx[:, None, None, :]
     # else:
-    plane_idx = [_PLANE[k] for k in vis_plane]
+    plane_idx = [vis.constants._PLANE[k] for k in vis_plane]
 
     pose_vis = pose_rot.reshape(-1, n_keypts, 3)
     pose_vis = pose_vis[..., plane_idx]
-    print(pose_vis.shape)
+    print(np.max(pose_vis, axis=(0, 1)))
+    print(np.min(pose_vis, axis=(0, 1)))
 
     full_pose_inds = np.linspace(0, N_FRAMES - 1, n_full_pose).astype(int)
+    print(full_pose_inds)
     for i in full_pose_inds:
+        # print(i)
+        alpha = 1 if i == full_pose_inds[-1] else 0.1
+        # print(alpha)
         curr_frames = i + np.arange(len(frames)) * N_FRAMES
 
         for index_from, index_to in connectivity.links:
@@ -782,37 +787,40 @@ def trace(
                 )
                 for j in range(2)
             ]
-            lw_color = np.sqrt(np.linspace(0, 0.75, 10))
-            linewidth = 3.5 - np.linspace(0, 3.1, 10)
-            for co, l in zip(lw_color, linewidth):
-                ax.plot(
-                    xs,
-                    ys,
-                    c=(co, co, co),
-                    lw=l,
-                    alpha=0.2,  # - (i * 0.55 / full_pose_inds[-1])
-                )
+            # lw_color = np.sqrt(np.linspace(0, 0.75, 10))
+            # linewidth = 3.5 - np.linspace(0, 3.1, 10)
+            # for co, l in zip(lw_color, linewidth):
+            ax.plot(
+                xs,
+                ys,
+                # c="k",
+                c=(0.1, 0.1, 0.1),
+                lw=1,
+                alpha=alpha,  # - (i * 0.55 / full_pose_inds[-1])
+            )
 
         ax.scatter(
             pose_vis[curr_frames, :, 0].flatten(),
             pose_vis[curr_frames, :, 1].flatten(),
             marker="o",
             color=np.tile(connectivity.keypt_colors, (len(frames), 1)),
-            s=100,
-            alpha=0.3,  # 1 - (i * 0.75 / full_pose_inds[-1]),
+            s=20,
+            alpha=alpha,  # 1 - (i * 0.75 / full_pose_inds[-1]),
             zorder=3.5,
         )
 
-    for keypt in keypts:
-        ax.plot(
-            pose_vis[:, keypt, 0].reshape(len(frames), -1).T,
-            pose_vis[:, keypt, 1].reshape(len(frames), -1).T,
-            marker="o",
-            color=connectivity.keypt_colors[keypt],
-            ms=0,
-            lw=2.5,
-            alpha=0.3,
-        )
+    # for keypt in keypts:
+    #     ax.plot(
+    #         pose_vis[:, keypt, 0].reshape(len(frames), -1).T,
+    #         pose_vis[:, keypt, 1].reshape(len(frames), -1).T,
+    #         marker="o",
+    #         color=connectivity.keypt_colors[keypt],
+    #         ms=0,
+    #         lw=2.5,
+    #         alpha=0.3,
+    #     )
+    ax.set_ylim(bottom=-50, top=120)
+    ax.set_xlim(left=-150, right=150)
     ax.set_aspect("equal")
     ax.axis("off")
     plt.savefig("{}/vis_{}_{}".format(SAVE_ROOT, vis_plane, FIG_NAME), dpi=dpi)

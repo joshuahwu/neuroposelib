@@ -2,7 +2,6 @@ import numpy as np
 import tqdm
 
 import pandas as pd
-
 # import seaborn as sns
 from matplotlib.lines import Line2D
 import matplotlib
@@ -19,6 +18,7 @@ from neuroposelib.embed import Watershed, GaussDensity
 from neuroposelib.analysis import hist_cluster_by_cat
 from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
 import numpy.typing as npt
+import copy
 
 # def scatter_by_cat(
 #     data: np.ndarray,
@@ -92,7 +92,7 @@ def scatter(
 
 
 def watershed(
-    ws_map: np.ndarray,
+    ws_map: npt.NDArray,
     ws_borders: Optional[Dict] = None,
     cmap: Optional[str] = None,
     filepath: str = "./results/watershed.png",
@@ -108,12 +108,17 @@ def watershed(
     # ax.imshow(ws_map, vmin=EPS, cmap=cmap)
     ax.set_aspect(0.9)
     if ws_borders is not None:
-        for k,v in ws_borders.items():
-            ax.plot(v[:,0], v[:,1], "k", markersize=0, lw=0.25)
+        for k, v in ws_borders.items():
+            ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
             cluster_loc = np.where(ws_map == k)
-            cluster_loc = (np.mean(inds) for inds in cluster_loc)
-            ax.text(cluster_loc[0], cluster_loc[1], str(k))
-
+            cluster_loc = [np.mean(inds) for inds in cluster_loc]
+            ax.text(
+                cluster_loc[1],
+                cluster_loc[0],
+                str(k),
+                horizontalalignment="center",
+                verticalalignment="center",
+            )
 
     ax.axis("off")
     plt.savefig("".join([filepath, "_watershed.png"]), dpi=200)
@@ -244,9 +249,45 @@ def density(
 def _mask_density(density, watershed_map, eps: float = EPS * 1.01):
     mask = watershed_map > 0
     density[mask] = np.maximum(density[mask], eps)
-    density[~mask] = 0
+    density[~mask] = -np.inf
     return density
 
+def numbered_watershed(
+    ws_map: npt.NDArray,
+    ws_borders: Optional[Dict] = None,
+    cmap: Optional[str] = None,
+    filepath: str = "./results/watershed.svg",
+    show: Optional[bool] = False,
+):
+    """
+    Plotting a watershed map with clusters colored
+    """
+    if cmap == None:
+        cmap = DEFAULT_VIRIDIS
+    f = plt.figure()
+    ax = f.add_subplot(111)
+    ax.imshow(ws_map, vmin=EPS, cmap=cmap)
+    ax.set_aspect(0.9)
+    if ws_borders is not None:
+        for k, v in ws_borders.items():
+            ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
+            cluster_loc = np.where(ws_map == k)
+            cluster_loc = [np.mean(inds) for inds in cluster_loc]
+            ax.text(
+                cluster_loc[1],
+                cluster_loc[0],
+                str(k),
+                horizontalalignment="center",
+                verticalalignment="center",
+            )
+
+    ax.axis("off")
+    plt.savefig("".join([filepath, "_watershed.svg"]), dpi=200)
+
+    if show:
+        plt.show()
+    plt.close()
+    return
 
 def density_cat(
     data: ds.DataStruct,
@@ -307,6 +348,7 @@ def density_grid(
     cat1: str,
     cat2: str,
     watershed: Watershed,
+    col_cmaps: List = [],
     filepath: str = "./results/density_by_label.png",
     show: bool = False,
     vmax: float = 3.5,
@@ -325,36 +367,44 @@ def density_grid(
         #     ax_arr[i, 0].set_title(label1)
 
         for j, label2 in enumerate(np.unique(labels2)):
+            if len(col_cmaps) == 0:
+                cmap = DEFAULT_VIRIDIS
+            else:
+                cmap = col_cmaps[j]
+            # Indexing latent embedding by label
             embed_vals = data.embed_vals[
                 (data.data[cat1] == label1) & (data.data[cat2] == label2)
-            ]  # Indexing by label
-            density = watershed.fit_density(
-                embed_vals, new=False
-            )  # Fit density on old axes
-            idx = i * len(np.unique(labels2)) + j
-            # if n_rows == 1:
-            ax_arr.ravel()[idx].imshow(
-                _mask_density(density, watershed.watershed_map, EPS * 1.01),
-                vmin=EPS,
-                vmax=vmax,
-                cmap=DEFAULT_VIRIDIS,
-            )
+            ]
+            if len(embed_vals) > 0:
+                density = watershed.fit_density(
+                    embed_vals, new=False
+                )  # Fit density on old axes
+                idx = i * len(np.unique(labels2)) + j
+                # if n_rows == 1:
+                ax_arr.ravel()[idx].imshow(
+                    _mask_density(density, watershed.watershed_map, EPS * 1.01),
+                    vmin=EPS,
+                    vmax=vmax,
+                    cmap=cmap,
+                )
 
-            if watershed is not None:
-                for k,v in watershed.borders.items():
-                    ax_arr.ravel()[idx].plot(v[:,0], v[:,1], "k", markersize=0, lw=0.25)
-            ax_arr.ravel()[idx].set_aspect(0.9)
-            # ax_arr[idx].axis("off")
-            ax_arr.ravel()[idx].set_xticks([])
-            ax_arr.ravel()[idx].set_yticks([])
-            for spine in ax_arr.ravel()[idx].spines.values():
-                spine.set_visible(False)
+                if watershed is not None:
+                    for k, v in watershed.borders.items():
+                        ax_arr.ravel()[idx].plot(
+                            v[:, 0], v[:, 1], "k", markersize=0, lw=0.25
+                        )
+                ax_arr.ravel()[idx].set_aspect(0.9)
+                # ax_arr[idx].axis("off")
+                ax_arr.ravel()[idx].set_xticks([])
+                ax_arr.ravel()[idx].set_yticks([])
+                for spine in ax_arr.ravel()[idx].spines.values():
+                    spine.set_visible(False)
 
-            if j == 0:
-                ax_arr.ravel()[idx].set_ylabel(label1)
+                if j == 0:
+                    ax_arr.ravel()[idx].set_ylabel(label1)
 
-            if i == 0:
-                ax_arr.ravel()[idx].set_title(label2)
+                if i == 0:
+                    ax_arr.ravel()[idx].set_title(label2)
 
     f.tight_layout()
     plt.savefig(filepath, dpi=200)
@@ -830,6 +880,148 @@ def bubble_map(
         fig.subplots_adjust(left=0.01, wspace=0.02)
         plt.savefig(f"timepoint_condition/{condition}.png")
         plt.close()
+
+def _ax_bubble_map(
+    ax,
+    embed_vals: npt.ArrayLike,
+    borders: npt.ArrayLike,
+    unique_annotations: List[str],
+    clusters: npt.ArrayLike,
+    annotations: npt.ArrayLike,
+    radius: Union[str, npt.ArrayLike] = "frequency",
+    scale_factor: float = 1000,
+    get_legend_handles: bool = True,
+):
+    n_clusters = len(annotations)
+    n_vals = len(embed_vals)
+
+    for k, v in borders.items():
+        ax.plot(
+            v[:, 0],
+            v[:, 1],
+            color="k",
+            markersize=0,
+            lw=0.25,
+            # s=0.5,
+            zorder=1,  # Small dots (s=0.1 controls size)
+        )
+
+    data_arr = np.concatenate([embed_vals, clusters[:, None]], axis=-1)
+    data_df = pd.DataFrame(data=data_arr, columns=["x", "y", "cluster"])
+    agg_methods = dict(x_mean=("x", "mean"), y_mean=("y", "mean"))
+    if isinstance(radius, str):
+        if radius == "frequency":
+            agg_methods["radius"] = ("cluster", "size")
+    else:
+        if len(radius) == n_vals:
+            agg_methods["radius"] = ("radius", "mean")
+
+    cluster_stats = data_df.groupby("cluster").agg(**agg_methods)
+    # cluster_stats = cluster_stats.drop(index=0)
+    cluster_stats = cluster_stats.reindex(range(1, n_clusters + 1), fill_value=0)
+    cluster_stats["annotations"] = annotations
+
+    if isinstance(radius, str):
+        if radius == "frequency":
+            cluster_stats["radius"] = cluster_stats["radius"] / n_vals
+    else:
+        if len(radius) == len(cluster_stats):
+            cluster_stats["radius"] = radius
+
+    # Loop through each cluster to draw circles
+    legend_handles = []  # Collect handles for legend
+    for idx, row in cluster_stats.iterrows():
+        color = PALETTE[unique_annotations.index(row["annotations"])]
+
+        # Define the radius proportional to the count
+        radius = row["radius"] * scale_factor
+        circle = plt.Circle(
+            (row["x_mean"], row["y_mean"]),
+            radius,
+            facecolor=color,
+            alpha=0.75,
+            edgecolor="black",
+            linewidth=1.2,
+            linestyle="-" if radius >= 0 else "--",
+        )
+        ax.add_patch(circle)
+        # plt.text(x_mean, y_mean, cluster, fontsize=10, ha='center', va='center')
+
+        if (
+            row["annotations"] not in [h.get_label() for h in legend_handles]
+        ) & get_legend_handles:
+            legend_handles.append(
+                plt.Line2D(
+                    [0],
+                    [0],
+                    marker="o",
+                    color="w",
+                    markerfacecolor=color,
+                    markersize=10,
+                    label=row["annotations"],
+                )  # Use Line2D to mimic legend entry
+            )
+
+    ax.set_aspect(0.9)
+
+    # Show the plot
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.axis("off")
+
+    return ax, legend_handles
+
+
+def bubble_map(
+    embed_vals: npt.ArrayLike,
+    watershed: Watershed,
+    clusters: npt.ArrayLike,
+    annotations: Optional[npt.ArrayLike] = None,
+    radius: Union[str, npt.ArrayLike] = "frequency",
+    scale_factor: float = 1000,
+    filepath: Optional[str] = "./bubble_map.svg",
+    show_legend: bool = True,
+):
+    borders = copy.deepcopy(watershed.borders)
+    watershed_shape = watershed.watershed_map.shape
+    unique_annotations = list(np.unique(annotations))
+
+    # Convert embed vals into pixel units
+    for ind in range(2):
+        embed_vals[:, ind] = (
+            (embed_vals[:, ind] - watershed.hist_range[ind][0])
+            / (watershed.hist_range[ind][1] - watershed.hist_range[ind][0])
+            * watershed_shape[ind]
+        )
+
+    # Border values in imshow coordinates, flipping y values around to match scatterplot
+    for k,v in borders.items():
+        borders[k][:, 1] = watershed_shape[1] - v[:, 1]
+
+    f = plt.figure(figsize=(10, 10))
+    ax = f.add_subplot(1, 1, 1)
+    ax, legend_handles = _ax_bubble_map(
+        ax,
+        embed_vals=embed_vals,
+        borders=borders,
+        unique_annotations=unique_annotations,
+        clusters=clusters,
+        annotations=annotations,
+        radius=radius,
+        scale_factor=scale_factor,
+        get_legend_handles=show_legend,
+    )
+
+    if show_legend:
+        plt.legend(handles=legend_handles, ncols=4, loc="upper center")
+    f.tight_layout()
+    f.subplots_adjust(top=0.75, bottom=0.001)
+    plt.savefig(filepath, dpi=400)
+
+    plt.show()
+
+    return
+    
 
 
 # def labeled_watershed(watershed, borders, labels_path):
