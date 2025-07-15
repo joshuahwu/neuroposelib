@@ -100,7 +100,6 @@ def watershed(
 ):
     """
     Plotting a watershed map with clusters colored
-
     """
     if cmap == None:
         cmap = DEFAULT_VIRIDIS
@@ -124,7 +123,6 @@ def watershed(
     ax.axis("off")
     plt.savefig("".join([filepath, "_watershed.png"]), dpi=200)
     plt.close()
-
 
 def scatter_on_watershed(
     data: ds.DataStruct, watershed: GaussDensity, column: str, path: str = "./results/"
@@ -252,43 +250,6 @@ def _mask_density(density, watershed_map, eps: float = EPS * 1.01):
     density[mask] = np.maximum(density[mask], eps)
     density[~mask] = -np.inf
     return density
-
-def numbered_watershed(
-    ws_map: npt.NDArray,
-    ws_borders: Optional[Dict] = None,
-    cmap: Optional[str] = None,
-    filepath: str = "./results/watershed.svg",
-    show: Optional[bool] = False,
-):
-    """
-    Plotting a watershed map with clusters colored
-    """
-    if cmap == None:
-        cmap = DEFAULT_VIRIDIS
-    f = plt.figure()
-    ax = f.add_subplot(111)
-    ax.imshow(ws_map, vmin=EPS, cmap=cmap)
-    ax.set_aspect(0.9)
-    if ws_borders is not None:
-        for k, v in ws_borders.items():
-            ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
-            cluster_loc = np.where(ws_map == k)
-            cluster_loc = [np.mean(inds) for inds in cluster_loc]
-            ax.text(
-                cluster_loc[1],
-                cluster_loc[0],
-                str(k),
-                horizontalalignment="center",
-                verticalalignment="center",
-            )
-
-    ax.axis("off")
-    plt.savefig("".join([filepath, "_watershed.svg"]), dpi=200)
-
-    if show:
-        plt.show()
-    plt.close()
-    return
 
 def density_cat(
     data: ds.DataStruct,
