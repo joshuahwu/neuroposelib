@@ -434,7 +434,10 @@ def _pose3D_arena(
 ):
     (rows, cols) = size
     # import pdb; pdb.set_trace()
-    kpts_3d = np.reshape(data[frames, :, :], (len(frames) * data.shape[-2], 3))
+    try:
+        kpts_3d = np.reshape(data[frames, :, :], (len(frames) * data.shape[-2], 3))
+    except:
+        import pdb; pdb.set_trace()
 
     ax_3d = _pose3D_frame(
         ax_3d, kpts_3d, COLORS, links, limits  # , figsize=(cols * 5, rows * 5)
@@ -679,8 +682,6 @@ def feature_hist(feature, label, filepath, range=None):
 #     plt.close()
 #     return 0
 
-from neuroposelib import DataStruct as ds
-from typing import Union
 def trace(
     pose: npt.ArrayLike,
     connectivity: ds.Connectivity,
@@ -728,7 +729,6 @@ def trace(
     n_keypts = pose.shape[-2]
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(1, 1, 1)
-    print(pose.shape)
     pose_vis, _, _, _ = _init_vid3D(
         pose, connectivity, np.array(frames, dtype=int), centered, N_FRAMES, SAVE_ROOT
     )
@@ -762,7 +762,7 @@ def trace(
     #     plane_idx = np.argsort(dim_std, axis=-1)[:, :-1]
     #     # plane_idx = np.zeros(pose_rot.shape,dtype=int)[...,:-1] + plane_idx[:, None, None, :]
     # else:
-    plane_idx = [vis.constants._PLANE[k] for k in vis_plane]
+    plane_idx = [_PLANE[k] for k in vis_plane]
 
     pose_vis = pose_rot.reshape(-1, n_keypts, 3)
     pose_vis = pose_vis[..., plane_idx]

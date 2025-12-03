@@ -10,16 +10,18 @@ from pathlib import Path
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from typing import Optional, Union, List, Dict
+from typing import Optional, Union, List, Dict, Tuple
 from scipy.special import softmax
 from sklearn.preprocessing import MinMaxScaler
 
 from neuroposelib import DataStruct as ds
 from neuroposelib.embed import Watershed, GaussDensity
 from neuroposelib.analysis import hist_cluster_by_cat
-from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS
+from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS, CUSTOM_CMAPS
 import numpy.typing as npt
 import copy
+from matplotlib.patches import Patch
+from skimage import measure
 
 # def scatter_by_cat(
 #     data: np.ndarray,
@@ -45,6 +47,25 @@ import copy
 #     plt.close()
 #     # plt.savefig(''.join([filepath, 'scatter_by_', label, '.png']))
 
+def _hex_to_rgb(hex_color):
+  """Converts a hex color code to an RGB tuple.
+
+  Args:
+    hex_color: A string representing the hex color code, with or without the '#' prefix.
+
+  Returns:
+    A tuple of three integers representing the RGB values (0-255), or None if the input is invalid.
+  """
+  hex_color = hex_color.lstrip('#')
+  if len(hex_color) != 6:
+    return None
+  try:
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return np.array([r/255, g/255, b/255])
+  except ValueError:
+    return None
 
 def scatter(
     data: np.ndarray,
@@ -105,7 +126,7 @@ def watershed(
         cmap = DEFAULT_VIRIDIS
     f = plt.figure()
     ax = f.add_subplot(111)
-    ax.imshow(ws_map, vmin=EPS, cmap=cmap)
+    ax.imshow(ws_map,cmap=cmap)
     ax.set_aspect(0.9)
     if ws_borders is not None:
         for k, v in ws_borders.items():
@@ -223,17 +244,23 @@ def density(
     density: np.ndarray,
     ws_borders: Optional[np.ndarray] = None,
     filepath: str = "./results/density.png",
+    cmap: Optional[str] = None,
     show: bool = False,
     vmax: float = None,
+    return_fig: bool = False,
 ):
     vmin = 0.99 * 15 / density.shape[0] ** 2
+    density_copy = np.copy(density)
+    density_copy[density_copy<vmin] = -np.inf
     f = plt.figure()
     ax = f.add_subplot(111)
+    if cmap is None:
+        cmap = DEFAULT_VIRIDIS
     if ws_borders is not None:
         for k, v in ws_borders.items():
             ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
 
-    ax.imshow(density, vmin=vmin, vmax=vmax, cmap=DEFAULT_VIRIDIS)
+    ax.imshow(density_copy, vmin=vmin, vmax=vmax, cmap=cmap)
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_aspect(0.9)
@@ -242,7 +269,12 @@ def density(
         plt.savefig(filepath, dpi=200)
     if show:
         plt.show()
-    plt.close()
+
+    if return_fig:
+        return f
+    else:
+        plt.close()
+        return
 
 
 def _mask_density(density, watershed_map, eps: float = EPS * 1.01):
@@ -303,7 +335,7 @@ def density_cat(
         plt.show()
     plt.close()
     return
-
+    
 
 def density_grid(
     data: ds.DataStruct,
@@ -314,6 +346,7 @@ def density_grid(
     filepath: str = "./results/density_by_label.png",
     show: bool = False,
     vmax: float = 3.5,
+    return_fig: bool = False,
 ):
     """
     Plot densities by a category label
@@ -368,11 +401,17 @@ def density_grid(
                 if i == 0:
                     ax_arr.ravel()[idx].set_title(label2)
 
-    f.tight_layout()
-    plt.savefig(filepath, dpi=200)
-    if show:
-        plt.show()
-    plt.close()
+    if return_fig:
+        if show:
+            plt.show()
+        return f
+    else:
+        f.tight_layout()
+        plt.savefig(filepath, dpi=200)
+        if show:
+            plt.show()
+        plt.close()
+        return
     return
 
 
@@ -803,98 +842,137 @@ def bubble_map(
     f.tight_layout()
     f.subplots_adjust(top=0.75, bottom=0.001)
     plt.savefig(filepath, dpi=400)
-
-    plt.show()
-
     return
     
 
+def annotated_watershed(watershed: Watershed,
+                        annotations: npt.ArrayLike,
+                        palette: Optional[List] = None,
+                        filepath: Optional[str] = "./bubble_map.svg",
+                        show=False):
 
-# def labeled_watershed(watershed, borders, labels_path):
-#     labels = pd.read_csv(labels_path)
+    unique_annotations = list(np.unique(annotations))
 
-#     behavior_cats = set(labels["Label"])
+    if palette is None:
+        palette = PALETTE
 
-#     color_dict = {
-#         "Background": np.array([0, 0, 0]),
-#         "Crouched Idle": np.array([241, 194, 50]),
-#         "Face Groom": np.array([106, 168, 79]),
-#         "Body Groom": np.array([106, 168, 79]),
-#         "High Rear": np.array([69, 129, 142]),
-#         "Low Rear": np.array([106, 168, 79]),
-#         "Investigate": np.array([106, 168, 79]),
-#         "Walk/Rear": np.array([106, 168, 79]),
-#         "Walk": np.array([103, 78, 167]),
-#     }
+    watershed_map = watershed.watershed_map
+    colored_map = np.ones(watershed_map.shape + (3,))
 
-#     colors = [
-#         "#FFFFFF",
-#         "tab:gray",
-#         "tab:green",
-#         "tab:blue",
-#         "tab:orange",
-#         "tab:red",
-#         "tab:purple",
-#         "tab:brown",
-#         "tab:pink",
-#         "tab:olive",
-#         "tab:cyan",
-#         "#dc0ab4",
-#         "#00b7c7",
+    # Apply colors to the map based on annotations
+    for i, annotation in enumerate(unique_annotations):
+        inds = np.where(annotations == annotation)[0] + 1  # +1 because labels in map start from 1?
+        is_anno = np.isin(watershed_map, inds)
+        colored_map[is_anno] = palette[i]
+
+    f = plt.figure(figsize=(10, 10))
+    ax = f.add_subplot(111)
+    im = ax.imshow(colored_map, alpha=0.6)
+    ax.set_aspect(0.9)
+
+    # Draw thin individual borders
+    for k, v in watershed.borders.items():
+        ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
+
+    # Plot thick borders around merged regions with same annotation
+    for annotation in unique_annotations:
+        inds = np.where(annotations == annotation)[0] + 1
+        mask = np.isin(watershed_map, inds)
+
+        contours = measure.find_contours(mask.astype(float), level=0.5)
+        for contour in contours:
+            ax.plot(contour[:, 1], contour[:, 0], "k", lw=1.25)
+
+    # Outer border around all non-zero regions
+    nonzero_mask = watershed_map != 0
+    outer_contours = measure.find_contours(nonzero_mask.astype(float), level=0.5)
+    for contour in outer_contours:
+        ax.plot(contour[:, 1], contour[:, 0], "k", lw=1.5)
+
+    ax.axis("off")
+
+    # ---- Add Legend ----
+    legend_elements = [
+        Patch(facecolor=palette[i], edgecolor='k', label=label)
+        for i, label in enumerate(unique_annotations)
+    ]
+    ax.legend(handles=legend_elements, ncols=len(unique_annotations), loc='upper center', frameon=True, prop={'family': 'Liberation Sans', 'size': 16})
+
+    plt.savefig(filepath, dpi=400)
+    if show:
+        plt.show()
+    plt.close()
+    return
+
+def feature_watershed(
+    watershed: npt.ArrayLike,
+    watershed_borders: npt.ArrayLike,
+    feature: npt.ArrayLike,
+    labels: List[Tuple],
+    cluster_labels: Optional[npt.ArrayLike] = None,
+    filepath: Optional[str] = "./bubble_map.svg",
+    show: bool = True,
+):
+    """Returns watershed map with clusters colored by the difference in z scores
+    for the group defined by query 1 and the group defined by query 2.
+
+    Parameters
+    ----------
+    watershed : npt.ArrayLike
+        Array of (# pixel height, # pixels width) with cluster label for each pixel
+    watershed_borders : npt.ArrayLike
+        Coordinates of watershed borders (# coordinates, 2)
+    feature : npt.ArrayLike
+        (# clusters) or (# frames)
+    cluster_labels: Optional[npt.ArrayLike]
+    
+    """
+    # Define bounds and custom colormap
+#     bounds = [-4, -3.29, -2.58, -1.96, 1.96, 2.58, 3.29, 4]
+#     base_colors = plt.get_cmap("seismic", 6)([0, 1, 2, 3, 4, 5])
+#     custom_colors = [
+#         base_colors[0],
+#         base_colors[1],
+#         base_colors[2],
+#         "white",  # for 'ns'
+#         base_colors[3],
+#         base_colors[4],
+#         base_colors[5],
 #     ]
+#     custom_cmap = mcolors.ListedColormap(custom_colors)
+#     norm = mcolors.BoundaryNorm(bounds, custom_cmap.N)
 
-#     unique_labels = labels["Label"].unique()
+    n_clusters = watershed.max() + 1
+    if len(feature) in [n_clusters, n_clusters -1]:
+        feat = feature
+    else:
+        feat_dict = {"feature": feature, "cluster": cluster_labels}
+        df = pd.DataFrame().assign(**feat_dict)
+        feat = df.groupby("cluster").agg({"feature":"mean"})
+        assert len(feat) in [n_clusters, n_clusters-1]
 
-#     labeled_map = np.zeros(watershed.shape)
-#     for i, label in enumerate(unique_labels):
-#         labeled_map[
-#             np.isin(watershed, labels["Cluster"][labels["Label"] == label].values)
-#         ] = i
+    f = plt.figure()
+    ax = f.add_subplot(111)
+    im = ax.imshow(
+        feat[watershed],
+        cmap=CUSTOM_CMAPS["wide_white_seismic"],
+        #         cmap=custom_cmap,
+#         norm=norm,
+        vmin = -5,
+        vmax = 5,
+    )
+    ax.set_aspect(0.9)
+    for k,v in watershed_borders.items():
+        ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
+    ax.axis("off")
 
-#     # labeled_map = np.zeros((watershed.shape[0], watershed.shape[1], 3))
-#     # for i in range(watershed.shape[0]):
-#     #     for j in range(watershed.shape[1]):
-#     #         # try:
-#     #         label = labels["Label"].loc[labels["Cluster"] == watershed[i, j]].values[0]
-#     #         # except:
-#     #         #     import pdb; pdb.set_trace()
-#     #         labeled_map[i, j, :] = np.array(color_dict[label])
+    f.colorbar(im)
 
-#     # fig, ax = plt.subplots()
-#     sns.set(rc={"figure.figsize": (12, 10)})
-#     cmap = [(1, 1, 1)] + sns.color_palette("Pastel2", len(unique_labels) - 1)
-#     ax = sns.heatmap(labeled_map, cmap=cmap)
-#     plt.colorbar(ax=ax, fraction=0.047 * 0.8)
-#     colorbar = ax.collections[0].colorbar
-#     # colorbar.fraction = 0.047*0.8
-#     r = colorbar.vmax - 1
-#     colorbar.set_ticks(
-#         [
-#             0 + r / (len(unique_labels) - 1) * (0.5 + i)
-#             for i in range(1, len(unique_labels))
-#         ]
-#     )
-#     colorbar.set_ticklabels(unique_labels[1:])
-
-#     # ax.set(xlabel="t-SNE 1", ylabel="t-SNE 2")
-#     ax.get_xaxis().set_ticks([])
-#     ax.get_yaxis().set_ticks([])
-#     ax.set_box_aspect(0.8)
-
-#     ax.plot(borders[:, 0], borders[:, 1], "k.", markersize=0.5)
-
-#     # handles = [
-#     #     Line2D(
-#     #         [0], [0], marker="o", color="w", markerfacecolor=v, label=k, markersize=8
-#     #     )
-#     #     for k, v in color_dict.items() if k!="Background"
-#     # ]
-#     # ax.legend(
-#     #     title="color", handles=handles, bbox_to_anchor=(1.05, 1), loc="upper left"
-#     # )
-#     plt.savefig("./labeled_map.png")
-#     plt.close()
-
+    plt.savefig("{}/{}feat_watershed.svg".format(filepath))
+    if show:
+        plt.show()
+    plt.close()
+    return
 
 # def feature_ridge(
 #     feature: np.ndarray,

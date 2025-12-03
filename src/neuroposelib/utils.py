@@ -4,6 +4,25 @@ import numpy as np
 from typing import Union, List
 
 
+def format_three_digits(val: float) -> str:
+    if val == 0:
+        return "0.00"
+
+    abs_val = abs(val)
+
+    if abs_val >= 100:
+        # 3 digits before the decimal, no decimals
+        val_rounded = round(val)
+        return f"{val_rounded:.0f}"
+    elif abs_val >= 10:
+        # 2 digits before, 1 after
+        val_rounded = round(val, 1)
+        return f"{val_rounded:.1f}"
+    else:
+        # 1 digit before (or less), 2 after
+        val_rounded = round(val, 2)
+        return f"{val_rounded:.2f}"
+
 def by_id(func):
     @functools.wraps(func)
     def wrapper(pose: np.ndarray, ids: Union[np.ndarray, List], **kwargs):

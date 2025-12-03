@@ -433,7 +433,7 @@ class GaussDensity:
         self,
         sigma: int = 15,
         n_bins: int = 1000,
-        max_clip: float = 0.75,
+        max_clip: float = 1,
         log_out: bool = False,
         pad_factor: float = 0.025,
     ):
@@ -502,7 +502,6 @@ class GaussDensity:
         # Calculates density using gaussian filter
         density = gaussian_filter(hist, sigma=self.sigma)
         if self.log_out:
-            print("Calculating log density")
             density = np.log1p(density)
         density = np.clip(
             density, None, np.amax(density) * self.max_clip
@@ -601,7 +600,7 @@ class Watershed(GaussDensity):
             -self.density, mask=self.density > self.density_thresh, watershed_line=False
         )
         self.watershed_map[self.density < self.density_thresh] = 0
-        self.borders = {}#np.empty((0, 2), dtype=data.dtype)
+        self.borders = {}  # np.empty((0, 2), dtype=data.dtype)
         for i in range(1, self.watershed_map.max() + 1):
             self.borders[i] = measure.find_contours(self.watershed_map.T == i, 0.5)[0]
             # self.borders[i] = np.append(self.borders, contour, axis=0)
@@ -616,16 +615,16 @@ class Watershed(GaussDensity):
         print("Merging thin clusters ...")
         original_borders = self.borders.copy()
         n_clusters = self.watershed_map.max() + 1
-        slim_clusters = [0, 0]  # placeholder with len>1
+        # slim_clusters = [0, 0]  # placeholder with len>1
         counter = 0
-        while (len(slim_clusters) > 1) and (counter < 100):
-            sav = np.array(
-                [
-                    int(np.sum(self.watershed_map == i)) / len(original_borders[i])
-                    for i in range(1, n_clusters)
-                ]
-            )
-            slim_clusters = np.where((sav < sav_threshold) & (sav > 0))[0] + 1
+        sav = np.array(
+            [
+                int(np.sum(self.watershed_map == i)) / len(original_borders[i])
+                for i in range(1, n_clusters)
+            ]
+        )
+        slim_clusters = np.where((sav < sav_threshold) & (sav > 0))[0] + 1
+        while (len(slim_clusters) > 0) and (counter < 100):
             smallest_cluster = slim_clusters[np.argmin(sav[slim_clusters - 1])]
             border_set = set(map(tuple, self.borders[smallest_cluster]))
             len_overlaps = [
@@ -650,14 +649,22 @@ class Watershed(GaussDensity):
                     self.borders[i] = measure.find_contours(
                         self.watershed_map.T == i, 0.5
                     )[0]
+
+            sav = np.array(
+                [
+                    int(np.sum(self.watershed_map == i)) / len(original_borders[i])
+                    for i in range(1, n_clusters)
+                ]
+            )
+            slim_clusters = np.where((sav < sav_threshold) & (sav > 0))[0] + 1
             counter += 1
 
         # Fixing cluster labels so that there are no skipped values
         self.borders = dict(sorted(self.borders.items()))
         border_keys = list(self.borders.keys())
         for i, k in enumerate(border_keys):
-            self.borders[i+1] = self.borders.pop(k)
-            self.watershed_map[self.watershed_map == k] = i+1
+            self.borders[i + 1] = self.borders.pop(k)
+            self.watershed_map[self.watershed_map == k] = i + 1
         return self
 
     def predict(self, data: Optional[Union[ds.DataStruct, npt.ArrayLike]] = None):

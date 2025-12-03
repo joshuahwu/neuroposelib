@@ -1,7 +1,3 @@
-# from neuroposelib.features import *
-# from neuroposelib import DataStruct as ds
-# from neuroposelib import visualization as vis
-# from neuroposelib import interface as itf
 import numpy as np
 from tqdm import tqdm
 from typing import Union, List, Optional
@@ -12,12 +8,42 @@ from sklearn.metrics import r2_score
 from sklearn.ensemble import RandomForestRegressor
 import seaborn as sns
 from neuroposelib.embed import Watershed
-# import faiss
 import time
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import dijkstra, minimum_spanning_tree
 from scipy.spatial import distance
 import numpy.typing as npt
+import pandas as pd
+
+def get_z_scores(freq, meta, groups):
+    cluster_list = list(np.arange(freq.shape[-1], dtype=int))#list(np.sort(freq_df.columns))
+    # if 0 in cluster_list:
+    #     cluster_list.pop(0)
+    freq_df = pd.DataFrame(freq)
+    freq_df.loc[:, 0] = 0
+    freq_df = pd.concat([meta.loc[:, groups], freq_df], axis=1)
+    # freq_df_BH = freq_df.loc[freq_df["Condition"].isin(["Baseline", "Habituation"]), :]
+    # groups = ["Merged_GroupID"]
+    meanz = (
+        freq_df[cluster_list + groups]
+        .groupby(groups)
+        .mean()
+    )
+    stdz = (
+        freq_df[cluster_list + groups]
+        .groupby(groups)
+        .std()
+    )
+    n_s = freq_df.groupby(groups).size().values
+    mean_diffs = np.array(meanz)[:, None, ...] - np.array(meanz)[None, ...]
+    std_diffs = np.sqrt(
+        np.array(stdz)[:, None, ...] ** 2 / n_s[:, None, None]
+        + np.array(stdz)[None, ...] ** 2 / n_s[None, :, None]
+    )
+    z_scores = mean_diffs / np.where(std_diffs == 0, 1, std_diffs)
+    labels = list(meanz.index)
+
+    return z_scores, labels
 
 # def get_nn_graph(X: npt.NDArray, k: int = 5, weighted: bool = True) -> csr_matrix:
 #     """Get nearest neighbor graph.
