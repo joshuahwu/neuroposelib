@@ -3,20 +3,38 @@ import numpy as np
 from typing import Union, Type, Optional, List
 import numpy.typing as npt
 
+def features_h5(
+    features: npt.ArrayLike,
+    labels: npt.ArrayLike,
+    path: str
+) -> None:
+    """Write features and feature labels to an HDF5 file.
 
-def features_h5(features: npt.ArrayLike, labels: npt.ArrayLike, path: str):
-    """Writes features and labels to `.h5` file.
+    This function creates an HDF5 file containing:
+      - a ``features`` dataset (2D array),
+      - a ``labels`` dataset storing variable-length UTF-8 strings.
 
     Parameters
     ----------
-    features : npt.ArrayLike
-        2D array of features (# frames, # features).
-    labels : npt.ArrayLike
-        List of labels for features in columns of features array.
+    features : ArrayLike
+        2D array of shape ``(n_frames, n_features)`` containing feature values.
+        The array is written directly with no dtype conversion.
+    labels : ArrayLike
+        A list/array of strings, one per feature column in ``features``.
     path : str
-        Path to file.
-    """
+        Output path of the HDF5 file to be written.
 
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    OSError
+        If the file cannot be created or written.
+    TypeError
+        If ``labels`` contains non-string elements that cannot be encoded.
+    """
     hf = h5py.File(path, "w")
     hf.create_dataset("features", data=features)
     str_dtype = h5py.special_dtype(vlen=str)
@@ -24,62 +42,40 @@ def features_h5(features: npt.ArrayLike, labels: npt.ArrayLike, path: str):
     hf.close()
     return
 
+def pose_h5(
+    pose: npt.ArrayLike,
+    ids: npt.ArrayLike,
+    path: str
+) -> None:
+    """Write pose data and per-frame IDs to an HDF5 file.
 
-def pose_h5(pose: npt.ArrayLike, ids: npt.ArrayLike, path: str):
-    """Writes poses to `.h5` file.
+    This function writes two datasets:
+      - ``pose``: a 3D array of shape ``(n_frames, n_keypoints, 3)``,
+      - ``ids``: a vector of frame-level identifiers (e.g., video id).
 
     Parameters
     ----------
-    pose : npt.ArrayLike
-        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
-    ids : npt.ArrayLike
-        Id label for each frame in pose, e.g. video id (# frames).
+    pose : ArrayLike
+        Array of 3D coordinates for each keypoint in each frame.
+        Expected shape ``(n_frames, n_keypoints, 3)``.
+    ids : ArrayLike
+        Per-frame identifier array of length ``n_frames``.
     path : str
-        Path to file.
+        Output path for the created `.h5` file.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    OSError
+        If the file cannot be opened or written.
+    ValueError
+        If ``pose`` and ``ids`` have incompatible lengths.
     """
     hf = h5py.File(path, "w")
     hf.create_dataset("pose", data=pose)
     hf.create_dataset("ids", data=ids)
     hf.close()
     return
-
-
-# def extended_features_h5(
-#     features: npt.ArrayLike,
-#     labels: List[str],
-#     ids: npt.ArrayLike,
-#     meta: npt.ArrayLike,
-#     clusters: npt.ArrayLike,
-#     path: str,
-# ):
-#     """
-#     DEPRECATING
-#     Write extended set of features, metadata, and clusters to `.h5` file.
-
-#     Parameters
-#     ----------
-#     features : npt.ArrayLike
-#         Feature array (# frames, # features)
-#     labels : List[str]
-#         _description_
-#     ids : npt.ArrayLike
-#         _description_
-#     meta : npt.ArrayLike
-#         _description_
-#     clusters : npt.ArrayLike
-#         _description_
-#     path : str
-#         _description_
-#     """
-#     hf = h5py.File(path, "w")
-#     hf.create_dataset("features", data=features)
-#     hf.create_dataset("labels", data=labels)
-#     hf.create_dataset("ids", data=ids)
-#     hf.create_dataset("clusters", data=clusters)
-
-#     if isinstance(meta[0], str):
-#         str_dtype = h5py.special_dtype(vlen=str)
-#         hf.create_dataset("meta", data=meta, dtype=str_dtype)
-#     else:
-#         hf.create_dataset("meta", data=meta)
-#     return
