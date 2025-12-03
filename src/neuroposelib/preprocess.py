@@ -18,7 +18,7 @@ def align_floor_by_id(
     """Due to the camera calibration, predictions may be rotated to different world coordinates.
     Rotate poses per-video so the fitted floor lies on the XY plane.
 
-    This function is a thin wrapper (decorated with [`neuroposelib.utils.by_id`][neuroposelib.utils.by_id]) that
+    This function is a thin wrapper (decorated with `neuroposelib.utils.by_id` that
     calls :func:`align_floor` for each video id. It is intended to be applied
     on a full dataset where frames are grouped by id by the decorator.
 
@@ -386,7 +386,7 @@ def rotate_spine(
 ) -> npt.NDArray[np.float_]:
     """Rotate poses so the spine-forward direction lies in the XZ plane.
 
-    The function expects poses to be centered (e.g. via [`center_spine`][neuroposelib.preprocess.center]).
+    The function expects poses to be centered (e.g. via [`center_spine`][neuroposelib.preprocess.center_spine]).
     It computes a yaw (and optionally pitch) rotation per-frame that aligns
     the specified forward vector into the XZ plane or locks it to the +X axis.
 

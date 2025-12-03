@@ -47,6 +47,7 @@ docs = [
     "mkdocs_literate_nav",
     "mkdocs-gallery",
     "mkdocs-macros-plugin",
+    "mkdocs-autorefs",
 ]
 
 [tool.setuptools_scm]
