@@ -19,7 +19,7 @@ def align_floor_by_id(
     Rotate poses per-video so the fitted floor lies on the XY plane.
 
     This function is a thin wrapper (decorated with `neuroposelib.utils.by_id` that
-    calls :func:`align_floor` for each video id. It is intended to be applied
+    calls `neuroposelib.preprocess.align_floor` for each video id. It is intended to be applied
     on a full dataset where frames are grouped by id by the decorator.
 
     Parameters
@@ -620,7 +620,7 @@ def inv_kin(
 
 def fwd_kin_cont6d(
     continuous_6D: npt.NDArray[np.float_],
-    kinematic_tree: Union[List, np.ndarray],
+    kinematic_tree: npt.ArrayLike,
     offset: npt.NDArray[np.float_],
     root_pos: npt.NDArray[np.float_],
     do_root_R: bool = True,
@@ -635,7 +635,7 @@ def fwd_kin_cont6d(
     ----------
     continuous_6D : np.ndarray
         Array of continuous 6D rotations with shape ``(batch_size, n_joints, 6)``.
-    kinematic_tree : list or np.ndarray
+    kinematic_tree : array-like
         Kinematic chains as used by `inv_kin`.
     offset : np.ndarray
         Rest offsets per joint (``(n_joints, 3)``) or batched offsets.
