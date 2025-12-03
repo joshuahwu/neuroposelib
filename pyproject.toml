@@ -41,13 +41,15 @@ build-backend = "setuptools.build_meta"
 [project.optional-dependencies]
 docs = [
     "mkdocs",
+    "mkdocs-material",
     "mkdocstrings[python]",
-    "mkdocs_section_index",
-    "mkdocs_gen_files",
-    "mkdocs_literate_nav",
-    "mkdocs-gallery",
-    "mkdocs-macros-plugin",
+    "mkdocs-gen-files",
+    "mkdocs-literate-nav",
+    "mkdocs-section-index",
     "mkdocs-autorefs",
+    "pymdown-extensions",
+    "mkdocs-gallery",
+    "mkdocs-macros-plugin"
 ]
 
 [tool.setuptools_scm]
