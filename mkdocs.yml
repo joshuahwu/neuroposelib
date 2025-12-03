@@ -18,7 +18,7 @@ plugins:
             options:                   # configuration of options for the Python handler
               docstring_style: numpy   # style of docstrings (convention followed)
               show_source: true        # include a link to the source code
-              show_members: source     # configures the order in which members (methods, attributes, etc.) are displayed.
+              members_order: source     # configures the order in which members (methods, attributes, etc.) are displayed.
               docstring_section_style: list # If set to 'source', it means the order in the source code will be maintained.
     - gen-files:
         scripts:
