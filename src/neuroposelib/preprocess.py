@@ -636,7 +636,7 @@ def fwd_kin_cont6d(
     continuous_6D : np.ndarray
         Array of continuous 6D rotations with shape ``(batch_size, n_joints, 6)``.
     kinematic_tree : list or np.ndarray
-        Kinematic chains as used by :func:`inv_kin`.
+        Kinematic chains as used by `inv_kin`.
     offset : np.ndarray
         Rest offsets per joint (``(n_joints, 3)``) or batched offsets.
     root_pos : np.ndarray
