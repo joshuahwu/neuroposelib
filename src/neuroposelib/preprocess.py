@@ -18,7 +18,7 @@ def align_floor_by_id(
     """Due to the camera calibration, predictions may be rotated to different world coordinates.
     Rotate poses per-video so the fitted floor lies on the XY plane.
 
-    This function is a thin wrapper (decorated with :func:`by_id`) that
+    This function is a thin wrapper (decorated with [`neuroposelib.utils.by_id`][neuroposelib.utils.by_id]) that
     calls :func:`align_floor` for each video id. It is intended to be applied
     on a full dataset where frames are grouped by id by the decorator.
 
@@ -51,7 +51,7 @@ def align_floor_by_id(
     -----
     The function relies on :func:`align_floor` to perform the actual
     computations; this wrapper exists so the operation can be applied per-id
-    when used with the :func:`by_id` decorator.
+    when used with the [`neuroposelib.utils.by_id`][neuroposelib.utils.by_id] decorator.
     """
     return align_floor(pose=pose, foot_id=foot_id, head_id=head_id, dtype=dtype)
 
@@ -160,7 +160,7 @@ def vel_filter(
 
     This function computes a per-frame velocity signal and, for frames that
     exceed ``threshold``, replaces the pose with values interpolated from the
-    non-erroneous frames using :class:`scipy.interpolate.CubicSpline`.
+    non-erroneous frames using [`scipy.interpolate.CubicSpline`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.CubicSpline.html).
 
     Parameters
     ----------
@@ -186,8 +186,8 @@ def vel_filter(
 
     Notes
     -----
-    The function uses :func:`get_frame_diff` to compute per-frame differences
-    and :class:`tqdm` for a progress bar over unique ``exp_id`` values.
+    The function uses [`neuroposelib.utils.get_frame_diff`][neuropopselib.utils.get_frame_diff] to compute per-frame differences
+    and [`tqdm`](https://tqdm.github.io/) for a progress bar over unique ``exp_id`` values.
     """
     print("Completing cubic spline interpolation based on velocity")
     for _, i in enumerate(tqdm(np.unique(exp_id))):
@@ -386,7 +386,7 @@ def rotate_spine(
 ) -> npt.NDArray[np.float_]:
     """Rotate poses so the spine-forward direction lies in the XZ plane.
 
-    The function expects poses to be centered (e.g. via :func:`center_spine`).
+    The function expects poses to be centered (e.g. via [`center_spine`][neuroposelib.preprocess.center]).
     It computes a yaw (and optionally pitch) rotation per-frame that aligns
     the specified forward vector into the XZ plane or locks it to the +X axis.
 

@@ -145,7 +145,7 @@ def _features_mat(
     Behavior
     --------
     - Loads ``jt_features`` and ``frames_with_good_tracking`` from an analysis
-      MATLAB struct (via :mod:`hdf5storage`).
+      MATLAB struct (via [`hdf5storage`](https://pypi.org/project/hdf5storage/)).
     - Loads experiment ids (``exp_key``) from the predictions MATLAB file.
     - Optionally downsamples frames and features by ``downsample``.
 
