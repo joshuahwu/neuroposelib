@@ -18,8 +18,8 @@ def align_floor_by_id(
     """Due to the camera calibration, predictions may be rotated to different world coordinates.
     Rotate poses per-video so the fitted floor lies on the XY plane.
 
-    This function is a thin wrapper (decorated with `neuroposelib.utils.by_id` that
-    calls `neuroposelib.preprocess.align_floor` for each video id. It is intended to be applied
+    This function is a thin wrapper (decorated with [`neuroposelib.utils.by_id`][neuroposelib.utils.by_id] that
+    calls [`align_floor`][neuroposelib.preprocess.align_floor] for each video id. It is intended to be applied
     on a full dataset where frames are grouped by id by the decorator.
 
     Parameters
@@ -49,7 +49,7 @@ def align_floor_by_id(
 
     Notes
     -----
-    The function relies on :func:`align_floor` to perform the actual
+    The function relies on [`align_floor`][neuroposelib.preprocess.align_floor] to perform the actual
     computations; this wrapper exists so the operation can be applied per-id
     when used with the [`neuroposelib.utils.by_id`][neuroposelib.utils.by_id] decorator.
     """
