@@ -186,7 +186,7 @@ def vel_filter(
 
     Notes
     -----
-    The function uses [`neuroposelib.utils.get_frame_diff`][neuropopselib.utils.get_frame_diff] to compute per-frame differences
+    The function uses [`neuroposelib.utils.get_frame_diff`][neuroposelib.utils.get_frame_diff] to compute per-frame differences
     and [`tqdm`](https://tqdm.github.io/) for a progress bar over unique ``exp_id`` values.
     """
     print("Completing cubic spline interpolation based on velocity")

@@ -2,7 +2,7 @@ import functools
 import numpy as np
 import time
 from neuroposelib import DataStruct as ds
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Tuple, Any
 import numpy.typing as npt
 import tqdm
 from scipy.ndimage import gaussian_filter
@@ -12,6 +12,39 @@ import pickle
 
 
 class Embed:
+    """
+    Base class to compute and apply low-dimensional embeddings (t-SNE / UMAP).
+
+    Parameters
+    ----------
+    n_neighbors : int
+        Default number of neighbors for neighbor-based embedders.
+    embed_method : str
+        Embedding algorithm to use for template construction (e.g. "fitsne", "umap").
+    transform_method : str
+        Method used to transform new data into the template embedding (e.g. "knn", "umap").
+    min_dist : float
+        UMAP `min_dist` parameter (only used when `embed_method="umap"`).
+    spread : float
+        UMAP `spread` parameter (only used when `embed_method="umap"`).
+    n_iter : int
+        Number of iterations for iterative embedders.
+    perplexity : int or str
+        t-SNE perplexity. Accepts "auto" or an int.
+    lr : float or str
+        Learning rate for t-SNE. Accepts "auto" or a float.
+    k : int
+        Default k for KNN-based transforms.
+    n_trees : int
+        Default number of trees for ensemble regressors (e.g. random forest).
+    embedder : object or None
+        If an external embedder object (UMAP etc.) is available, it can be stored here.
+    template : array-like, shape (n_template_samples, n_features) or None
+        Template high-dimensional data used to build the low-dimensional template.
+    temp_embedding : array-like, shape (n_template_samples, n_components) or None
+        Low-dimensional embedding of `template`.
+    """
+
     def __init__(
         self,
         n_neighbors: int = 150,
@@ -24,10 +57,10 @@ class Embed:
         lr: Union[str, float] = "auto",
         k: int = 5,
         n_trees: int = 100,
-        embedder=None,
-        template=None,
-        temp_embedding=None,
-    ):
+        embedder: Any = None,
+        template: Optional[npt.ArrayLike] = None,
+        temp_embedding: Optional[npt.ArrayLike] = None,
+    ) -> None:
         self.n_neighbors = n_neighbors
 
         self.min_dist = min_dist
@@ -58,14 +91,44 @@ class Embed:
         spread: Optional[float] = None,
         method: Optional[str] = None,
         save_self: bool = True,
-    ):
+    ) -> npt.NDArray[Any]:
         """
-        Calculate t-SNE embedding of template values
+        Calculate a low-dimensional embedding of `features` using the configured
+        embedding method.
+
+        Parameters
+        ----------
+        features : array-like, shape (n_samples, n_features), optional
+            Feature matrix to embed. If None, `self.template` will be used.
+        n_iter : int, optional
+            Number of iterations (overrides instance default if provided).
+        n_neighbors : int, optional
+            Number of neighbors (overrides instance default if provided).
+        perplexity : int or str, optional
+            t-SNE perplexity override ("auto" or int).
+        lr : float or str, optional
+            Learning rate override ("auto" or float).
+        min_dist : float, optional
+            UMAP min_dist override.
+        spread : float, optional
+            UMAP spread override.
+        method : str, optional
+            Embedding method to use for this call. If None, instance `embed_method`
+            is used. Supported: "fitsne", "umap".
+        save_self : bool, default True
+            If True, save the template and resulting embedding to the instance.
+
+        Returns
+        -------
+        embed_vals : ndarray, shape (n_samples, n_components)
+            2D embedding of the input features.
         """
         if features is None:
+            if self.template is None:
+                raise ValueError("No features provided and self.template is None.")
             features = self.template
 
-        self._n = features.shape[0]
+        self._n = np.asarray(features).shape[0]
         if not n_neighbors:
             n_neighbors = self.n_neighbors
         if not method:
@@ -81,23 +144,6 @@ class Embed:
         if not perplexity:
             perplexity = self.perplexity
 
-        # if method == "tsne_cuda":
-        #     print("Running CUDA tSNE")
-
-        # if lr == "auto":
-        #     lr = int(features.shape[0] / 12)
-
-        # if perplexity == "auto":
-        #     perplexity = max(int(features.shape[0] / 100), 30)
-
-        # tsne = tc.TSNE(
-        #     n_iter=n_iter,
-        #     verbose=2,
-        #     num_neighbors=n_neighbors,
-        #     perplexity=perplexity,
-        #     learning_rate=lr,
-        # )
-        # embed_vals = tsne.fit_transform(features)
         if method == "fitsne":
             print("Running fitsne via openTSNE")
             import openTSNE
@@ -117,7 +163,7 @@ class Embed:
                 assert isinstance(perplexity, int)
                 tsne = partial_tsne(perplexity=perplexity)
             embed_vals = np.array(
-                tsne.fit(features.astype(np.float64)), dtype=features.dtype
+                tsne.fit(np.asarray(features, dtype=np.float64)), dtype=np.asarray(features).dtype
             )
 
         elif method == "umap":
@@ -127,17 +173,17 @@ class Embed:
             embedder = umap.UMAP(
                 n_neighbors=n_neighbors, spread=spread, min_dist=min_dist, verbose=True
             )
-            embed_vals = embedder.fit_transform(features).astype(features.dtype)
+            embed_vals = embedder.fit_transform(np.asarray(features)).astype(np.asarray(features).dtype)
             if save_self:
                 self.embedder = embedder
         else:
             raise ValueError(f"Unexpected method {method}")
 
         if save_self:
-            self.template = features
-            self.temp_embedding = embed_vals
+            self.template = np.asarray(features)
+            self.temp_embedding = np.asarray(embed_vals)
 
-        return embed_vals
+        return np.asarray(embed_vals)
 
     def predict(
         self,
@@ -147,14 +193,31 @@ class Embed:
         k: Optional[int] = None,
         template: Optional[npt.ArrayLike] = None,
         temp_embedding: Optional[npt.ArrayLike] = None,
-    ):
+    ) -> npt.NDArray[Any]:
         """
-        Uses prediction method to embed points onto template
+        Project `data` into the low-dimensional template space using the chosen
+        transform method.
 
-        IN:
-            data - n_frames x n_features
-        OUT:
-            embed_vals - KNN reembedded values
+        Parameters
+        ----------
+        data : array-like, shape (n_samples, n_features) or DataStruct
+            High-dimensional data to embed.
+        transform_method : str, optional
+            Transform method to use. If None, uses the instance `transform_method`.
+            Supported: "umap", "knn", "sklearn_rf".
+        n_trees : int, optional
+            Number of trees/estimators for tree-based regressors (if applicable).
+        k : int, optional
+            k for KNN-based transforms.
+        template : array-like, shape (n_template_samples, n_features), optional
+            High-dimensional template data. If None, uses `self.template`.
+        temp_embedding : array-like, shape (n_template_samples, n_components), optional
+            Low-dimensional embedding of `template`. If None, uses `self.temp_embedding`.
+
+        Returns
+        -------
+        embed_vals : ndarray, shape (n_samples, n_components)
+            Low-dimensional embedding for `data`.
         """
         if transform_method is None:
             transform_method = self.transform_method
@@ -170,39 +233,48 @@ class Embed:
         start = time.time()
         if transform_method == "umap":
             print("Predicting using UMAP")
+            if self.embedder is None:
+                raise ValueError("embedder is not set for UMAP transform.")
             embed_vals = self.embedder.transform(data)
 
         elif transform_method == "knn":
             print("Predicting using KNN")
             raise NotImplementedError
-            # print(k)
-            # knn = KNNEmbed(k=k).fit(template, temp_embedding)
-            # embed_vals = knn.predict_x(data, weights="distance")
-
-        # elif transform_method == "xgboost":
-        #     import xgboost as xgb
-
-        #     print("Predicting using XGBoost RF")
-        #     print(n_trees)
-        #     embed_vals = np.zeros((np.shape(data)[0], 2))
-        #     for i in range(2):
-        #         embed = xgb.XGBRFRegressor(n_estimators=n_trees, verbosity=2).fit(
-        #             template, temp_embedding[:, i]
-        #         )
-        #         embed_vals[:, i] = embed.predict(data)
 
         elif transform_method == "sklearn_rf":
             from sklearn.ensemble import RandomForestRegressor
 
             rf_embed = RandomForestRegressor(n_estimators=n_trees, n_jobs=-1)
-            rf_embed = rf_embed.fit(template, temp_embedding)
-            embed_vals = rf_embed.predict(data)
+            rf_embed = rf_embed.fit(np.asarray(template), np.asarray(temp_embedding))
+            embed_vals = rf_embed.predict(np.asarray(data))
+
+        else:
+            raise ValueError(f"Unknown transform_method: {transform_method}")
 
         print("Total Time embedding: ", time.time() - start)
-        return embed_vals
+        return np.asarray(embed_vals)
 
 
 class BatchEmbed(Embed):
+    """
+    Batch-based template construction.
+
+    This class repeatedly embeds batches of data, computes dense regions using
+    a watershed on a Gaussian density map, and samples representative points from
+    each discovered cluster to assemble a global template for a final embedding.
+
+    Parameters
+    ----------
+    sampling_n : int
+        Number of points to sample per cluster for the global template.
+    sigma : int
+        Gaussian smoothing sigma used when computing density maps.
+    batch_method : str
+        Embedding method used to embed each batch (e.g. "fitsne", "umap").
+    Other parameters
+        Inherited from :class:`Embed`.
+    """
+
     def __init__(
         self,
         sampling_n: int = 20,
@@ -218,14 +290,16 @@ class BatchEmbed(Embed):
         lr: Union[str, int] = "auto",
         k: int = 5,
         n_trees: int = 100,
-        embedder=None,
-        template=None,
-        temp_idx=[],
-        temp_embedding=None,
-    ):
+        embedder: Any = None,
+        template: Optional[npt.ArrayLike] = None,
+        temp_idx: Optional[List[int]] = None,
+        temp_embedding: Optional[npt.ArrayLike] = None,
+    ) -> None:
         """
+        Notes
+        -----
         t-SNE parameters here are used in the embedding of batches,
-        not for the final template itself
+        not for the final template itself.
         """
         super().__init__(
             n_neighbors=n_neighbors,
@@ -245,29 +319,40 @@ class BatchEmbed(Embed):
         self.sampling_n = sampling_n
         self.sigma = sigma
         self.batch_method = batch_method
-        self.temp_idx = temp_idx
+        self.temp_idx = [] if temp_idx is None else temp_idx
 
     def fit(
         self,
         data: Union[npt.ArrayLike, ds.DataStruct],
         batch_id: Optional[Union[npt.ArrayLike, List[Union[int, str]]]] = None,
-        # save_batchmaps: Optional[str] = None,
         embed_temp: bool = True,
-    ):
-        """ """
-        # if save_batchmaps:
-        #     import visualization as vis
+    ) -> "BatchEmbed":
+        """
+        Build a template by embedding each batch and sampling cluster representatives.
 
-        #     save_path = "".join([save_batchmaps, "/batch_maps/"])
-        #     if not os.path.exists(save_path):
-        #         os.makedirs(save_path)
+        Parameters
+        ----------
+        data : array-like, shape (n_frames, n_features)
+            Full dataset to sample batches from.
+        batch_id : array-like, shape (n_frames,), optional
+            Array indicating batch membership for each row in `data`.
+        embed_temp : bool, default True
+            If True, embed the assembled template into low-dimensional space and save it.
 
-        #     filename = "".join([save_path, self.embed_method])
-
-        self.template = np.empty((0, data.shape[1]))
+        Returns
+        -------
+        self : BatchEmbed
+            The fitted BatchEmbed instance (with `self.template` and `self.temp_idx` populated).
+        """
+        self.template = np.empty((0, np.asarray(data).shape[1]))
         self.temp_idx = []
-        for batch in tqdm.tqdm(np.unique(batch_id)):
-            data_by_ID = data[batch_id == batch, :]  # Subsetting data by batch
+        if batch_id is None:
+            unique_batches = np.unique(np.zeros(np.asarray(data).shape[0], dtype=int))
+        else:
+            unique_batches = np.unique(batch_id)
+
+        for batch in tqdm.tqdm(unique_batches):
+            data_by_ID = np.asarray(data)[np.asarray(batch_id) == batch, :]  # Subsetting data by batch
 
             embed_vals = self.embed(
                 data_by_ID, method=self.batch_method, save_self=False
@@ -278,20 +363,16 @@ class BatchEmbed(Embed):
             )
             cluster_labels = ws.fit_predict(embed_vals)
 
-            # if save_batchmaps:
-            #     ws.plot_density(
-            #         filepath="".join([filename, str(batch), "_density.png"]),
-            #         watershed=True,
-            #     )
-            #     vis.scatter(
-            #         embed_vals, filepath="".join([filename, str(batch), "_scatter.png"])
-            #     )
-
             sampled_points, idx = self.__sample_clusters(
                 data_by_ID, cluster_labels, sample_size=self.sampling_n
             )
 
-            idx = np.nonzero(batch_id == batch)[0][idx]
+            if batch_id is None:
+                # fallback indexing when batch_id is None
+                idx = np.array(idx)
+            else:
+                idx = np.nonzero(np.asarray(batch_id) == batch)[0][idx]
+
             self.template = np.append(self.template, sampled_points, axis=0)
             self.temp_idx += list(idx)
 
@@ -305,41 +386,65 @@ class BatchEmbed(Embed):
         data: Union[npt.ArrayLike, ds.DataStruct],
         batch_id: Optional[Union[npt.ArrayLike, List[Union[int, str]]]] = None,
         save_batchmaps: Optional[str] = None,
-    ):
+    ) -> npt.NDArray[Any]:
+        """
+        Convenience method: run `fit` then predict embeddings for `data`.
+
+        Parameters
+        ----------
+        data : array-like, shape (n_frames, n_features)
+            Full dataset to embed.
+        batch_id : array-like, shape (n_frames,), optional
+            Batch membership array.
+        save_batchmaps : str, optional
+            Path prefix to save batch maps (not currently used).
+
+        Returns
+        -------
+        embed_vals : ndarray, shape (n_samples, n_components)
+            Low-dimensional embedding for `data`.
+        """
         self.fit(
-            data=data, batch_id=batch_id, save_batchmaps=save_batchmaps, embed_temp=True
+            data=data, batch_id=batch_id, embed_temp=True
         )
         embed_vals = self.predict(data)
 
-        return embed_vals
+        return np.asarray(embed_vals)
 
     def __sample_clusters(
         self,
-        data,
+        data: npt.ArrayLike,
         meta_name: Union[npt.ArrayLike, List[Union[int, str]]],
         sample_size: int = 20,
-    ):
+    ) -> Tuple[npt.NDArray[Any], List[int]]:
         """
-        Equally sampling points from
-        IN:
-            data - All of the data in dataset (may be downsampled)
-            meta_name - Cluster number for each point in `data`
-            sample_size - Number of points to sample from a cluster
-        OUT:
-            sampled_points - Values of sampled points from `data`
-            idx - Index in `data` of sampled points
+        Equally sample points from each cluster.
+
+        Parameters
+        ----------
+        data : array-like, shape (n_points, n_features)
+            Data to sample from.
+        meta_name : array-like, shape (n_points,)
+            Cluster label for each point in `data`.
+        sample_size : int, default 20
+            Number of points to sample from each cluster.
+
+        Returns
+        -------
+        sampled_points : ndarray, shape (m, n_features)
+            Array of sampled points where m is the total number of sampled points.
+        idx : list of int
+            Indices (in `data`) for the sampled points.
         """
         data = np.append(
-            data, np.expand_dims(np.arange(np.shape(data)[0]), axis=1), axis=1
+            np.asarray(data), np.expand_dims(np.arange(np.shape(data)[0]), axis=1), axis=1
         )
         sampled_points = np.empty((0, np.shape(data)[1]))
         for meta_id in np.unique(meta_name):
-            points = data[meta_name == meta_id, :]
+            points = data[np.asarray(meta_name) == meta_id, :]
             if len(points) < sample_size:
                 # If fewer points, just skip (probably artifactual cluster)
                 continue
-                # sampled_idx = np.random.choice(np.arange(len(points)), size=size, replace=True)
-                # sampled_points = np.append(sampled_points, points[sampled_idx,:], axis=0)
             else:
                 num_points = min(len(points), sample_size)
                 sampled_points = np.append(
@@ -352,15 +457,45 @@ class BatchEmbed(Embed):
             np.squeeze(sampled_points[:, -1]).astype(int).tolist(),
         )
 
-    def save_pickle(self, filepath: str = "./plot_folder/"):
+    def save_pickle(self, filepath: str = "./plot_folder/") -> "BatchEmbed":
+        """
+        Save this BatchEmbed instance to a pickle file.
+
+        Parameters
+        ----------
+        filepath : str, default "./plot_folder/"
+            Directory or prefix to write the pickle file; file will be saved as
+            `<filepath>batch_embed.p`.
+
+        Returns
+        -------
+        self : BatchEmbed
+            The same instance (for chaining).
+        """
         pickle.dump(self, open("".join([filepath, "batch_embed.p"]), "wb"))
         return self
 
-    def load_pickle(self, filepath: str = "./plot_folder/batch_embed.p"):
-        self = pickle.load(open(filepath, "rb"))
+    def load_pickle(self, filepath: str = "./plot_folder/batch_embed.p") -> "BatchEmbed":
+        """
+        Load a BatchEmbed instance from a pickle file.
+
+        Parameters
+        ----------
+        filepath : str, default "./plot_folder/batch_embed.p"
+            Path to pickle file.
+
+        Returns
+        -------
+        BatchEmbed
+            Loaded BatchEmbed instance.
+        """
+        loaded = pickle.load(open(filepath, "rb"))
+        if not isinstance(loaded, BatchEmbed):
+            raise TypeError("Loaded pickle is not a BatchEmbed object.")
+        
+        self = loaded
         return self
-
-
+    
 # class KNNGraph:
 #     """
 #     Using faiss to run k-Nearest Neighbors algorithm
@@ -426,7 +561,20 @@ class BatchEmbed(Embed):
 
 class GaussDensity:
     """
-    Class for creating Gaussian density maps of 2D scatter data
+    Class to create Gaussian-smoothed density maps from 2D point clouds.
+
+    Parameters
+    ----------
+    sigma : int
+        Standard deviation for Gaussian smoothing (in histogram-bin units).
+    n_bins : int
+        Number of bins along each axis for the 2D histogram.
+    max_clip : float
+        Fraction of the maximum density to clip values to for visualization.
+    log_out : bool
+        If True, apply log1p to the smoothed density output.
+    pad_factor : float
+        Fractional padding applied to histogram range.
     """
 
     def __init__(
@@ -436,7 +584,7 @@ class GaussDensity:
         max_clip: float = 1,
         log_out: bool = False,
         pad_factor: float = 0.025,
-    ):
+    ) -> None:
         self.sigma = sigma
         self.n_bins = n_bins
         self.max_clip = max_clip
@@ -444,22 +592,31 @@ class GaussDensity:
         self.pad_factor = pad_factor
 
         # [[xmin, xmax], [ymin, ymax]]
-        self.hist_range = None
+        self.hist_range: Optional[List[List[float]]] = None
 
         # TODO: More consideration for when these save
-        self.density = None
-        self.data_in_bin = None
+        self.density: Optional[npt.NDArray[np.float64]] = None
+        self.data_in_bin: Optional[npt.NDArray[np.int_]] = None
+        self.xedges: Optional[npt.NDArray[Any]] = None
+        self.yedges: Optional[npt.NDArray[Any]] = None
 
-    def hist(self, data: npt.ArrayLike, new: bool = True):
+    def hist(self, data: npt.ArrayLike, new: bool = True) -> npt.NDArray[np.float64]:
         """
-        Run 2D histogram
+        Run a 2D histogram on `data`.
 
-        IN:
-            data - Data to convert to density map (n_frames x 2)
-            new - Map onto old hist range and bins if False
-        OUT:
-            hist - Calculated 2d histogram  (n_bins x n_bins)
+        Parameters
+        ----------
+        data : array-like, shape (n_points, 2)
+            XY coordinates to histogram.
+        new : bool, default True
+            If False, reuse existing histogram range and bins.
+
+        Returns
+        -------
+        hist : ndarray, shape (n_bins, n_bins)
+            2D histogram (rotated) of the input points.
         """
+        data = np.asarray(data)
         range_len = (
             np.ceil(np.amax(data, axis=0)) - np.floor(np.amin(data, axis=0))
         ).astype(int)
@@ -484,18 +641,27 @@ class GaussDensity:
 
         assert (self.xedges[0] < self.xedges[-1]) and (self.yedges[0] < self.yedges[1])
 
-        return hist
+        return hist.astype(np.float64)
 
-    def fit_density(self, data: npt.ArrayLike, new: bool = True, map_bin: bool = True):
+    def fit_density(self, data: npt.ArrayLike, new: bool = True, map_bin: bool = True) -> npt.NDArray[np.float64]:
         """
-        Calculate Gaussian density for 2D embedding
+        Calculate Gaussian density for 2D embedding.
 
-        IN:
-            data - Data to convert to density map (n_frames x 2)
-            new - Map onto old hist range and bins if False
-        OUT:
-            density - Calculated density map (n_bins x n_bins)
+        Parameters
+        ----------
+        data : array-like, shape (n_points, 2)
+            2D points.
+        new : bool, default True
+            If True, compute histogram ranges anew.
+        map_bin : bool, default True
+            If True, compute and store `self.data_in_bin` mapping points to bins.
+
+        Returns
+        -------
+        density : ndarray, shape (n_bins, n_bins)
+            Smoothed density map.
         """
+        data = np.asarray(data)
         # 2D histogram
         hist = self.hist(data, new)
 
@@ -513,20 +679,27 @@ class GaussDensity:
             self.data_in_bin = self.map_bins(data)
 
         if new:
-            self.density = density
+            self.density = density.astype(np.float64)
 
-        return density
+        return density.astype(np.float64)
 
-    def map_bins(self, data: npt.ArrayLike):
+    def map_bins(self, data: npt.ArrayLike) -> npt.NDArray[np.int_]:
         """
-        Find which bin in histogram/density map each data point is a part of
-        IN:
-            edges: self.xedges and self.yedges must be calculated from np.histogram (represents edge values of bins)
-            data: Data to be transformed
-        OUT:
-            data_in_bin: Indices (returns n_frames x 2) of data in density map (shape n_bins x n_bins)
+        Map each 2D point to the corresponding histogram bin indices.
+
+        Parameters
+        ----------
+        data : array-like, shape (n_points, 2)
+            2D points to map.
+
+        Returns
+        -------
+        data_in_bin : ndarray of int, shape (n_points, 2)
+            Array of (row, col) bin indices into density/histogram arrays.
         """
-        if self.xedges is None:
+        data = np.asarray(data)
+
+        if getattr(self, "xedges", None) is None:
             print("Could not find histogram, computing now")
             self.density = None
             self.hist(data, new=True)
@@ -535,19 +708,15 @@ class GaussDensity:
 
         data_in_bin = np.zeros(np.shape(data), dtype)
 
-        # This is actually slower
-        # data_in_bin[:,1] = np.argmax(self.xedges>np.repeat(data[:,0][:,None],len(self.xedges),axis=1),axis=1)-1
-        # data_in_bin[:,0] = self.n_bins-np.argmax(self.yedges>np.repeat(data[:,1][:,None],len(self.yedges),axis=1),axis=1)-1
-
         for i in range(data_in_bin.shape[0]):
             data_in_bin[i, 1] = (
                 np.argmax(self.xedges > data[i, 0]) - 1
-            )  # ,0,self.n_bins-1
+            )
             data_in_bin[i, 0] = (
                 self.n_bins - np.argmax(self.yedges > data[i, 1]) - 1
-            )  # ,0,self.n_bins-1)
+            )
 
-        return data_in_bin
+        return data_in_bin.astype(np.int_)
 
     # def plot_density(self, filepath: str = "./plot_folder/density.png"):
     #     f = plt.figure()
@@ -559,6 +728,24 @@ class GaussDensity:
 
 
 class Watershed(GaussDensity):
+    """
+    Watershed-based clustering on Gaussian density maps.
+
+    Parameters
+    ----------
+    sigma : int
+        Gaussian smoothing sigma (in histogram-bin units).
+    n_bins : int
+        Number of histogram bins per axis.
+    max_clip : float
+        Clip fraction for density values.
+    log_out : bool
+        Whether to apply log1p to the smoothed density.
+    pad_factor : float
+        Padding fraction when computing histogram ranges.
+    density_thresh : float
+        Threshold used to define mask for watershed (before internal normalization).
+    """
 
     def __init__(
         self,
@@ -568,7 +755,7 @@ class Watershed(GaussDensity):
         log_out: bool = False,
         pad_factor: float = 0.025,
         density_thresh: float = 17,
-    ):
+    ) -> None:
         super().__init__(
             sigma=sigma,
             n_bins=n_bins,
@@ -578,18 +765,26 @@ class Watershed(GaussDensity):
         )
         self.density_thresh = density_thresh / (n_bins**2)
 
-        self.watershed_map = None
-        self.borders = None
+        self.watershed_map: Optional[npt.NDArray[Any]] = None
+        self.borders: Optional[dict] = None
 
         self.density = None  # TODO: Consider more when this saves and doesn't
 
-    def fit(self, data: npt.ArrayLike, sav_threshold: Optional[float] = 0):
+    def fit(self, data: npt.ArrayLike, sav_threshold: Optional[float] = 0) -> "Watershed":
         """
-        Running watershed clustering on data
-        IN:
-            data - ds.DataStruct object or numpy array (frames x 2) of t-SNE coordinates
-        OUT:
-            self.density
+        Run watershed segmentation on the smoothed density map computed from `data`.
+
+        Parameters
+        ----------
+        data : array-like, shape (n_points, 2)
+            2D points to compute watershed over.
+        sav_threshold : float, optional
+            If >0, run `merge_clusters` step using this threshold.
+
+        Returns
+        -------
+        self : Watershed
+            The fitted Watershed instance with `watershed_map` and `borders` set.
         """
         from skimage.segmentation import watershed
 
@@ -600,22 +795,34 @@ class Watershed(GaussDensity):
             -self.density, mask=self.density > self.density_thresh, watershed_line=False
         )
         self.watershed_map[self.density < self.density_thresh] = 0
-        self.borders = {}  # np.empty((0, 2), dtype=data.dtype)
-        for i in range(1, self.watershed_map.max() + 1):
-            self.borders[i] = measure.find_contours(self.watershed_map.T == i, 0.5)[0]
-            # self.borders[i] = np.append(self.borders, contour, axis=0)
+        self.borders = {}
+        for i in range(1, int(self.watershed_map.max()) + 1):
+            # measure.find_contours returns a list; we take first contour found
+            contours = measure.find_contours(self.watershed_map.T == i, 0.5)
+            self.borders[i] = contours[0] if len(contours) > 0 else np.empty((0, 2))
 
         if sav_threshold > 0:
             self.merge_clusters(sav_threshold=sav_threshold)
 
         return self
 
-    def merge_clusters(self, sav_threshold: float):
+    def merge_clusters(self, sav_threshold: float) -> "Watershed":
+        """
+        Merge thin / skinny clusters based on SAV (size / border-length) metric.
 
+        Parameters
+        ----------
+        sav_threshold : float
+            Threshold under which clusters are considered 'thin' and will be merged.
+
+        Returns
+        -------
+        self : Watershed
+            Updated Watershed instance with merged clusters.
+        """
         print("Merging thin clusters ...")
         original_borders = self.borders.copy()
-        n_clusters = self.watershed_map.max() + 1
-        # slim_clusters = [0, 0]  # placeholder with len>1
+        n_clusters = int(self.watershed_map.max()) + 1
         counter = 0
         sav = np.array(
             [
@@ -646,9 +853,8 @@ class Watershed(GaussDensity):
             for i in range(1, n_clusters):
                 bool_map = self.watershed_map.T == i
                 if bool_map.sum() > 0:
-                    self.borders[i] = measure.find_contours(
-                        self.watershed_map.T == i, 0.5
-                    )[0]
+                    contours = measure.find_contours(self.watershed_map.T == i, 0.5)
+                    self.borders[i] = contours[0] if len(contours) > 0 else np.empty((0, 2))
 
             sav = np.array(
                 [
@@ -667,17 +873,21 @@ class Watershed(GaussDensity):
             self.watershed_map[self.watershed_map == k] = i + 1
         return self
 
-    def predict(self, data: Optional[Union[ds.DataStruct, npt.ArrayLike]] = None):
+    def predict(self, data: Union[ds.DataStruct, npt.ArrayLike]) -> npt.NDArray[np.int_]:
         """
-        Predicts the cluster label of data
+        Predict cluster labels for `data` using the previously computed watershed map.
 
-        Requires knowledge of what bin data is in in the histogram/density map
+        Parameters
+        ----------
+        data : array-like, shape (n_points, 2)
+            2D coordinates to label.
 
-        IN:
-            data - XY coordinates of data to be predicted
-        OUT:
-            cluster_labels - cluster labels of all data
+        Returns
+        -------
+        cluster_labels : ndarray of int, shape (n_points,)
+            Integer cluster label for each input point.
         """
+        data = np.asarray(data)
         dtype = np.int32 if data.dtype == np.float32 else int
         data_in_bin = self.map_bins(data)
 
@@ -688,13 +898,28 @@ class Watershed(GaussDensity):
         print(str(np.unique(cluster_labels).shape), "unique clusters detected")
         print(np.unique(cluster_labels))
 
-        return cluster_labels
+        return np.asarray(cluster_labels).astype(np.int_)
 
     def fit_predict(
         self,
         data: Optional[Union[ds.DataStruct, npt.ArrayLike]] = None,
         sav_threshold: Optional[float] = 0,
-    ):
+    ) -> npt.NDArray[np.int_]:
+        """
+        Fit watershed on `data` then predict cluster labels for the same `data`.
+
+        Parameters
+        ----------
+        data : array-like, shape (n_points, 2)
+            2D points to cluster.
+        sav_threshold : float, optional
+            SAV threshold used in merging step.
+
+        Returns
+        -------
+        cluster_labels : ndarray of int, shape (n_points,)
+            Integer cluster labels for each input point.
+        """
         self.fit(data, sav_threshold=sav_threshold)
         cluster_labels = self.predict(data)
         return cluster_labels
@@ -722,135 +947,3 @@ class Watershed(GaussDensity):
     #     ax.set_aspect("auto")
     #     plt.savefig(filepath, dpi=400)
     #     plt.close()
-
-
-# class KFoldEmbed:
-#     def __init__(
-#         k_split: int = 10,
-#         param_range=list(range(1, 22, 2)),
-#         plot_folder: str = "./plots/",
-#         watershed: bool = True,
-#     ):
-#         self.k_split = k_split
-#         self.plot_folder = plot_folder
-#         self.param = param
-
-#         self.mse = []
-#         self.euc = []
-
-#     def run(
-#         self,
-#         embedder: Union[BatchEmbed, Embed],
-#         param: str,
-#     ):
-#         """
-#         param can be either k, n_tree, or
-#         """
-#         from sklearn.model_selection import KFold
-
-#         print("Embedding 10-fold data")
-#         template = embedder.template
-#         temp_embedding = embedder.temp_embedding
-#         print("Template shape: ", template.shape)
-#         print("Predictions shape: ", temp_embedding.shape)
-#         kf = KFold(n_splits=k_split, shuffle=True)
-#         preds_max_dist = np.sqrt(
-#             np.sum(
-#                 (np.amax(temp_embedding, axis=0) - np.amin(temp_embedding, axis=0)) ** 2
-#             )
-#         )
-
-#         metric_vals, min_metric_embedding = [], []
-
-#         for param_val in param_range:
-#             setattr(embedder, param, param_val)  # seting new param
-#             print("Reembedding with ", param_val, " ", param)
-#             kf_embedding = np.empty((0, 2))
-#             start = time.time()
-#             mse_k, euc_k = np.zeros(shape)
-
-#             for train, test in tqdm.tqdm(kf.split(template, temp_embedding)):
-#                 # Embed the 90
-#                 kf_temp_embedding = embedder.embed(
-#                     data=template[train], save_self=False
-#                 )
-
-#                 # Reembed the 10 using the 90
-#                 kf_embedding = embedder.predict(
-#                     data=template[test],
-#                     template=template[train],
-#                     temp_embedding=kf_temp_embedding,
-#                 )
-
-#                 kf_embedding = np.append(kf_embedding, reembedding, axis=0)
-#                 test_idx += test
-
-#                 mse_k[test] = (temp_embedding[test] - kf_embedding) ** 2
-
-#             print("Total Time K-Fold Reembedding: ", time.time() - start)
-
-#             euc = np.mean(
-#                 np.sqrt(
-#                     np.sum(
-#                         (data_shuffled[: kf_embedding.shape[0], :2] - kf_embedding)
-#                         ** 2,
-#                         axis=1,
-#                     )
-#                 )
-#             )
-#             mse = np.mean(
-#                 np.sum(
-#                     (data_shuffled[: kf_embedding.shape[0], :2] - kf_embedding) ** 2,
-#                     axis=1,
-#                 )
-#             )
-
-#             curr_metric = curr_metric / max_dist
-#             print(curr_metric)
-
-#             print("Reembedding Metric: ", curr_metric)
-
-#             # if metric is empty or curr_metric is lowest so far
-#             if not metric_vals or all(curr_metric < val for val in metric_vals):
-#                 min_metric_embedding = kf_embedding
-#                 min_metric_nn = nn
-
-#             metric_vals += [curr_metric]
-
-#         ws = Watershed(sigma=15, max_clip=1, log_out=True, pad_factor=0.05)
-#         cluster_true = ws.fit_predict(temp_embedding)
-
-#         cluster_preds = ws.predict(reembedding)
-
-#         f = plt.figure()
-#         plt.scatter(
-#             predictions[:, 0],
-#             predictions[:, 1],
-#             marker=".",
-#             s=3,
-#             linewidths=0,
-#             c="b",
-#             label="Targets",
-#         )
-#         plt.scatter(
-#             min_metric_embedding[:, 0],
-#             min_metric_embedding[:, 1],
-#             marker=".",
-#             s=3,
-#             linewidths=0,
-#             c="m",
-#             label="CV Predictions",
-#         )
-#         plt.legend()
-#         plt.savefig(
-#             "".join([plot_folder, "k_fold_mbed_", str(min_metric_nn), "nn.png"]),
-#             dpi=400,
-#         )
-#         plt.close()
-
-#         f = plt.figure()
-#         plt.plot(nn_range, metric_vals, marker="o", c="k")
-#         plt.savefig("".join([plot_folder, "k_fold_embed_metric.png"]), dpi=400)
-#         plt.close()
-
-#         return min_metric_nn
