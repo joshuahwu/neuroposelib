@@ -272,7 +272,7 @@ class BatchEmbed(Embed):
     batch_method : str
         Embedding method used to embed each batch (e.g. "fitsne", "umap").
     Other parameters
-        Inherited from :class:`Embed`.
+        Inherited from [`Embed`](neuroposelib.embed.Embed).
     """
 
     def __init__(
