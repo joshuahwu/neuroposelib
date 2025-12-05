@@ -18,11 +18,11 @@ nav = mkdocs_gen_files.Nav()
 
 EXCLUDE_MODULES = ["neuroposelib.validation", "neuroposelib.augmentations"]
 
-for path in sorted(Path("src").rglob("*.py")):
-    module_path = path.relative_to("src").with_suffix("")
+for path in sorted(Path("neuroposelib").rglob("*.py")):
+    module_path = path.relative_to("neuroposelib").with_suffix("")
     parts = tuple(module_path.parts)
 
-    doc_path = path.relative_to("src").with_suffix(".md")
+    doc_path = path.relative_to("neuroposelib").with_suffix(".md")
     full_doc_path = Path("reference", doc_path)
 
     if parts[-1] == "__init__":
@@ -45,5 +45,5 @@ for path in sorted(Path("src").rglob("*.py")):
 
     mkdocs_gen_files.set_edit_path(full_doc_path, path)
 
-# with mkdocs_gen_files.open("reference/neuroposelib.md", "w") as nav_file:
-#     nav_file.writelines(nav.build_literate_nav())
+with mkdocs_gen_files.open("reference/neuroposelib.md", "w") as nav_file:
+    nav_file.writelines(nav.build_literate_nav())
