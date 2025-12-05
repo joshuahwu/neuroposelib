@@ -1,6 +1,6 @@
 import numpy as np
 from tqdm import tqdm
-from typing import Union, List, Optional
+from typing import Union, List, Optional, Tuple, Any, Sequence
 import sklearn
 from sklearn.linear_model import ElasticNet, ElasticNetCV
 from sklearn.preprocessing import StandardScaler
@@ -15,25 +15,39 @@ from scipy.spatial import distance
 import numpy.typing as npt
 import pandas as pd
 
-def get_z_scores(freq, meta, groups):
-    cluster_list = list(np.arange(freq.shape[-1], dtype=int))#list(np.sort(freq_df.columns))
-    # if 0 in cluster_list:
-    #     cluster_list.pop(0)
+
+def get_z_scores(
+    freq: npt.NDArray[Any],
+    meta: pd.DataFrame,
+    groups: Union[str, List[str]],
+) -> Tuple[npt.NDArray[np.float64], List[Any]]:
+    """
+    Compute pairwise z-scores of cluster frequency means between groups.
+
+    Parameters
+    ----------
+    freq : ndarray, shape (n_samples, n_clusters)
+        Frequency/occupancy values per sample for each cluster.
+    meta : pandas.DataFrame, shape (n_samples, ...)
+        Metadata table aligned with `freq`. Rows correspond to samples.
+    groups : str or list of str
+        Column name(s) in `meta` to group by (e.g., condition or subject).
+
+    Returns
+    -------
+    z_scores : ndarray(float64), shape (n_groups, n_groups, n_clusters)
+        Pairwise z-scores comparing mean cluster frequencies between groups.
+        `z_scores[i, j, c]` is (mean_group_i - mean_group_j) / pooled_std.
+    labels : list
+        Ordered list of the group labels corresponding to z_scores axes.
+    """
+    cluster_list = list(np.arange(freq.shape[-1], dtype=int))
     freq_df = pd.DataFrame(freq)
     freq_df.loc[:, 0] = 0
     freq_df = pd.concat([meta.loc[:, groups], freq_df], axis=1)
-    # freq_df_BH = freq_df.loc[freq_df["Condition"].isin(["Baseline", "Habituation"]), :]
-    # groups = ["Merged_GroupID"]
-    meanz = (
-        freq_df[cluster_list + groups]
-        .groupby(groups)
-        .mean()
-    )
-    stdz = (
-        freq_df[cluster_list + groups]
-        .groupby(groups)
-        .std()
-    )
+
+    meanz = freq_df[cluster_list + groups].groupby(groups).mean()
+    stdz = freq_df[cluster_list + groups].groupby(groups).std()
     n_s = freq_df.groupby(groups).size().values
     mean_diffs = np.array(meanz)[:, None, ...] - np.array(meanz)[None, ...]
     std_diffs = np.sqrt(
@@ -43,7 +57,7 @@ def get_z_scores(freq, meta, groups):
     z_scores = mean_diffs / np.where(std_diffs == 0, 1, std_diffs)
     labels = list(meanz.index)
 
-    return z_scores, labels
+    return np.asarray(z_scores).astype(np.float64), labels
 
 # def get_nn_graph(X: npt.NDArray, k: int = 5, weighted: bool = True) -> csr_matrix:
 #     """Get nearest neighbor graph.
@@ -115,182 +129,201 @@ def get_z_scores(freq, meta, groups):
 #     return nn_graph
 
 def get_pose_geodesic(
-    pose: npt.NDArray,
+    pose: npt.NDArray[Any],
     graph: csr_matrix,
     start_i: int,
     end_i: int,
-) -> tuple[npt.NDArray, List]:
-    """Return the poses along the geodesics defined by a nearest neighbor graph.
+) -> Tuple[npt.NDArray[np.float64], List[int]]:
+    """
+    Return the poses along the geodesic path between two frames on a graph.
 
     Parameters
     ----------
-    pose : npt.NDArray
-        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
-    graph : csr_matrix
-        Nearest neighbor graph.
+    pose : ndarray, shape (n_frames, n_keypoints, 3)
+        3D pose arrays for each frame.
+    graph : csr_matrix, shape (n_frames, n_frames)
+        Nearest-neighbor graph (weighted) connecting frames.
     start_i : int
-        Index of first pose.
+        Index of the starting frame.
     end_i : int
-        Index of second pose.
+        Index of the ending frame.
 
     Returns
     -------
-    geodesic_pose : npt.NDArray
-        Frames of poses along the pose geodesic which begins with `pose[start_i]` and ends with `pose[end_i]`.
-    indices: List
-        Indices within `pose` corresponding to the pose geodesic.
-    """    
+    geodesic_pose : ndarray(float64), shape (m, n_keypoints, 3)
+        Sequence of poses along the geodesic (starts at start_i, ends at end_i).
+    indices : list of int
+        Frame indices corresponding to rows of `geodesic_pose`.
+    """
     print("Calculating Dijkstra")
     path_indices = dijkstra(
         csgraph=graph, directed=False, indices=end_i, return_predecessors=True
     )[1]
 
     print("Finding pose geodesic")
-    geodesic_pose, geodesic_indices = [], []
+    geodesic_pose: List[npt.NDArray[Any]] = []
+    geodesic_indices: List[int] = []
     curr_frame = start_i
 
     while path_indices[curr_frame] > 0:
         geodesic_pose += [pose[curr_frame : curr_frame + 1, ...]]
-        geodesic_indices += [curr_frame]
-        curr_frame = path_indices[curr_frame]
+        geodesic_indices += [int(curr_frame)]
+        curr_frame = int(path_indices[curr_frame])
 
     geodesic_pose += [pose[end_i: end_i + 1, ...]]
-    geodesic_indices += [end_i]
+    geodesic_indices += [int(end_i)]
     if curr_frame != end_i:
         print("Broken graph")
 
     geodesic_pose = np.concatenate(geodesic_pose, axis=0)
 
-    return geodesic_pose, geodesic_indices
+    return np.asarray(geodesic_pose).astype(np.float64), geodesic_indices
 
 
-def hist_cluster_by_watershed(data: npt.NDArray, watershed: Watershed) -> npt.NDArray:
-    """Generates histogram of cluster assignments given 2D embedded values and a Watershed segmentation object.
+def hist_cluster_by_watershed(
+    data: npt.NDArray[Any], watershed: Watershed
+) -> npt.NDArray[np.float64]:
+    """
+    Generate normalized histogram of cluster occupancies using a Watershed segmentation.
 
     Parameters
     ----------
-    data : npt.NDArray
-        2D embedded values (# frames, 2).
+    data : ndarray, shape (n_frames, 2)
+        2D embedded coordinates for frames.
     watershed : Watershed
-        Watershed segmentation object.
+        Watershed segmentation object with precomputed `watershed_map`.
 
     Returns
     -------
-    histogram: npt.NDArray
-        Histogram (# clusters).
+    freq : ndarray(float64), shape (n_clusters,)
+        Normalized occupancy histogram across clusters (sums to 1).
     """
     num_clusters = np.max(watershed.watershed_map) + 1
     cluster_labels = watershed.predict(data)
 
     # Calculate frequencies
     freq = hist_cluster(cluster_labels, num_clusters)
-    return freq
+    return np.asarray(freq).astype(np.float64)
 
 
-def hist_cluster(cluster_labels: npt.NDArray, num_clusters: int) -> npt.NDArray:
-    """Generates histograms of cluster assignments.
+def hist_cluster(cluster_labels: npt.NDArray[Any], num_clusters: int) -> npt.NDArray[np.float64]:
+    """
+    Generate a normalized histogram over cluster labels.
 
     Parameters
     ----------
-    cluster_labels : npt.NDArray
-        Cluster labels per frame (# frames).
+    cluster_labels : ndarray, shape (n_frames,)
+        Integer cluster label for each frame.
     num_clusters : int
-        Total number of clusters.
+        Number of clusters (max label + 1).
 
     Returns
     -------
-    histogram: npt.NDArray
-        Histogram (# clusters).
-    """    
+    histogram : ndarray(float64), shape (num_clusters,)
+        Normalized histogram (density) over cluster labels.
+    """
     freq = np.histogram(
         cluster_labels,
         bins=num_clusters,
         range=(-0.5, num_clusters - 0.5),
         density=True,
     )[0]
-    return freq
+    return np.asarray(freq).astype(np.float64)
 
-def hist_cluster_by_cat(cluster_labels: npt.ArrayLike, cat: npt.ArrayLike, return_labels: bool = False) -> tuple[npt.NDArray, npt.ArrayLike]:
-    """Generates histograms of cluster assignments organized by categorical label.
+
+def hist_cluster_by_cat(
+    cluster_labels: npt.NDArray[Any],
+    cat: npt.NDArray[Any],
+    return_labels: bool = False,
+) -> Union[npt.NDArray[np.float64], Tuple[npt.NDArray[np.float64], npt.NDArray[Any]]]:
+    """
+    Compute histograms of cluster occupancies separated by categorical labels.
 
     Parameters
     ----------
-    cluster_labels :
-        Cluster labels per frame (# frames).
-    cat :
-        Categorical labels (# frames).
+    cluster_labels : ndarray, shape (n_frames,)
+        Cluster label for each frame.
+    cat : ndarray, shape (n_frames,)
+        Categorical labels per frame (e.g., condition or subject).
+    return_labels : bool, default False
+        If True, also return the ordered list of unique category labels.
 
     Returns
     -------
-    histogram: npt.NDArray
-        Histogram (# categories, # clusters).
-    labels : npt.ArrayLike
-        If `return_labels == True`, returns unique labels in categories.
-    """    
+    freq : ndarray(float64), shape (n_categories, n_clusters)
+        Frequency histograms per category.
+    labels : ndarray, shape (n_categories,), optional
+        Unique category labels in the order used for rows (returned if return_labels is True).
+    """
     print("Calculating cluster occupancies ")
-    num_clusters = np.max(cluster_labels) + 1
-    cat_labels = cat[np.sort(np.unique(cat, return_index=True)[1])]  # Unique cat labels
+    num_clusters = int(np.max(cluster_labels)) + 1
+    # Unique labels in stable order (first occurrence)
+    cat_labels = cat[np.sort(np.unique(cat, return_index=True)[1])]
     freq = np.zeros((len(cat_labels), num_clusters))
     for i, label in enumerate(tqdm(cat_labels)):
-        # import pdb; pdb.set_trace()
-        freq[i, :] = hist_cluster(
-            cluster_labels[cat == label], num_clusters
-        )
+        freq[i, :] = hist_cluster(cluster_labels[cat == label], num_clusters)
 
     if return_labels:
-        return freq, cat_labels
+        return np.asarray(freq).astype(np.float64), np.asarray(cat_labels)
     else:
-        return freq
+        return np.asarray(freq).astype(np.float64)
 
-def cosine_similarity(a: npt.NDArray, b: npt.NDArray):
-    """Row-wise cosine similarity between two 2D matrices. `a` and `b` must match in shape.
+
+def cosine_similarity(a: npt.NDArray[Any], b: npt.NDArray[Any]) -> npt.NDArray[np.float64]:
+    """
+    Compute row-wise cosine similarity between rows of `a` and rows of `b`.
 
     Parameters
     ----------
-    a : npt.NDArray
-    b : npt.NDArray
+    a : ndarray, shape (n_rows, n_dim)
+        First matrix (rows are vectors).
+    b : ndarray, shape (m_rows, n_dim)
+        Second matrix. If m_rows != n_rows, the result is (n_rows, m_rows).
 
     Returns
     -------
-    cosine_similarity
-        Cosine similarity between each row of a and b.
-    """    
+    cosine_similarity : ndarray(float64), shape (n_rows, m_rows)
+        Cosine similarity matrix between rows of `a` and rows of `b`.
+    """
+    a = np.asarray(a)
+    b = np.asarray(b)
     norm_a = np.linalg.norm(a, axis=1)
     norm_b = np.linalg.norm(b, axis=1)
     cos_sim = (a @ b.T) / (norm_a * norm_b)
+    return np.asarray(cos_sim).astype(np.float64)
 
-    return cos_sim
 
 def _bin_embed_distance(
-    values: npt.NDArray,
-    meta: npt.ArrayLike,
-    augmentation: npt.ArrayLike,
+    values: npt.NDArray[Any],
+    meta: npt.NDArray[Any],
+    augmentation: npt.NDArray[Any],
     time_bins: int = 1000,
     hist_bins: int = 100,
-    hist_range: Optional[npt.NDArray] = None,
-):
-    """Calculating Jensen Shannon distance between binned segments of videos
+    hist_range: Optional[npt.NDArray[Any]] = None,
+) -> npt.NDArray[np.float64]:
+    """
+    Calculate Jensen-Shannon distance between temporally-binned 2D histograms across augmentations.
 
     Parameters
     ----------
-    values : npt.NDArray
-        _description_
-    meta : npt.ArrayLike
-        _description_
-    augmentation : npt.ArrayLike
-        _description_
-    time_bins : int, optional
-        _description_, by default 1000
-    hist_bins : int, optional
-        _description_, by default 100
-    hist_range : Optional[npt.NDArray], optional
-        _description_, by default None
+    values : ndarray, shape (n_samples, n_points, 2)
+        2D embedded coordinates for samples (frames x points x 2).
+    meta : ndarray, shape (n_samples,)
+        Metadata array aligning each sample to an augmentation label.
+    augmentation : ndarray, shape (n_augmentations,)
+        Ordered augmentation labels to compare (first element is baseline).
+    time_bins : int, default 1000
+        Number of temporal bins to split each augmentation's frames into.
+    hist_bins : int, default 100
+        Number of bins per axis for the 2D histogram.
+    hist_range : ndarray or None, optional
+        Range argument passed to `np.histogram2d` as `[[xmin, xmax], [ymin, ymax]]`.
 
     Returns
     -------
-    _type_
-        _description_
-    """    
+    dist_js : ndarray(float64), shape (len(augmentation) - 1,)
+        Mean Jensen-Shannon distance between baseline histograms and each subsequent augmentation.
+    """
     dist_js = np.zeros(len(augmentation) - 1)
     dist_med, dist_mse = np.zeros(len(dist_js)), np.zeros(len(dist_js))
     for i in range(len(augmentation)):
@@ -320,55 +353,53 @@ def _bin_embed_distance(
             vals_base = vals_aug
             hist_base = stacked_hist
         else:
-            # import pdb; pdb.set_trace()
             dist_js[i - 1] = np.mean(
                 np.array(
                     [
-                        distance.jensenshannon(stacked_hist[i, :], hist_base[i, :])
-                        for i in range(time_bins)
+                        distance.jensenshannon(stacked_hist[ii, :], hist_base[ii, :])
+                        for ii in range(time_bins)
                     ]
                 )
             )
-            # dist_mse[i-1] = np.sum((vals_base - vals_aug) ** 2) / len(vals_base)
-            # dist_med[i-1] = np.sqrt(np.sum((vals_base - vals_aug) ** 2)) / len(vals_base)
 
-    return dist_js  # , dist_mse, dist_med
+    return np.asarray(dist_js).astype(np.float64)
 
 
-def levenshtein(s1: npt.ArrayLike, s2: npt.ArrayLike):
-    """Levenshtein edit distance between two sequences.
-
-    From [Wikipedia](https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#Python).
+def levenshtein(
+    s1: Union[str, Sequence[Any], npt.NDArray[Any]],
+    s2: Union[str, Sequence[Any], npt.NDArray[Any]],
+) -> int:
+    """Compute the Levenshtein edit distance between two sequences.
 
     Parameters
     ----------
-    s1 : npt.ArrayLike
-        Sequence 1.
-    s2 : npt.ArrayLike
-        Sequence 2.
+    s1 : str or sequence, shape (len1,)
+        First sequence (string, list, or 1D ndarray).
+    s2 : str or sequence, shape (len2,)
+        Second sequence.
 
     Returns
     -------
     distance : int
-        Number of insertions, deletions, and substitutions to convert `s1` to `s2`.
+        Minimum number of insertions, deletions, or substitutions required
+        to transform `s1` into `s2`.
     """
+    # Normalize to sequences that support len()/indexing
     if len(s1) < len(s2):
         return levenshtein(s2, s1)
 
     # len(s1) >= len(s2)
     if len(s2) == 0:
-        return len(s1)
+        return int(len(s1))
 
     previous_row = range(len(s2) + 1)
     for i, c1 in enumerate(s1):
         current_row = [i + 1]
         for j, c2 in enumerate(s2):
-            insertions = (
-                previous_row[j + 1] + 1
-            )  # j+1 instead of j since previous_row and current_row are one character longer
-            deletions = current_row[j] + 1  # than s2
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
             substitutions = previous_row[j] + (c1 != c2)
             current_row.append(min(insertions, deletions, substitutions))
         previous_row = current_row
 
-    return previous_row[-1]
+    return int(previous_row[-1])
