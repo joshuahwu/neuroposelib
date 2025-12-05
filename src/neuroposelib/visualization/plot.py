@@ -10,84 +10,99 @@ from pathlib import Path
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from typing import Optional, Union, List, Dict, Tuple
+from typing import Optional, Union, List, Dict, Tuple, Any, Sequence
 from scipy.special import softmax
 from sklearn.preprocessing import MinMaxScaler
 
 from neuroposelib import DataStruct as ds
 from neuroposelib.embed import Watershed, GaussDensity
 from neuroposelib.analysis import hist_cluster_by_cat
-from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_VIRIDIS, CUSTOM_CMAPS
+from neuroposelib.visualization.constants import (
+    PALETTE,
+    EPS,
+    DEFAULT_VIRIDIS,
+    CUSTOM_CMAPS,
+)
 import numpy.typing as npt
 import copy
 from matplotlib.patches import Patch
 from skimage import measure
 
-# def scatter_by_cat(
-#     data: np.ndarray,
-#     cat: np.ndarray,
-#     label: str,
-#     size=3,
-#     color=None,
-#     filepath: str = "./",
-# ):
-#     if color == None:
-#         color = PALETTE
-#     ax = sns.scatterplot(
-#         x=data[:, 0],
-#         y=data[:, 1],
-#         marker=".",
-#         hue=cat,
-#         palette=color,
-#         s=size,
-#     )
-#     # ax.set(xlabel="t-SNE 1", ylabel="t-SNE 2")
-#     ax.set_box_aspect(0.9)
-#     ax.figure.savefig("".join([filepath, "scatter_by_", label, ".png"]))
-#     plt.close()
-#     # plt.savefig(''.join([filepath, 'scatter_by_', label, '.png']))
 
-def _hex_to_rgb(hex_color):
-  """Converts a hex color code to an RGB tuple.
+def _hex_to_rgb(hex_color: str) -> Optional[npt.NDArray[np.float64]]:
+    """
+    Convert a hex color string to an RGB numpy array scaled 0..1.
 
-  Args:
-    hex_color: A string representing the hex color code, with or without the '#' prefix.
+    Parameters
+    ----------
+    hex_color : str
+        Hex color string, with or without leading '#', e.g. '#ff00aa' or 'ff00aa'.
 
-  Returns:
-    A tuple of three integers representing the RGB values (0-255), or None if the input is invalid.
-  """
-  hex_color = hex_color.lstrip('#')
-  if len(hex_color) != 6:
-    return None
-  try:
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
-    return np.array([r/255, g/255, b/255])
-  except ValueError:
-    return None
+    Returns
+    -------
+    rgb : ndarray(float64), shape (3,)
+        RGB values in range [0,1], or None if input invalid.
+    """
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) != 6:
+        return None
+    try:
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+        return np.array([r / 255.0, g / 255.0, b / 255.0], dtype=np.float64)
+    except ValueError:
+        return None
+
 
 def scatter(
-    data: np.ndarray,
+    data: npt.NDArray[Any],
     color: Optional[npt.ArrayLike] = None,
     marker_size: int = 3,
     ax_label: str = "t-SNE",
     filepath: str = "./results/scatter.png",
     show: bool = False,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> None:
     """
-    Draw a 2d tSNE plot from zValues.
+    Draw a 2D scatter plot from 2D embedding values.
 
-    input: zValues dataframe, [num of points x 2]
-    output: a scatter plot
+    Parameters
+    ----------
+    data : ndarray, shape (N, 2) or (2, N)
+        2D coordinates to plot. Either Nx2 (rows = points) or 2xN (rows = dims).
+    color : array-like or None
+        Color/colormap information passed to `plt.scatter`. Can be numeric array or
+        colormap string depending on usage.
+    marker_size : int, default 3
+        Scatter marker size.
+    ax_label : str, default "t-SNE"
+        Label prefix for axes (e.g., 't-SNE' results in 't-SNE 1' and 't-SNE 2').
+    filepath : str, default "./results/scatter.png"
+        Path to save the figure. If empty string, the figure is not saved.
+    show : bool, default False
+        If True, call `plt.show()` before closing.
+    **kwargs : dict
+        Additional keyword args forwarded to `plt.scatter`.
+
+    Returns
+    -------
+    None
     """
-    if data.shape.index(2) == 1:
+    data = np.asarray(data)
+    # Support either (N,2) or (2,N)
+    if data.ndim != 2:
+        raise ValueError("`data` must be 2D array with shape (N,2) or (2,N).")
+    if data.shape[1] == 2:
         x = data[:, 0]
         y = data[:, 1]
-    else:
+    elif data.shape[0] == 2:
         x = data[0, :]
         y = data[1, :]
+    else:
+        raise ValueError(
+            "`data` must have second dimension size 2 (Nx2) or first dimension 2 (2xN)."
+        )
 
     f = plt.figure()
     plt.scatter(
@@ -97,7 +112,6 @@ def scatter(
         s=marker_size,
         linewidths=0,
         c=color,
-        # cmap=sns.color_palette("crest", as_cmap=True),
         alpha=0.75,
         **kwargs,
     )
@@ -106,6 +120,7 @@ def scatter(
     if color is not None:
         plt.colorbar()
     if filepath:
+        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(filepath, dpi=200)
 
     if show:
@@ -114,19 +129,34 @@ def scatter(
 
 
 def watershed(
-    ws_map: npt.NDArray,
-    ws_borders: Optional[Dict] = None,
+    ws_map: npt.NDArray[Any],
+    ws_borders: Optional[Dict[int, npt.NDArray[Any]]] = None,
     cmap: Optional[str] = None,
     filepath: str = "./results/watershed.png",
-):
+) -> None:
     """
-    Plotting a watershed map with clusters colored
+    Plot a watershed map with optional borders and cluster labels.
+
+    Parameters
+    ----------
+    ws_map : ndarray, shape (H, W)
+        Integer labelled watershed map (cluster labels per pixel).
+    ws_borders : dict(int -> ndarray), optional
+        Mapping from cluster id to border coordinates array (Ncoords x 2).
+    cmap : str, optional
+        Colormap name for imshow.
+    filepath : str, default "./results/watershed.png"
+        File path to save the figure.
+
+    Returns
+    -------
+    None
     """
-    if cmap == None:
+    if cmap is None:
         cmap = DEFAULT_VIRIDIS
     f = plt.figure()
     ax = f.add_subplot(111)
-    ax.imshow(ws_map,cmap=cmap)
+    ax.imshow(ws_map, cmap=cmap)
     ax.set_aspect(0.9)
     if ws_borders is not None:
         for k, v in ws_borders.items():
@@ -142,12 +172,35 @@ def watershed(
             )
 
     ax.axis("off")
-    plt.savefig("".join([filepath, "_watershed.png"]), dpi=200)
+    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(filepath, dpi=200)
     plt.close()
 
+
 def scatter_on_watershed(
-    data: ds.DataStruct, watershed: GaussDensity, column: str, path: str = "./results/"
-):
+    data: ds.DataStruct,
+    watershed: GaussDensity,
+    column: str,
+    path: str = "./results/",
+) -> None:
+    """
+    Overlay scatter points (embed_vals) on top of a watershed map and save per-category images.
+
+    Parameters
+    ----------
+    data : DataStruct
+        DataStruct containing `.embed_vals` (n_frames x 2) and `.data` with categorical columns.
+    watershed : GaussDensity
+        Watershed/GaussDensity object that provides `watershed_map` and `hist_range`.
+    column : str
+        Column name in `data.data` to split plots by.
+    path : str, default "./results/"
+        Output directory prefix.
+
+    Returns
+    -------
+    None
+    """
     out_path = "{}points_by_{}/".format(path, column)
     labels = data.data[column].values
     Path(out_path).mkdir(parents=True, exist_ok=True)
@@ -214,11 +267,33 @@ def scatter_on_watershed(
 def density_feat(
     data: ds.DataStruct,
     watershed: Watershed,
-    features: np.ndarray,
-    feature_labels: List,
+    features: npt.NDArray[Any],
+    feature_labels: List[str],
     key: str,
     file_path: str = "./results/",
-):
+) -> None:
+    """
+    Build and plot a feature heatmap mapped to watershed bins.
+
+    Parameters
+    ----------
+    data : DataStruct
+        DataStruct providing `.embed_vals`.
+    watershed : Watershed
+        Watershed object used for binning.
+    features : ndarray, shape (n_frames, n_features)
+        Feature matrix aligned to `data`.
+    feature_labels : list of str
+        Labels for columns in `features`.
+    key : str
+        Feature name to map.
+    file_path : str, default "./results/"
+        Output directory.
+
+    Returns
+    -------
+    None
+    """
     feat_key = features[:, feature_labels.index(key)]
     density_feat = np.zeros((watershed.n_bins, watershed.n_bins))
     data_in_bin = watershed.map_bins(data.embed_vals)
@@ -241,17 +316,42 @@ def density_feat(
 
 
 def density(
-    density: np.ndarray,
-    ws_borders: Optional[np.ndarray] = None,
+    density: npt.NDArray[Any],
+    ws_borders: Optional[Dict[int, npt.NDArray[Any]]] = None,
     filepath: str = "./results/density.png",
     cmap: Optional[str] = None,
     show: bool = False,
-    vmax: float = None,
+    vmax: Optional[float] = None,
     return_fig: bool = False,
-):
+) -> Optional[plt.Figure]:
+    """
+    Render a 2D density map with optional watershed borders.
+
+    Parameters
+    ----------
+    density : ndarray, shape (H, W)
+        Density image to show.
+    ws_borders : dict(int -> ndarray), optional
+        Borders mapping for overlay.
+    filepath : str, default "./results/density.png"
+        Save location.
+    cmap : str, optional
+        Colormap name.
+    show : bool, default False
+        Show figure interactively before closing.
+    vmax : float, optional
+        Max for color scale.
+    return_fig : bool, default False
+        If True, return the matplotlib Figure object instead of closing it.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure or None
+        Figure object when `return_fig` is True, otherwise None.
+    """
     vmin = 0.99 * 15 / density.shape[0] ** 2
     density_copy = np.copy(density)
-    density_copy[density_copy<vmin] = -np.inf
+    density_copy[density_copy < vmin] = -np.inf
     f = plt.figure()
     ax = f.add_subplot(111)
     if cmap is None:
@@ -266,6 +366,7 @@ def density(
     ax.set_aspect(0.9)
     ax.axis("off")
     if filepath:
+        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(filepath, dpi=200)
     if show:
         plt.show()
@@ -274,14 +375,31 @@ def density(
         return f
     else:
         plt.close()
-        return
+        return None
 
 
-def _mask_density(density, watershed_map, eps: float = EPS * 1.01):
+def _mask_density(
+    density: npt.NDArray[Any], watershed_map: npt.NDArray[Any], eps: float = EPS * 1.01
+) -> npt.NDArray[Any]:
+    """
+    Apply mask to density: keep values inside watershed (>0) and clip outside to -inf.
+
+    Parameters
+    ----------
+    density : ndarray, shape (H, W)
+    watershed_map : ndarray, shape (H, W)
+    eps : float
+        Minimal value to enforce inside mask.
+
+    Returns
+    -------
+    density_masked : ndarray, shape (H, W)
+    """
     mask = watershed_map > 0
     density[mask] = np.maximum(density[mask], eps)
     density[~mask] = -np.inf
     return density
+
 
 def density_cat(
     data: ds.DataStruct,
@@ -289,10 +407,21 @@ def density_cat(
     watershed: Watershed,
     filepath: str = "./results/density_by_label.png",
     show: bool = False,
-    vmax: float = None,
-):
+    vmax: Optional[float] = None,
+) -> None:
     """
-    Plot densities by a category label
+    Plot density maps for each unique label in `column`.
+
+    Parameters
+    ----------
+    data : DataStruct
+    column : str
+        Column in data.data to group by.
+    watershed : Watershed
+    filepath : str
+        Output file path (one image with grid).
+    show : bool, default False
+    vmax : float, optional
     """
     labels = data.data[column].values
 
@@ -315,7 +444,7 @@ def density_cat(
             vmin=EPS,
             vmax=vmax,
             cmap=DEFAULT_VIRIDIS,
-        )  # scp.special.softmax(density))
+        )
 
         if watershed is not None:
             for k, v in watershed.borders.items():
@@ -328,28 +457,46 @@ def density_cat(
         ax.set_yticks([])
         ax.axis("off")
 
-    # ax_arr = ax_arr.reshape(n_rows,n_cols)
     f.tight_layout()
+    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(filepath, dpi=200)
     if show:
         plt.show()
     plt.close()
-    return
-    
+    return None
+
 
 def density_grid(
     data: ds.DataStruct,
     cat1: str,
     cat2: str,
     watershed: Watershed,
-    col_cmaps: List = [],
+    col_cmaps: Optional[List[str]] = None,
     filepath: str = "./results/density_by_label.png",
     show: bool = False,
     vmax: float = 3.5,
     return_fig: bool = False,
-):
+) -> Optional[plt.Figure]:
     """
-    Plot densities by a category label
+    Create a grid of density maps arranged by two categorical variables.
+
+    Parameters
+    ----------
+    data : DataStruct
+    cat1 : str
+    cat2 : str
+    watershed : Watershed
+    col_cmaps : list of str, optional
+        Per-column colormaps to use.
+    filepath : str
+    show : bool
+    vmax : float
+    return_fig : bool
+        If True, return the Figure object.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure or None
     """
     labels1, labels2 = data.data[cat1].values, data.data[cat2].values
     n_col = len(np.unique(labels2))
@@ -358,24 +505,15 @@ def density_grid(
 
     # Loop over unique labels
     for i, label1 in enumerate(np.unique(labels1)):
-        # if n_rows != 1:
-        #     ax_arr[i, 0].set_title(label1)
-
         for j, label2 in enumerate(np.unique(labels2)):
-            if len(col_cmaps) == 0:
-                cmap = DEFAULT_VIRIDIS
-            else:
-                cmap = col_cmaps[j]
+            cmap = DEFAULT_VIRIDIS if not col_cmaps else col_cmaps[j]
             # Indexing latent embedding by label
             embed_vals = data.embed_vals[
                 (data.data[cat1] == label1) & (data.data[cat2] == label2)
             ]
             if len(embed_vals) > 0:
-                density = watershed.fit_density(
-                    embed_vals, new=False
-                )  # Fit density on old axes
+                density = watershed.fit_density(embed_vals, new=False)
                 idx = i * len(np.unique(labels2)) + j
-                # if n_rows == 1:
                 ax_arr.ravel()[idx].imshow(
                     _mask_density(density, watershed.watershed_map, EPS * 1.01),
                     vmin=EPS,
@@ -389,7 +527,6 @@ def density_grid(
                             v[:, 0], v[:, 1], "k", markersize=0, lw=0.25
                         )
                 ax_arr.ravel()[idx].set_aspect(0.9)
-                # ax_arr[idx].axis("off")
                 ax_arr.ravel()[idx].set_xticks([])
                 ax_arr.ravel()[idx].set_yticks([])
                 for spine in ax_arr.ravel()[idx].spines.values():
@@ -407,19 +544,39 @@ def density_grid(
         return f
     else:
         f.tight_layout()
+        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(filepath, dpi=200)
         if show:
             plt.show()
         plt.close()
-        return
-    return
+        return None
 
 
-def cluster_freq(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=False):
+def cluster_freq(
+    data_obj: ds.DataStruct,
+    cat1: str,
+    cat2: str,
+    filepath: str = "./",
+    show: bool = False,
+) -> None:
     """
-    IN:
-        cat1: Will create a separate subplot for each label in cat1
-        cat2: For each subplot of cat1, will have multiple lines for each cat2
+    Plot cluster frequency by two categorical variables.
+
+    Parameters
+    ----------
+    data_obj : DataStruct
+    cat1 : str
+        Primary categorical variable (one subplot per unique value).
+    cat2 : str
+        Secondary categorical variable (one line per unique value per subplot).
+    filepath : str
+        Directory to save results.
+    show : bool
+        If True, show plots interactively.
+
+    Returns
+    -------
+    None
     """
     colors = [
         "tab:green",
@@ -447,27 +604,21 @@ def cluster_freq(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=False)
         data_obj.data["Cluster"].values, cat=combined_labels
     )
 
-    # cat1_freq_keys,cat2_freq_keys = map(list, zip(*[key.split(',') for key in combined_keys]))
-
-    num_clusters = freq.shape[1]  # data_obj.data['Cluster'].max()+1
-    # Unique keys for cat1 and cat2
+    num_clusters = freq.shape[1]
     cat1_keys, cat2_keys = np.unique(data_obj.data[cat1].values), np.unique(
         data_obj.data[cat2].values
     )
 
     f, ax_arr = plt.subplots(len(cat1_keys) + 1, 1, sharex="all", figsize=(20, 10))
 
-    for i, key1 in enumerate(cat1_keys):  # For each plot of cat1
-        # videos = data_obj.meta.index[data_obj.meta['Condition'] == cat1_keys[i]].tolist()
-        for j, key2 in enumerate(cat2_keys):  # For each cat2 of cat 1
-            # cluster_labels = data_obj.data['Cluster'].values[(data_obj.data[cat1]==key1) & data_obj.data[cat2]==key2]
-            # freq = analysis.cluster_freq_from_labels(cluster_labels, num_clusters)
+    for i, key1 in enumerate(cat1_keys):
+        for j, key2 in enumerate(cat2_keys):
             freq_key = "_".join([key1, key2])
             ax_arr[i].plot(
                 range(num_clusters),
                 np.squeeze(freq[combined_keys == freq_key, :]),
                 label=key2,
-            )  # color=colors[j], #''.join(['Animal',str(i)]))
+            )
 
         ax_arr[i].set_title(cat1_keys[i], pad=-14)
         ax_arr[i].spines["top"].set_visible(False)
@@ -475,13 +626,11 @@ def cluster_freq(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=False)
         ax_arr[i].spines["right"].set_visible(False)
         ax_arr[i].spines["bottom"].set_visible(False)
     ax_arr[1].set_ylabel("% Time Spent in Cluster")
-    ax_arr[0].legend(loc="upper right", ncol=6)  # TODO: Make this ncol programmable
+    ax_arr[0].legend(loc="upper right", ncol=6)
 
     markers = ["o", "v", "s"]
-    # for j in range(len(conditions),len(conditions)+2): # For mean and variance plots
     j = len(cat1_keys)
-    for i, key1 in enumerate(cat1_keys):  # for each condition
-        # videos = data.meta.index[data.meta['Condition'] == conditions[j]].tolist()
+    for i, key1 in enumerate(cat1_keys):
         key_bool = [True if key.startswith(key1) else False for key in combined_keys]
         ax_arr[j].errorbar(
             range(num_clusters),
@@ -495,33 +644,45 @@ def cluster_freq(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=False)
             yerr=np.std(freq[key_bool, :], axis=0)
             / np.sqrt(freq[key_bool, :].shape[0]),
         )
-        # ax_arr[4].plot(range(num_clusters),np.std(freq[j,:,:],axis=1),color=colors[j],label=conditions[j],
-        #                 marker=markers[j], markersize=5, linewidth=0)
     ax_arr[j].spines["top"].set_visible(False)
     ax_arr[j].spines["right"].set_visible(False)
 
     ax_arr[j].legend(loc="upper right", ncol=3)
-    # ax_arr[j].spines['bottom'].set_visible(False)
-    # ax_arr[j].get_xaxis().set_visible(False)
-    # ax_arr[j].set_ylabel("Mean")
     ax_arr[j].set_ylabel("Mean")
     ax_arr[j].set_xlabel("Cluster")
     ax_arr[j].set_xlim([-0.25, freq.shape[1] + 0.25])
     f.tight_layout()
     plt.subplots_adjust(hspace=0.05)
+    Path(filepath).mkdir(parents=True, exist_ok=True)
     plt.savefig("".join([filepath, "mean_sd_cluster_freq.png"]), dpi=200)
     if show:
         plt.show()
 
     plt.close()
-    return
+    return None
 
 
-def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=False):
+def cluster_freq_cond(
+    data_obj: ds.DataStruct,
+    cat1: str,
+    cat2: str,
+    filepath: str = "./",
+    show: bool = False,
+) -> None:
     """
-    IN:
-        cat1: Will create a separate subplot for each label in cat1
-        cat2: For each subplot of cat1, will have multiple lines for each cat2
+    Variant of cluster_freq with fixed layout for condition plots.
+
+    Parameters
+    ----------
+    data_obj : DataStruct
+    cat1 : str
+    cat2 : str
+    filepath : str
+    show : bool
+
+    Returns
+    -------
+    None
     """
     colors = [
         "tab:pink",
@@ -537,7 +698,6 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
         "#dc0ab4",
         "#00b7c7",
     ]
-    # Cat1 and cat2 labels for all points
     cat1_labels = data_obj.data[cat1].astype(str).values.tolist()
     cat2_labels = data_obj.data[cat2].astype(str).values.tolist()
 
@@ -549,10 +709,7 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
         data_obj.data["Cluster"].values, cat=combined_labels
     )
 
-    # cat1_freq_keys,cat2_freq_keys = map(list, zip(*[key.split(',') for key in combined_keys]))
-
-    num_clusters = freq.shape[1]  # data_obj.data['Cluster'].max()+1
-    # Unique keys for cat1 and cat2
+    num_clusters = freq.shape[1]
     cat1_keys, cat2_keys = np.unique(data_obj.data[cat1].values), np.unique(
         data_obj.data[cat2].values
     )
@@ -561,11 +718,8 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
         3, 1, sharex="all", figsize=(12, 4), gridspec_kw={"height_ratios": [0.2, 2, 2]}
     )
 
-    for i, key1 in enumerate(cat1_keys):  # For each plot of cat1
-        # videos = data_obj.meta.index[data_obj.meta['Condition'] == cat1_keys[i]].tolist()
-        for j, key2 in enumerate(cat2_keys):  # For each cat2 of cat 1
-            # cluster_labels = data_obj.data['Cluster'].values[(data_obj.data[cat1]==key1) & data_obj.data[cat2]==key2]
-            # freq = analysis.cluster_freq_from_labels(cluster_labels, num_clusters)
+    for i, key1 in enumerate(cat1_keys):
+        for j, key2 in enumerate(cat2_keys):
             freq_key = "_".join([key1, key2])
             ax_arr[1].plot(
                 range(num_clusters),
@@ -573,21 +727,19 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
                 label=key1,
                 color=colors[-i - 1],
                 alpha=0.1,
-            )  #''.join(['Animal',str(i)]))
+            )
 
     handles = [
         Line2D([0], [0], linewidth=5, color=colors[-i - 1], label=cat1_keys[i])
         for i in range(len(cat1_keys))
     ]
-    # ax_arr[0].set_title(cat1_keys[i],pad=-14)
     ax_arr[1].spines["top"].set_visible(False)
     ax_arr[1].get_xaxis().set_visible(False)
     ax_arr[1].spines["right"].set_visible(False)
     ax_arr[1].spines["bottom"].set_visible(False)
     ax_arr[1].set_ylabel("% Time Spent in Cluster")
-    ax_arr[1].legend(
-        handles, cat1_keys, loc="upper right", ncol=1, borderpad=1
-    )  # TODO: Make this ncol programmable
+    # TODO: Make this ncol programmable
+    ax_arr[1].legend(handles, cat1_keys, loc="upper right", ncol=1, borderpad=1)
     ax_arr[1].set_ylim(0, 0.16)
     ax_arr[0].set_ylim(0.59, 0.6)
     ax_arr[1].spines["bottom"].set_visible(False)
@@ -610,10 +762,8 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
     ax_arr[0].plot([0], [0], transform=ax_arr[0].transAxes, **kwargs)
     ax_arr[1].plot([0], [1], transform=ax_arr[1].transAxes, **kwargs)
     markers = ["o", "v", "s"]
-    # for j in range(len(conditions),len(conditions)+2): # For mean and variance plots
     j = 1
-    for i, key1 in enumerate(cat1_keys):  # for each condition
-        # videos = data.meta.index[data.meta['Condition'] == conditions[j]].tolist()
+    for i, key1 in enumerate(cat1_keys):
         key_bool = [True if key.startswith(key1) else False for key in combined_keys]
 
         ax_arr[2].errorbar(
@@ -628,29 +778,47 @@ def cluster_freq_cond(data_obj: ds.DataStruct, cat1, cat2, filepath="./", show=F
             yerr=np.std(freq[key_bool, :], axis=0)
             / np.sqrt(freq[key_bool, :].shape[0]),
         )
-        # ax_arr[4].plot(range(num_clusters),np.std(freq[j,:,:],axis=1),color=colors[j],label=conditions[j],
-        #                 marker=markers[j], markersize=5, linewidth=0)
     ax_arr[2].spines["top"].set_visible(False)
     ax_arr[2].spines["right"].set_visible(False)
 
-    # ax_arr[1].legend(loc='upper right',ncol=3)
-    # ax_arr[j].spines['bottom'].set_visible(False)
-    # ax_arr[j].get_xaxis().set_visible(False)
-    # ax_arr[j].set_ylabel("Mean")
     ax_arr[2].set_ylabel("Mean")
     ax_arr[2].set_xlabel("Cluster")
     ax_arr[2].set_xlim([-0.25, freq.shape[1] + 0.25])
     f.tight_layout()
     plt.subplots_adjust(hspace=0.05)
+    Path(filepath).mkdir(parents=True, exist_ok=True)
     plt.savefig("".join([filepath, "mean_sd_cluster_freq.png"]), dpi=200)
     if show:
         plt.show()
 
     plt.close()
-    return
+    return None
 
 
-def heuristics(features, labels, data_obj, heuristics, filepath):
+def heuristics(
+    features: npt.NDArray[Any],
+    labels: List[str],
+    data_obj: ds.DataStruct,
+    heuristics: Dict[str, Dict[str, List[str]]],
+    filepath: str,
+) -> None:
+    """
+    Visualize heuristic-derived scores on watershed maps.
+
+    Parameters
+    ----------
+    features : ndarray, shape (n_frames, n_features)
+    labels : list of str
+    data_obj : DataStruct
+    heuristics : dict
+        Mapping heuristic name -> {"high": [...], "low": [...]}
+    filepath : str
+        Output directory prefix.
+
+    Returns
+    -------
+    None
+    """
     filepath = filepath + "/heuristics/"
     for heur_key in heuristics:
         print("Plotting heuristics")
@@ -669,17 +837,16 @@ def heuristics(features, labels, data_obj, heuristics, filepath):
         try:
             assert len(high_feat_i) == len(heur_feats["high"])
             assert len(low_feat_i) == len(heur_feats["low"])
-        except:
+        except AssertionError:
             print("Couldn't find some features from the heuristics")
 
         high_feats = np.clip(features[:, high_feat_i], -2.5, 2.5)
         low_feats = np.clip(-features[:, low_feat_i], -2.5, 2.5)
-        heur_feats = np.mean(np.append(high_feats, low_feats, axis=1), axis=1)
+        heur_feats_arr = np.mean(np.append(high_feats, low_feats, axis=1), axis=1)
 
-        # num_clusters = np.max(np.unique(data_obj.data['Cluster'].values))
-        heur_watershed = data_obj.ws.watershed_map
+        heur_watershed = data_obj.ws.watershed_map.copy()
         for cluster in np.unique(data_obj.data["Cluster"].values):
-            cluster_mean = np.mean(heur_feats[data_obj.data["Cluster"] == cluster])
+            cluster_mean = np.mean(heur_feats_arr[data_obj.data["Cluster"] == cluster])
             heur_watershed[data_obj.ws.watershed_map == cluster] = cluster_mean
 
         watershed(
@@ -688,26 +855,13 @@ def heuristics(features, labels, data_obj, heuristics, filepath):
             filepath=filepath + heur_key,
         )
 
-        # vis.scatter(data_obj.embed_vals,
-        #             color=heur_feats,
-        #             filepath=''.join([filepath,'scatter_',heur_key,'_clipped_score.png']))
-
         print("Highest " + heur_key + " score frames: ")
-        sorted_idx = np.argsort(heur_feats)
+        sorted_idx = np.argsort(heur_feats_arr)
         print(sorted_idx)
 
-        # skeleton_vid3D(
-        #     data_obj.pose,
-        #     data_obj.connectivity,
-        #     frames=[sorted_idx[-1] * 10],
-        #     N_FRAMES=100,
-        #     dpi=100,
-        #     VID_NAME="highest_" + heur_key + "_score.mp4",
-        #     SAVE_ROOT=filepath,
-        # )
 
 def _ax_bubble_map(
-    ax,
+    ax: Any,
     embed_vals: npt.ArrayLike,
     borders: npt.ArrayLike,
     unique_annotations: List[str],
@@ -716,7 +870,27 @@ def _ax_bubble_map(
     radius: Union[str, npt.ArrayLike] = "frequency",
     scale_factor: float = 1000,
     get_legend_handles: bool = True,
-):
+) -> Tuple[Any, List[Any]]:
+    """
+    Draw bubble overlays for clusters on a matplotlib Axes.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+    embed_vals : array-like, shape (N, 2)
+    borders : array-like
+    unique_annotations : list of str
+    clusters : array-like, shape (N,)
+    annotations : array-like, shape (N,) or (n_clusters,)
+    radius : 'frequency' or array-like, default 'frequency'
+    scale_factor : float, default 1000
+    get_legend_handles : bool, default True
+
+    Returns
+    -------
+    ax : matplotlib.axes.Axes
+    legend_handles : list
+    """
     n_clusters = len(annotations)
     n_vals = len(embed_vals)
 
@@ -727,8 +901,7 @@ def _ax_bubble_map(
             color="k",
             markersize=0,
             lw=0.25,
-            # s=0.5,
-            zorder=1,  # Small dots (s=0.1 controls size)
+            zorder=1,
         )
 
     data_arr = np.concatenate([embed_vals, clusters[:, None]], axis=-1)
@@ -742,7 +915,6 @@ def _ax_bubble_map(
             agg_methods["radius"] = ("radius", "mean")
 
     cluster_stats = data_df.groupby("cluster").agg(**agg_methods)
-    # cluster_stats = cluster_stats.drop(index=0)
     cluster_stats = cluster_stats.reindex(range(1, n_clusters + 1), fill_value=0)
     cluster_stats["annotations"] = annotations
 
@@ -753,24 +925,20 @@ def _ax_bubble_map(
         if len(radius) == len(cluster_stats):
             cluster_stats["radius"] = radius
 
-    # Loop through each cluster to draw circles
-    legend_handles = []  # Collect handles for legend
+    legend_handles = []
     for idx, row in cluster_stats.iterrows():
         color = PALETTE[unique_annotations.index(row["annotations"])]
-
-        # Define the radius proportional to the count
-        radius = row["radius"] * scale_factor
+        rad = row["radius"] * scale_factor
         circle = plt.Circle(
             (row["x_mean"], row["y_mean"]),
-            radius,
+            rad,
             facecolor=color,
             alpha=0.75,
             edgecolor="black",
             linewidth=1.2,
-            linestyle="-" if radius >= 0 else "--",
+            linestyle="-" if rad >= 0 else "--",
         )
         ax.add_patch(circle)
-        # plt.text(x_mean, y_mean, cluster, fontsize=10, ha='center', va='center')
 
         if (
             row["annotations"] not in [h.get_label() for h in legend_handles]
@@ -784,12 +952,10 @@ def _ax_bubble_map(
                     markerfacecolor=color,
                     markersize=10,
                     label=row["annotations"],
-                )  # Use Line2D to mimic legend entry
+                )
             )
 
     ax.set_aspect(0.9)
-
-    # Show the plot
     ax.set_xticks([])
     ax.set_yticks([])
     ax.axis("off")
@@ -798,7 +964,7 @@ def _ax_bubble_map(
 
 
 def bubble_map(
-    embed_vals: npt.ArrayLike,
+    embed_vals: npt.NDArray[np.float64_],
     watershed: Watershed,
     clusters: npt.ArrayLike,
     annotations: Optional[npt.ArrayLike] = None,
@@ -806,7 +972,25 @@ def bubble_map(
     scale_factor: float = 1000,
     filepath: Optional[str] = "./bubble_map.svg",
     show_legend: bool = True,
-):
+) -> None:
+    """
+    Create and save a bubble map visualizing cluster centers and sizes.
+
+    Parameters
+    ----------
+    embed_vals : ndarray, shape (N, 2)
+    watershed : Watershed
+    clusters : array-like, shape (N,)
+    annotations : array-like, optional
+    radius : 'frequency' or array-like
+    scale_factor : float
+    filepath : str
+    show_legend : bool
+
+    Returns
+    -------
+    None
+    """
     borders = copy.deepcopy(watershed.borders)
     watershed_shape = watershed.watershed_map.shape
     unique_annotations = list(np.unique(annotations))
@@ -820,7 +1004,7 @@ def bubble_map(
         )
 
     # Border values in imshow coordinates, flipping y values around to match scatterplot
-    for k,v in borders.items():
+    for k, v in borders.items():
         borders[k][:, 1] = watershed_shape[1] - v[:, 1]
 
     f = plt.figure(figsize=(10, 10))
@@ -841,16 +1025,33 @@ def bubble_map(
         plt.legend(handles=legend_handles, ncols=4, loc="upper center")
     f.tight_layout()
     f.subplots_adjust(top=0.75, bottom=0.001)
+    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(filepath, dpi=400)
-    return
-    
+    return None
 
-def annotated_watershed(watershed: Watershed,
-                        annotations: npt.ArrayLike,
-                        palette: Optional[List] = None,
-                        filepath: Optional[str] = "./bubble_map.svg",
-                        show=False):
 
+def annotated_watershed(
+    watershed: Watershed,
+    annotations: npt.ArrayLike,
+    palette: Optional[List] = None,
+    filepath: Optional[str] = "./bubble_map.svg",
+    show: bool = False,
+) -> None:
+    """
+    Color a watershed map by annotations and draw merged borders and legend.
+
+    Parameters
+    ----------
+    watershed : Watershed
+    annotations : array-like, shape (n_clusters,) or (n_pixels,)
+    palette : list, optional
+    filepath : str
+    show : bool
+
+    Returns
+    -------
+    None
+    """
     unique_annotations = list(np.unique(annotations))
 
     if palette is None:
@@ -861,7 +1062,7 @@ def annotated_watershed(watershed: Watershed,
 
     # Apply colors to the map based on annotations
     for i, annotation in enumerate(unique_annotations):
-        inds = np.where(annotations == annotation)[0] + 1  # +1 because labels in map start from 1?
+        inds = np.where(annotations == annotation)[0] + 1
         is_anno = np.isin(watershed_map, inds)
         colored_map[is_anno] = palette[i]
 
@@ -893,16 +1094,24 @@ def annotated_watershed(watershed: Watershed,
 
     # ---- Add Legend ----
     legend_elements = [
-        Patch(facecolor=palette[i], edgecolor='k', label=label)
+        Patch(facecolor=palette[i], edgecolor="k", label=label)
         for i, label in enumerate(unique_annotations)
     ]
-    ax.legend(handles=legend_elements, ncols=len(unique_annotations), loc='upper center', frameon=True, prop={'family': 'Liberation Sans', 'size': 16})
+    ax.legend(
+        handles=legend_elements,
+        ncols=len(unique_annotations),
+        loc="upper center",
+        frameon=True,
+        prop={"family": "Liberation Sans", "size": 16},
+    )
 
+    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(filepath, dpi=400)
     if show:
         plt.show()
     plt.close()
-    return
+    return None
+
 
 def feature_watershed(
     watershed: npt.ArrayLike,
@@ -912,67 +1121,60 @@ def feature_watershed(
     cluster_labels: Optional[npt.ArrayLike] = None,
     filepath: Optional[str] = "./bubble_map.svg",
     show: bool = True,
-):
-    """Returns watershed map with clusters colored by the difference in z scores
-    for the group defined by query 1 and the group defined by query 2.
+) -> None:
+    """
+    Render feature values on watershed clusters using a diverging colormap.
 
     Parameters
     ----------
-    watershed : npt.ArrayLike
-        Array of (# pixel height, # pixels width) with cluster label for each pixel
-    watershed_borders : npt.ArrayLike
-        Coordinates of watershed borders (# coordinates, 2)
-    feature : npt.ArrayLike
-        (# clusters) or (# frames)
-    cluster_labels: Optional[npt.ArrayLike]
-    
-    """
-    # Define bounds and custom colormap
-#     bounds = [-4, -3.29, -2.58, -1.96, 1.96, 2.58, 3.29, 4]
-#     base_colors = plt.get_cmap("seismic", 6)([0, 1, 2, 3, 4, 5])
-#     custom_colors = [
-#         base_colors[0],
-#         base_colors[1],
-#         base_colors[2],
-#         "white",  # for 'ns'
-#         base_colors[3],
-#         base_colors[4],
-#         base_colors[5],
-#     ]
-#     custom_cmap = mcolors.ListedColormap(custom_colors)
-#     norm = mcolors.BoundaryNorm(bounds, custom_cmap.N)
+    watershed : ndarray, shape (H, W)
+        Integer map of cluster labels per pixel (can be used to index cluster features).
+    watershed_borders : dict-like
+        Borders mapping for overlay.
+    feature : array-like, shape (n_clusters,) or (n_frames,)
+        Feature values either per cluster or per frame (if per frame, supply cluster_labels).
+    labels : list of tuples
+        Not used in computation (kept for compatibility).
+    cluster_labels : array-like, shape (n_frames,), optional
+        If `feature` is per-frame, this maps frames to clusters.
+    filepath : str
+    show : bool
 
-    n_clusters = watershed.max() + 1
-    if len(feature) in [n_clusters, n_clusters -1]:
+    Returns
+    -------
+    None
+    """
+    n_clusters = int(np.max(watershed)) + 1
+    if len(feature) in [n_clusters, n_clusters - 1]:
         feat = feature
     else:
         feat_dict = {"feature": feature, "cluster": cluster_labels}
         df = pd.DataFrame().assign(**feat_dict)
-        feat = df.groupby("cluster").agg({"feature":"mean"})
-        assert len(feat) in [n_clusters, n_clusters-1]
+        feat = df.groupby("cluster").agg({"feature": "mean"})
+        assert len(feat) in [n_clusters, n_clusters - 1]
 
     f = plt.figure()
     ax = f.add_subplot(111)
     im = ax.imshow(
         feat[watershed],
         cmap=CUSTOM_CMAPS["wide_white_seismic"],
-        #         cmap=custom_cmap,
-#         norm=norm,
-        vmin = -5,
-        vmax = 5,
+        vmin=-5,
+        vmax=5,
     )
     ax.set_aspect(0.9)
-    for k,v in watershed_borders.items():
+    for k, v in watershed_borders.items():
         ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
     ax.axis("off")
 
     f.colorbar(im)
 
-    plt.savefig("{}/{}feat_watershed.svg".format(filepath))
+    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(filepath, dpi=200)
     if show:
         plt.show()
     plt.close()
-    return
+    return None
+
 
 # def feature_ridge(
 #     feature: np.ndarray,
