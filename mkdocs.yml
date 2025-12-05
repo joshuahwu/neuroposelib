@@ -43,7 +43,7 @@ markdown_extensions:
 
 nav:
     - Home: index.md
-    - API References: reference/
+    # - API References: reference/
     # - Tutorials: generated/gallery
     # - Workflow: notes/00-workflow.md
     # - Structure: notes/01-structure.md
