@@ -1,5 +1,4 @@
 from scipy.ndimage import convolve
-from scipy.signal import morlet2, cwt
 import numpy as np
 from typing import Optional, Union, List, Tuple, Type
 from tqdm import tqdm
@@ -11,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 def get_lengths(pose: npt.NDArray, links: npt.ArrayLike) -> npt.NDArray:
     """Get lengths of all defined segments.
 
-    Parameters
+    Parametersxwxwxw
     ----------
     pose : npt.NDArray
         Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
