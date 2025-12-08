@@ -10,11 +10,11 @@ from scipy.spatial.transform import Rotation as R
 
 @by_id
 def align_floor_by_id(
-    pose: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
     foot_id: Optional[int] = 12,
     head_id: Optional[int] = 0,
     dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
-) -> npt.NDArray[np.float64, np.float32]:
+) -> npt.NDArray[Any]:
     """Due to the camera calibration, predictions may be rotated to different world coordinates.
     Rotate poses per-video so the fitted floor lies on the XY plane.
 
@@ -57,11 +57,11 @@ def align_floor_by_id(
 
 
 def align_floor(
-    pose: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
     foot_id: Optional[int] = 12,
     head_id: Optional[int] = None,
     dtype: Optional[npt.DTypeLike] = np.float32,
-) -> npt.NDArray[np.float64, np.float32]:
+) -> npt.NDArray[Any]:
     """Due to the camera calibration, predictions may be rotated to different world coordinates. 
     Rotate a single-video pose so the floor lies on the XY plane.
 
@@ -152,10 +152,10 @@ def align_floor(
 
 
 def vel_filter(
-    pose: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
     exp_id: Union[npt.NDArray[np.int_], List[int]],
     threshold: float = 20,
-) -> npt.NDArray[np.float64, np.float32]:
+) -> npt.NDArray[Any]:
     """Detect and replace high-velocity frames with cubic spline interpolation.
 
     This function computes a per-frame velocity signal and, for frames that
@@ -210,10 +210,10 @@ def vel_filter(
 
 
 def z_filter(
-    pose: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
     exp_id: Union[npt.NDArray[np.int_], List[int]],
     threshold: float = 2500,
-) -> npt.NDArray[np.float64, np.float32]:
+) -> npt.NDArray[Any]:
     """Detect frames with extreme summed-Z and interpolate them.
 
     For each grouped experiment/video (as indicated by ``exp_id``), the sum
@@ -260,10 +260,10 @@ def z_filter(
 
 
 def median_filter(
-    pose: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
     ids: Union[npt.NDArray[np.int_], List[int]],
     filter_len: int = 5,
-) -> npt.NDArray[np.float64, np.float32]:
+) -> npt.NDArray[Any]:
     """Apply a 1D temporal median filter per id/group.
 
     The median filter is applied along the time axis for each group of frames
@@ -294,11 +294,11 @@ def median_filter(
 
 
 def anipose_med_filt(
-    pose: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
     exp_id: Union[npt.NDArray[np.int_], List[int]],
     filter_len: int = 6,
     threshold: float = 5,
-) -> npt.NDArray[np.float64, np.float32]:
+) -> npt.NDArray[Any]:
     """Anipose-style median filtering + error-driven interpolation.
 
     For each video group, a median filter is used to compute a per-frame error
@@ -353,8 +353,8 @@ def anipose_med_filt(
 
 
 def center_spine(
-    pose: npt.NDArray[np.float64, np.float32], keypt_idx: int = 4
-) -> npt.NDArray[np.float64, np.float32]:
+    pose: npt.NDArray[Any], keypt_idx: int = 4
+) -> npt.NDArray[Any]:
     """Shift poses so the selected keypoint is at the origin per-frame.
 
     Parameters
@@ -380,10 +380,10 @@ def center_spine(
 
 
 def rotate_spine(
-    pose: npt.NDArray[np.float64, np.float32],
-    vector: Union[Tuple[int, int], npt.NDArray[np.float64, np.float32]] = (4, 3),
+    pose: npt.NDArray[Any],
+    vector: Union[Tuple[int, int], npt.NDArray[Any]] = (4, 3),
     lock_to_x: bool = False,
-) -> npt.NDArray[np.float64, np.float32]:
+) -> npt.NDArray[Any]:
     """Rotate poses so the spine-forward direction lies in the XZ plane.
 
     The function expects poses to be centered (e.g. via [`center_spine`][neuroposelib.preprocess.center_spine]).
@@ -451,14 +451,14 @@ def rotate_spine(
 ## The following code is adapted from
 
 
-def qnormalize(q: npt.NDArray[np.float64, np.float32]) -> npt.NDArray[np.float64, np.float32]:
+def qnormalize(q: npt.NDArray[Any]) -> npt.NDArray[Any]:
     norm = np.linalg.norm(q, axis=-1, keepdims=True)
     return q / norm
 
 
 def qbetween(
-    v0: npt.NDArray[np.float64, np.float32], v1: npt.NDArray[np.float64, np.float32]
-) -> npt.NDArray[np.float64, np.float32]:
+    v0: npt.NDArray[Any], v1: npt.NDArray[Any]
+) -> npt.NDArray[Any]:
     """Compute quaternion(s) that rotate ``v0`` to ``v1``.
 
     Parameters
@@ -488,7 +488,7 @@ def qbetween(
     return qnormalize(q)
 
 
-def qinv(q: npt.NDArray[np.float64, np.float32]) -> npt.NDArray[np.float64, np.float32]:
+def qinv(q: npt.NDArray[Any]) -> npt.NDArray[Any]:
     """Return the conjugate (inverse for unit quaternions) of ``q``.
 
     Parameters
@@ -513,8 +513,8 @@ def qinv(q: npt.NDArray[np.float64, np.float32]) -> npt.NDArray[np.float64, np.f
 
 
 def qmul(
-    q: npt.NDArray[np.float64, np.float32], r: npt.NDArray[np.float64, np.float32]
-) -> npt.NDArray[np.float64, np.float32]:
+    q: npt.NDArray[Any], r: npt.NDArray[Any]
+) -> npt.NDArray[Any]:
     """Multiply quaternions: compute ``r * q`` for inputs in ``(w,x,y,z)``.
 
     Parameters
@@ -546,11 +546,11 @@ def qmul(
 
 
 def inv_kin(
-    pose: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
     kinematic_tree: Union[List, np.ndarray],
-    offset: npt.NDArray[np.float64, np.float32],
+    offset: npt.NDArray[Any],
     forward_indices: Union[List[int], npt.NDArray[np.int_]] = [0, 1],
-) -> npt.NDArray[np.float64, np.float32]:
+) -> npt.NDArray[Any]:
     """Compute local joint quaternions from global joint positions.
 
     Adapted from the T2M-GPT implementation, this function computes an
@@ -619,12 +619,12 @@ def inv_kin(
 
 
 def fwd_kin_cont6d(
-    continuous_6D: npt.NDArray[np.float64, np.float32],
+    continuous_6D: npt.NDArray[Any],
     kinematic_tree: npt.ArrayLike,
-    offset: npt.NDArray[np.float64, np.float32],
-    root_pos: npt.NDArray[np.float64, np.float32],
+    offset: npt.NDArray[Any],
+    root_pos: npt.NDArray[Any],
     do_root_R: bool = True,
-) -> npt.NDArray[np.float64, np.float32]:
+) -> npt.NDArray[Any]:
     """Forward kinematics using 6D continuous rotation representations.
 
     Convert per-joint 6D continuous rotations into rotation matrices, multiply
@@ -674,8 +674,8 @@ def fwd_kin_cont6d(
 
 
 def cont6d_to_matrix(
-    cont6d: npt.NDArray[np.float64, np.float32], eps: float = 0
-) -> npt.NDArray[np.float64, np.float32]:
+    cont6d: npt.NDArray[Any], eps: float = 0
+) -> npt.NDArray[Any]:
     """Convert a 6D continuous rotation representation to 3x3 matrices.
 
     The 6D representation stores two 3D vectors; the implementation uses a

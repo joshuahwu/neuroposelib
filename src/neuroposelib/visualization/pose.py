@@ -64,7 +64,7 @@ def sample(func):
 
     @functools.wraps(func)
     def wrapper(
-        pose: npt.NDArray[np.float64, np.float32],
+        pose: npt.NDArray[Any],
         connectivity: ds.Connectivity,
         labels: npt.ArrayLike,
         VID_NAME: str = "cluster",
@@ -176,7 +176,7 @@ def sample(func):
 
 @sample
 def sample_arena3D(
-    pose: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
     connectivity: ds.Connectivity,
     n_samples: int = 9,
     VID_NAME: str = "cluster",
@@ -245,13 +245,13 @@ def sample_arena3D(
 
 @sample
 def sample_grid3D(
-    pose: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
     connectivity: ds.Connectivity,
     n_samples: int = 9,
     VID_NAME: str = "cluster",
     N_FRAMES: int = 100,
     watershed: Optional[Watershed] = None,
-    embed_vals: Optional[npt.NDArray[np.float64, np.float32]] = None,
+    embed_vals: Optional[npt.NDArray[Any]] = None,
     filepath: str = "./plot_folder",
     **kwargs: Any,
 ) -> None:
@@ -321,8 +321,8 @@ def sample_grid3D(
 
 def _plot_density(
     ax: matplotlib.axes.Axes,
-    density: npt.NDArray[np.float64, np.float32],
-    watershed_borders: Dict[int, npt.NDArray[np.float64, np.float32]],
+    density: npt.NDArray[Any],
+    watershed_borders: Dict[int, npt.NDArray[Any]],
 ) -> matplotlib.axes.Axes:
     """
     Helper to render density + borders on an axes.
@@ -351,9 +351,9 @@ def _plot_density(
 
 
 def arena3D_map(
-    pose: npt.NDArray[np.float64, np.float32],
-    density: npt.NDArray[np.float64, np.float32],
-    watershed_borders: Dict[int, npt.NDArray[np.float64, np.float32]],
+    pose: npt.NDArray[Any],
+    density: npt.NDArray[Any],
+    watershed_borders: Dict[int, npt.NDArray[Any]],
     connectivity: ds.Connectivity,
     frames: Union[List[int], int] = [3000, 100000, 500000],
     centered: bool = True,
@@ -425,9 +425,9 @@ def arena3D_map(
 
 
 def grid3D_map(
-    pose: npt.NDArray[np.float64, np.float32],
-    density: npt.NDArray[np.float64, np.float32],
-    watershed_borders: Dict[int, npt.NDArray[np.float64, np.float32]],
+    pose: npt.NDArray[Any],
+    density: npt.NDArray[Any],
+    watershed_borders: Dict[int, npt.NDArray[Any]],
     connectivity: ds.Connectivity,
     frames: Union[List[int], int] = [3000, 100000, 5000000],
     centered: bool = True,
@@ -527,7 +527,7 @@ def grid3D_map(
     return None
 
 
-def get_3d_limits(pose: npt.NDArray[np.float64, np.float32]) -> npt.NDArray[np.float64, np.float32]:
+def get_3d_limits(pose: npt.NDArray[Any]) -> npt.NDArray[Any]:
     """
     Compute 3D plotting limits for pose array.
 
@@ -559,10 +559,10 @@ def get_3d_limits(pose: npt.NDArray[np.float64, np.float32]) -> npt.NDArray[np.f
 
 def _pose3D_frame(
     ax_3d: matplotlib.axes.Axes,
-    pose: npt.NDArray[np.float64, np.float32],
-    COLOR: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
+    COLOR: npt.NDArray[Any],
     links: npt.NDArray[np.int_],
-    limits: Optional[npt.NDArray[np.float64, np.float32]] = None,
+    limits: Optional[npt.NDArray[Any]] = None,
 ) -> matplotlib.axes.Axes:
     """
     Plot a single 3D skeleton pose on the provided Axes3D.
@@ -607,7 +607,7 @@ def _pose3D_frame(
 
 
 def _init_vid3D(
-    data: npt.NDArray[np.float64, np.float32],
+    data: npt.NDArray[Any],
     connectivity: ds.Connectivity,
     frames: npt.NDArray[np.int_],
     centered: bool = True,
@@ -676,11 +676,11 @@ def _init_vid3D(
 
 def _pose3D_arena(
     ax_3d: matplotlib.axes.Axes,
-    data: npt.NDArray[np.float64, np.float32],
-    COLORS: npt.NDArray[np.float64, np.float32],
+    data: npt.NDArray[Any],
+    COLORS: npt.NDArray[Any],
     links: npt.NDArray[np.int_],
     frames: npt.NDArray[np.int_],
-    limits: npt.NDArray[np.float64, np.float32],
+    limits: npt.NDArray[Any],
     size: Tuple[int],
     title: Optional[str] = None,
 ) -> matplotlib.axes.Axes:
@@ -739,7 +739,7 @@ def _pose3D_arena(
 
 
 def arena3D(
-    pose: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
     connectivity: ds.Connectivity,
     frames: Union[List[int], int] = [3000, 100000, 500000],
     centered: bool = True,
@@ -791,7 +791,7 @@ def arena3D(
 
 def _pose3D_grid(
     fig: plt.Figure,
-    data: npt.NDArray[np.float64, np.float32],
+    data: npt.NDArray[Any],
     connectivity: ds.Connectivity,
     frames: npt.NDArray[np.int_],
     limits: npt.NDArray[np.int_],
@@ -845,7 +845,7 @@ def _pose3D_grid(
 
 
 def grid3D(
-    pose: npt.NDArray[np.float64, np.float32],
+    pose: npt.NDArray[Any],
     connectivity: ds.Connectivity,
     frames: Union[List[int], int] = [3000, 100000, 5000000],
     centered: bool = True,
