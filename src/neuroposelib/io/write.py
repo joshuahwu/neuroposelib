@@ -1,6 +1,6 @@
 import h5py
 import numpy as np
-from typing import Union, Type, Optional, List
+from typing import Union, Type, Optional, List, Any
 import numpy.typing as npt
 
 def features_h5(

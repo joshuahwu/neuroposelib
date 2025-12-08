@@ -1,6 +1,6 @@
 from scipy.ndimage import convolve
 import numpy as np
-from typing import Optional, Union, List, Tuple, Type
+from typing import Optional, Union, List, Tuple, Type, Any
 from tqdm import tqdm
 from neuroposelib.utils import by_id, rolling_window, get_frame_diff
 import pywt
@@ -172,7 +172,7 @@ def get_ego_pose(
         )
     )
     if not (is_centered and is_rotated):
-        raise ValueError("Pose must be centered and rotated")
+        print("Warning: Not detecting centered and rotated poses")
 
     pose = np.reshape(pose, (pose.shape[0], pose.shape[1] * pose.shape[2]))
     axis = ["x", "y", "z"]

@@ -1,7 +1,7 @@
 import yaml
 import h5py
 import hdf5storage
-from typing import Optional, Union, List, Tuple, Type, Dict
+from typing import Optional, Union, List, Tuple, Type, Dict, Any
 import pandas as pd
 import numpy as np
 from neuroposelib.DataStruct import Connectivity
