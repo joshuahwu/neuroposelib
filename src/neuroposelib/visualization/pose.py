@@ -11,7 +11,7 @@ import functools
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
-from typing import Optional, Union, List, Tuple
+from typing import Optional, Union, List, Tuple, Any, Dict
 from neuroposelib.embed import Watershed
 from neuroposelib import DataStruct as ds
 from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_BONE, _PLANE
@@ -21,19 +21,86 @@ import numpy.typing as npt
 
 
 def sample(func):
+    """
+    Decorator to sample frames per label and call the wrapped video-creation function
+    for each label.
+
+    The decorated function will be invoked once per unique label in `labels` with
+    a temporally contiguous slice of `pose` frames for each sampled point.
+
+    Parameters
+    ----------
+    func : Callable
+        Function to decorate. Expected signature (pose, connectivity, labels, ...).
+
+    Returns
+    -------
+    wrapper : Callable
+        Wrapped function that accepts the same args plus sampling arguments.
+
+    The wrapper accepts:
+    --------------------
+    pose : ndarray, shape (n_frames, n_keypts, 3)
+        Full pose array from which sampled contiguous windows will be taken.
+    connectivity : ds.Connectivity
+        Connectivity information (links, colors, etc.).
+    labels : ndarray or list-like, shape (n_labels,)
+        Per-frame or per-downsampled-frame labels used to group frames.
+    VID_NAME : str
+        Base name for output videos.
+    centered : bool
+        If True, sample windows are centered on the chosen frame (subtract half N_FRAMES).
+    n_samples : int
+        Number of sampled windows per label to produce.
+    N_FRAMES : int
+        Number of contiguous frames per sampled window.
+    watershed : Watershed or None
+        Optional watershed object used to render per-label watershed masks.
+    embed_vals : ndarray or None
+        Optional embedding values aligned to labels (used to compute density).
+    **kwargs : dict
+        Extra args forwarded to the wrapped function.
+    """
+
     @functools.wraps(func)
     def wrapper(
-        pose: np.ndarray,
+        pose: npt.NDArray[np.float_],
         connectivity: ds.Connectivity,
-        labels: Union[np.ndarray, List],
+        labels: npt.ArrayLike,
         VID_NAME: str = "cluster",
         centered: bool = True,
         n_samples: int = 9,
         N_FRAMES: int = 100,
         watershed: Optional[Watershed] = None,
-        embed_vals: Optional[np.ndarray] = None,
-        **kwargs,
-    ):
+        embed_vals: Optional[npt.NDArray[Any]] = None,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Wrapper produced by `sample`.
+
+        Parameters
+        ----------
+        pose : ndarray (n_frames, n_keypts, 3)
+            Full pose array aligned to the (possibly downsampled) `labels`.
+        connectivity : ds.Connectivity
+            Skeleton connectivity settings.
+        labels : array-like (n_frames,)
+            Labels aligned to frames or to downsampled frames.
+        VID_NAME : str
+            Base video file name used by inner function.
+        centered : bool
+            Whether to center the sampled window around the chosen frame.
+        n_samples : int
+            Number of windows to sample per label.
+        N_FRAMES : int
+            Window length (frames) for each sampled sample.
+        watershed : Watershed or None
+            Optional watershed used to create per-label maps.
+        embed_vals : ndarray or None
+            Optional embedding values aligned to `labels`.
+        **kwargs : dict
+            Passed through to the decorated function.
+        """
         if pose.shape[0] != len(labels):
             print("Detected labels not the same shape as pose...")
             downsample = int(np.ceil(pose.shape[0] / len(labels)))
@@ -52,10 +119,8 @@ def sample(func):
                 continue
             else:
                 num_points = min(len(label_idx), n_samples)
-                permuted_points = np.random.permutation(
-                    label_idx
-                )  # b/c moving frames filter
-                sampled_points = []
+                permuted_points = np.random.permutation(label_idx)
+                sampled_points: List[int] = []
                 for i in range(len(permuted_points)):
                     if len(sampled_points) == num_points:  # sampled enough points
                         break
@@ -111,21 +176,43 @@ def sample(func):
 
 @sample
 def sample_arena3D(
-    pose: np.ndarray,
+    pose: npt.NDArray[np.float_],
     connectivity: ds.Connectivity,
     n_samples: int = 9,
     VID_NAME: str = "cluster",
     N_FRAMES: int = 100,
     watershed: Optional[Watershed] = None,
-    embed_vals: Optional[np.ndarray] = None,
+    embed_vals: Optional[npt.NDArray[Any]] = None,
     filepath: str = "./plot_folder",
-    **kwargs,
-):
+    **kwargs: Any,
+) -> None:
+    """
+    Create several small arena-style 3D videos sampled per label.
+
+    Parameters
+    ----------
+    pose : ndarray, shape (n_frames, n_keypts, 3)
+        Full pose array from which short windows will be sampled.
+    connectivity : ds.Connectivity
+        Skeleton connectivity settings (links, colors).
+    n_samples : int
+        Number of sample windows (per label) used to choose windows.
+    VID_NAME : str
+        Base filename (decorator appends label).
+    N_FRAMES : int
+        Length of each sampled window in frames.
+    watershed : Watershed or None
+        If given, will create density overlays using `watershed`.
+    embed_vals : ndarray or None
+        Embedding values aligned to labels. If provided, used to compute density.
+    filepath : str
+        Root folder where skeleton videos will be saved.
+    **kwargs : dict
+        Passed through to `arena3D_map` or `arena3D`.
+    """
     if watershed is not None:
         if embed_vals is not None:
-            density = watershed.fit_density(
-                embed_vals, new=False
-            )  # Fit density on old axes
+            density = watershed.fit_density(embed_vals, new=False)
         else:
             density = watershed.watershed_map
 
@@ -153,26 +240,55 @@ def sample_arena3D(
             **kwargs,
         )
 
-    return
+    return None
 
 
 @sample
 def sample_grid3D(
-    pose: np.ndarray,
+    pose: npt.NDArray[np.float_],
     connectivity: ds.Connectivity,
     n_samples: int = 9,
     VID_NAME: str = "cluster",
     N_FRAMES: int = 100,
     watershed: Optional[Watershed] = None,
-    embed_vals: Optional[np.ndarray] = None,
+    embed_vals: Optional[npt.NDArray[np.float_]] = None,
     filepath: str = "./plot_folder",
-    **kwargs,
-):
+    **kwargs: Any,
+) -> None:
+    """
+    Create several small grid-style 3D videos sampled per label.
+
+    This function is wrapped by the `@sample` decorator which handles iterating
+    over labels and calling this function once per label with sampled windows.
+
+    Parameters
+    ----------
+    pose : ndarray, shape (n_frames, n_keypts, 3)
+        Full 3D pose array from which windows will be sampled.
+    connectivity : ds.Connectivity
+        Connectivity object that contains `.links` and `.colors`.
+    n_samples : int, optional
+        Number of windows to sample per label (default 9).
+    VID_NAME : str, optional
+        Base name for output videos; the decorator appends the label (default "cluster").
+    N_FRAMES : int, optional
+        Window length (frames) for each sampled sample (default 100).
+    watershed : Watershed or None, optional
+        If provided, used to compute density overlays for each label.
+    embed_vals : ndarray or None, optional
+        Embedding values aligned to labels (used to compute density if provided).
+    filepath : str, optional
+        Base path where outputs are saved (default "./plot_folder").
+    **kwargs : dict, optional
+        Extra keyword arguments forwarded to `grid3D_map` or `grid3D`.
+
+    Returns
+    -------
+    None
+    """
     if watershed is not None:
         if embed_vals is not None:
-            density = watershed.fit_density(
-                embed_vals, new=False
-            )  # Fit density on old axes
+            density = watershed.fit_density(embed_vals, new=False)
         else:
             density = watershed.watershed_map
 
@@ -200,12 +316,26 @@ def sample_grid3D(
             **kwargs,
         )
 
-    return
+    return None
 
 
 def _plot_density(
-    ax: matplotlib.axes.Axes, density: np.ndarray, watershed_borders: np.ndarray
-):
+    ax: matplotlib.axes.Axes,
+    density: npt.NDArray[np.float_],
+    watershed_borders: Dict[int, npt.NDArray[np.float_]],
+) -> matplotlib.axes.Axes:
+    """
+    Helper to render density + borders on an axes.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axes on which density will be drawn.
+    density : ndarray, shape (H, W)
+        Density image to show (already masked/clipped as desired).
+    watershed_borders : dict(int -> ndarray)
+        Dictionary mapping cluster id to border coordinates.
+    """
     ax.imshow(
         density,
         vmin=EPS,
@@ -221,9 +351,9 @@ def _plot_density(
 
 
 def arena3D_map(
-    pose: np.ndarray,
-    density: np.ndarray,
-    watershed_borders: np.ndarray,
+    pose: npt.NDArray[np.float_],
+    density: npt.NDArray[np.float_],
+    watershed_borders: Dict[int, npt.NDArray[np.float_]],
     connectivity: ds.Connectivity,
     frames: Union[List[int], int] = [3000, 100000, 500000],
     centered: bool = True,
@@ -232,7 +362,35 @@ def arena3D_map(
     dpi: int = 200,
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
-):
+) -> None:
+    """
+    Create an arena-style 3D video with density panel and 3D pose.
+
+    Parameters
+    ----------
+    pose : ndarray, shape (n_frames, n_keypts, 3)
+        Full 3D pose array used to produce moving skeleton panel.
+    density : ndarray, shape (H, W)
+        Density image to render in the left panel.
+    watershed_borders : dict
+        Borders mapping used to overlay lines on density.
+    connectivity : ds.Connectivity
+        Skeleton connectivity (links, colors).
+    frames : list or int
+        Frame indices (or single index) used to create windows.
+    centered : bool
+        Whether to center windows around each frame.
+    N_FRAMES : int
+        Number of frames in each window (loop length).
+    fps : int
+        Frames per second for output video.
+    dpi : int
+        Resolution when writing the video.
+    VID_NAME : str
+        Output filename for the created video.
+    SAVE_ROOT : str
+        Directory where video will be saved.
+    """
     if isinstance(frames, int):
         frames = [frames]
 
@@ -250,6 +408,7 @@ def arena3D_map(
     ax_dens = fig.add_subplot(gs[0, 0])
     ax_dens = _plot_density(ax_dens, density, watershed_borders)
 
+    Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
@@ -262,13 +421,13 @@ def arena3D_map(
             ax_3d.clear()
 
     plt.close()
-    return
+    return None
 
 
 def grid3D_map(
-    pose: np.ndarray,
-    density: np.ndarray,
-    watershed_borders: np.ndarray,
+    pose: npt.NDArray[np.float_],
+    density: npt.NDArray[np.float_],
+    watershed_borders: Dict[int, npt.NDArray[np.float_]],
     connectivity: ds.Connectivity,
     frames: Union[List[int], int] = [3000, 100000, 5000000],
     centered: bool = True,
@@ -280,7 +439,46 @@ def grid3D_map(
     figsize: Optional[Tuple[int]] = None,
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
-):
+) -> None:
+    """
+    Create a grid-style 3D video with a density panel and a grid of 3D poses.
+
+    Parameters
+    ----------
+    pose : ndarray, shape (n_frames, n_keypts, 3)
+        Full 3D pose array used to construct windows shown in the grid.
+    density : ndarray, shape (H, W)
+        Density image (e.g. watershed density) to show in the left panel.
+    watershed_borders : dict
+        Mapping from cluster id to border coordinates for overlaying borders on the density.
+    connectivity : ds.Connectivity
+        Skeleton connectivity information (links, colors, keypoint colors).
+    frames : list of int or int, optional
+        Frame indices to use as the reference time for each window; a single int will be converted to a one-element list.
+        Default examples: [3000, 100000, 5000000].
+    centered : bool, optional
+        If True, windows are centered around each frame (subtracts N_FRAMES//2), otherwise windows start at the frame.
+    subtitles : list of str or None, optional
+        Optional subtitles for each grid panel.
+    title : str or None, optional
+        Optional overall title placed above the grid of poses.
+    N_FRAMES : int, optional
+        Number of frames in each window (loop length) used to create the animation (default 150).
+    fps : int, optional
+        Frames-per-second for the output video (default 90).
+    dpi : int, optional
+        Resolution used when saving the video (default 100).
+    figsize : tuple or None, optional
+        Figure size passed to matplotlib. If None, computed from number of frames.
+    VID_NAME : str, optional
+        Output filename for the created video (default "0.mp4").
+    SAVE_ROOT : str, optional
+        Directory in which the video file will be saved (default "./test/pose_vids/").
+
+    Returns
+    -------
+    None
+    """
     if isinstance(frames, int):
         frames = [frames]
     # Reshape pose and other variables
@@ -302,6 +500,7 @@ def grid3D_map(
     ax_dens = subfig[0].add_subplot(1, 1, 1)
     ax_dens = _plot_density(ax_dens, density, watershed_borders)
 
+    Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
@@ -325,11 +524,23 @@ def grid3D_map(
             subfig[1].clear()
 
     plt.close()
-    return
+    return None
 
 
-def get_3d_limits(pose: np.ndarray):
-    # compute 3d grid limits
+def get_3d_limits(pose: npt.NDArray[np.float_]) -> npt.NDArray[np.float_]:
+    """
+    Compute 3D plotting limits for pose array.
+
+    Parameters
+    ----------
+    pose : ndarray, shape (n_frames, n_keypts, 3)
+        Input pose values.
+
+    Returns
+    -------
+    limits : ndarray, shape (3, 2)
+        For each axis (x,y,z) the [min, max] values padded slightly.
+    """
     limits = np.append(
         np.min(pose, axis=(0, 1))[:, None],
         np.max(pose, axis=(0, 1))[:, None],
@@ -348,15 +559,27 @@ def get_3d_limits(pose: np.ndarray):
 
 def _pose3D_frame(
     ax_3d: matplotlib.axes.Axes,
-    pose: np.ndarray,
-    COLOR: np.ndarray,
-    links: np.ndarray,
-    limits: Optional[np.ndarray] = None,
-):
+    pose: npt.NDArray[np.float_],
+    COLOR: npt.NDArray[np.float_],
+    links: npt.NDArray[np.int_],
+    limits: Optional[npt.NDArray[np.float_]] = None,
+) -> matplotlib.axes.Axes:
     """
-    Plot single pose given a 3D matplotlib.axes.Axes object
-    """
+    Plot a single 3D skeleton pose on the provided Axes3D.
 
+    Parameters
+    ----------
+    ax_3d : matplotlib.axes.Axes
+        3D axes on which to draw.
+    pose : ndarray, shape (n_keypts, 3)
+        Single frame of 3D keypoints.
+    COLOR : ndarray, shape (n_links, 4)
+        RGBA colors for link segments.
+    links : ndarray, shape (n_links, 2)
+        Array of (from, to) keypoint indices for segments.
+    limits : ndarray, shape (3,2), optional
+        Axis limits (min,max) for each of x,y,z. If None, limits are not set.
+    """
     # Plot keypoints
     ax_3d.scatter(
         pose[:, 0],
@@ -375,22 +598,51 @@ def _pose3D_frame(
         ]
         ax_3d.plot3D(xs, ys, zs, c=color, lw=4)
 
-    ax_3d.set_xlim(*limits[0, :])
-    ax_3d.set_ylim(*limits[1, :])
-    ax_3d.set_zlim(*limits[2, :])
-
-    ax_3d.set_box_aspect(limits[:, 1] - limits[:, 0])
+    if limits is not None:
+        ax_3d.set_xlim(*limits[0, :])
+        ax_3d.set_ylim(*limits[1, :])
+        ax_3d.set_zlim(*limits[2, :])
+        ax_3d.set_box_aspect(limits[:, 1] - limits[:, 0])
     return ax_3d
 
 
 def _init_vid3D(
-    data: np.ndarray,
+    data: npt.NDArray[np.float_],
     connectivity: ds.Connectivity,
-    frames: np.ndarray,
+    frames: npt.NDArray[np.int_],
     centered: bool = True,
     N_FRAMES: int = 150,
     SAVE_ROOT: str = "./test/pose_vids/",
-):
+) -> Tuple[npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]]:
+    """
+    Prepare stacked pose windows, plotting limits, expanded links and color array.
+
+    Parameters
+    ----------
+    data : ndarray, shape (n_frames, n_keypts, 3)
+        Full pose array.
+    connectivity : ds.Connectivity
+        Contains `.links` and `.colors`.
+    frames : ndarray of int
+        Frame indices for which windows will be prepared.
+    centered : bool
+        If True, frames are shifted by -N_FRAMES//2 to center windows.
+    N_FRAMES : int
+        Window length in frames.
+    SAVE_ROOT : str
+        Directory to ensure exists before saving.
+
+    Returns
+    -------
+    pose_3d : ndarray, shape (len(frames)*N_FRAMES, n_keypts, 3)
+        Concatenated windows of poses.
+    limits : ndarray, shape (3,2)
+        Plotting limits calculated from concatenated windows.
+    links_expand : ndarray, shape (n_links*len(frames), 2)
+        Expanded links across concatenated windows.
+    COLOR : ndarray, shape (n_links*len(frames), 4)
+        Per-link RGBA colors expanded over windows.
+    """
     Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
 
     if centered:
@@ -400,7 +652,7 @@ def _init_vid3D(
         np.tile(connectivity.colors[..., None], len(frames)), -1, 0
     ).reshape((-1, 4))
     links = connectivity.links
-    links_expand = links
+    links_expand = links.copy()
 
     ## Expanding connectivity for each frame to be visualized
     num_joints = np.max(links) + 1
@@ -424,20 +676,43 @@ def _init_vid3D(
 
 def _pose3D_arena(
     ax_3d: matplotlib.axes.Axes,
-    data: np.ndarray,
-    COLORS: np.ndarray,
-    links: np.ndarray,
-    frames: np.ndarray,
-    limits: np.ndarray,
+    data: npt.NDArray[np.float_],
+    COLORS: npt.NDArray[np.float_],
+    links: npt.NDArray[np.int_],
+    frames: npt.NDArray[np.int_],
+    limits: npt.NDArray[np.float_],
     size: Tuple[int],
     title: Optional[str] = None,
-):
+) -> matplotlib.axes.Axes:
+    """
+    Plot multiple frames concatenated as a single long skeleton (arena view).
+
+    Parameters
+    ----------
+    ax_3d : Axes3D
+        Axes used for plotting the arena-style concatenated skeleton.
+    data : ndarray, shape (total_frames, n_keypts, 3)
+        Pose data that will be indexed by `frames`.
+    COLORS : ndarray
+        Per-link colors, possibly expanded for concatenation.
+    links : ndarray, shape (n_links, 2)
+        Link definitions.
+    frames : ndarray of indices
+        Indices selecting frames from `data` (local to concatenated block).
+    limits : ndarray, shape (3,2)
+        Axis limits.
+    size : (rows, cols)
+        Used to compute internal layout; kept for compatibility.
+    title : str or None
+        Optional title to display on the axes.
+    """
     (rows, cols) = size
-    # import pdb; pdb.set_trace()
     try:
         kpts_3d = np.reshape(data[frames, :, :], (len(frames) * data.shape[-2], 3))
-    except:
-        import pdb; pdb.set_trace()
+    except Exception:
+        import pdb
+
+        pdb.set_trace()
 
     ax_3d = _pose3D_frame(
         ax_3d, kpts_3d, COLORS, links, limits  # , figsize=(cols * 5, rows * 5)
@@ -464,7 +739,7 @@ def _pose3D_arena(
 
 
 def arena3D(
-    pose: np.ndarray,
+    pose: npt.NDArray[np.float_],
     connectivity: ds.Connectivity,
     frames: Union[List[int], int] = [3000, 100000, 500000],
     centered: bool = True,
@@ -473,7 +748,18 @@ def arena3D(
     dpi: int = 200,
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
-):
+) -> None:
+    """
+    Create a 3D arena video (single 3D axes) for the given frames.
+
+    Parameters
+    ----------
+    pose : ndarray (n_frames, n_keypts, 3)
+    connectivity : ds.Connectivity
+    frames : list or int
+        Frames used to generate windows for the video.
+    centered, N_FRAMES, fps, dpi, VID_NAME, SAVE_ROOT : various
+    """
     if isinstance(frames, int):
         frames = [frames]
 
@@ -487,6 +773,7 @@ def arena3D(
     figsize = (12, 12)
     fig = plt.figure(figsize=figsize, layout="constrained")
     ax_3d = fig.add_subplot(1, 1, 1, projection="3d")
+    Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
@@ -499,18 +786,36 @@ def arena3D(
             ax_3d.clear()
 
     plt.close()
-    return
+    return None
 
 
 def _pose3D_grid(
-    fig: plt.figure,
-    data: np.ndarray,
+    fig: plt.Figure,
+    data: npt.NDArray[np.float_],
     connectivity: ds.Connectivity,
-    frames: np.ndarray,
-    limits: np.ndarray,
+    frames: npt.NDArray[np.int_],
+    limits: npt.NDArray[np.int_],
     size: Tuple[int],
     subtitles: Optional[List[str]] = None,
-):
+) -> plt.Figure:
+    """
+    Populate a matplotlib Figure with a grid of 3D pose subplots.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        Figure to which subplots will be added.
+    data : ndarray (total_frames, n_keypts, 3)
+    connectivity : ds.Connectivity
+    frames : ndarray of indices
+        Local indices into `data` selecting which frames to plot.
+    limits : ndarray, shape (3,2)
+        Axis limits to apply to each subplot.
+    size : tuple (rows, cols)
+        Grid dimensions.
+    subtitles : list of str or None
+        Optional per-panel subtitles.
+    """
     (rows, cols) = size
     for i, curr_frame in enumerate(frames):
         temp_kpts = data[curr_frame, :, :]
@@ -540,11 +845,11 @@ def _pose3D_grid(
 
 
 def grid3D(
-    pose: np.ndarray,
+    pose: npt.NDArray[np.float_],
     connectivity: ds.Connectivity,
     frames: Union[List[int], int] = [3000, 100000, 5000000],
     centered: bool = True,
-    subtitles: Optional[List] = None,
+    subtitles: Optional[List[str]] = None,
     title: Optional[str] = None,
     N_FRAMES: int = 150,
     fps: int = 90,
@@ -552,7 +857,41 @@ def grid3D(
     figsize: Optional[Tuple[int]] = None,
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
-):
+) -> None:
+    """
+    Create a grid-style 3D video of poses for the provided frames (no density panel).
+
+    Parameters
+    ----------
+    pose : ndarray, shape (n_frames, n_keypts, 3)
+        Full 3D pose array.
+    connectivity : ds.Connectivity
+        Skeleton connectivity containing `.links` and `.colors`.
+    frames : list of int or int, optional
+        Frame indices to create windows for. A single int will be converted to a single-element list.
+    centered : bool, optional
+        If True, windows are centered around each frame (default True).
+    subtitles : list of str or None, optional
+        Optional per-panel subtitles to annotate each subplot.
+    title : str or None, optional
+        Optional overall title for the figure.
+    N_FRAMES : int, optional
+        Number of frames per window (default 150).
+    fps : int, optional
+        Frames per second for output video (default 90).
+    dpi : int, optional
+        DPI used when saving the file (default 100).
+    figsize : tuple or None, optional
+        Figure size to use. If None, computed from grid dimensions.
+    VID_NAME : str, optional
+        Output filename (default "0.mp4").
+    SAVE_ROOT : str, optional
+        Directory where the resulting video will be saved.
+
+    Returns
+    -------
+    None
+    """
     if isinstance(frames, int):
         frames = [frames]
     # Reshape pose and other variables
@@ -568,6 +907,7 @@ def grid3D(
     figsize = (cols * 5, rows * 5) if figsize is None else figsize
     fig = plt.figure(figsize=figsize, layout="constrained")
 
+    Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
         for curr_frame in tqdm.tqdm(range(N_FRAMES)):
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
@@ -588,18 +928,37 @@ def grid3D(
             fig.clear()
 
     plt.close()
-    return
+    return None
 
 
-def feature_hist(feature, label, filepath, range=None):
+def feature_hist(
+    feature: npt.ArrayLike,
+    label: str,
+    filepath: str,
+    range: Optional[Tuple[float, float]] = None,
+) -> None:
+    """
+    Save a histogram (density) of a single feature.
+
+    Parameters
+    ----------
+    feature : array-like, shape (N,)
+        1D array with feature values.
+    label : str
+        Label/name used for the saved file and x-axis.
+    filepath : str
+        Path prefix or full filename where histogram will be saved. Directory is created if needed.
+    range : tuple(float, float) or None
+        Range to use for histogram binning. If None, automatic range is used.
+    """
+    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     plt.hist(feature, bins=1000, range=range, density=True)
     plt.xlabel(label)
     plt.ylabel("Histogram Density")
     if filepath:
         plt.savefig("".join([filepath, label, "_hist.png"]))
     plt.close()
-    return
-
+    return None
 
 # def features3D(
 #     pose: np.ndarray,
@@ -682,47 +1041,52 @@ def feature_hist(feature, label, filepath, range=None):
 #     plt.close()
 #     return 0
 
+
 def trace(
     pose: npt.ArrayLike,
     connectivity: ds.Connectivity,
     vis_plane: str = "xz",
     frame: int = 1000,
     n_full_pose: int = 3,
-    # keypts: List[int] = [0, 4, 8, 11, 14, 17],
-    vector: Union[Tuple, npt.ArrayLike] = (4, 3),
+    vector: Union[Tuple[int, int], npt.ArrayLike] = (4, 3),
     centered: bool = True,
     N_FRAMES: int = 300,
     dpi: int = 200,
     FIG_NAME: str = "pose_trace.png",
     SAVE_ROOT: str = "./test/pose_vids/",
-):
-    """Plots of movement trace of poses
+) -> None:
+    """
+    Plot a 2D trace (projected plane) of a moving skeleton around a selected frame.
 
     Parameters
     ----------
-    pose : npt.ArrayLike
-        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    pose : array-like, shape (n_frames, n_keypts, 3)
+        Full 3D pose array.
     connectivity : ds.Connectivity
-        Connectivity object containing keypoint/joint/skeletal information.
-    vis_plane : str, optional
-        A length-2 string combination of "x", "y", and "z" which denotes the plane 
-        from which to visualize the movement trace, by default "xz"
-    frame : int, optional
-        Index to plot, by default 1000
-    n_full_pose : int, optional
-        Number of full poses to plot within the trace, by default 3
-    vector : Union[Tuple, npt.ArrayLike], optional
-        A tuple of indices referencing the (root, forward) keypoints, by default (4, 3)
-    centered : bool, optional
-        Whether to plot the trace surrounding `frame` or beginning from `frame`, by default True
-    N_FRAMES : int, optional
-        Number of frames to plot, by default 300
-    dpi : int, optional
-        Resolution of saved figure, by default 200
-    FIG_NAME : str, optional
-        Name of save file, by default "pose_trace.png"
-    SAVE_ROOT : str, optional
-        Path to save folder, by default "./test/pose_vids/"
+        Connectivity object with `.links` and `.keypt_colors`.
+    vis_plane : str, default "xz"
+        Two-letter string specifying the plane to visualize (combination of x,y,z).
+        Examples: "xy", "xz", "yz".
+    frame : int, default 1000
+        Central frame index to visualize.
+    n_full_pose : int, default 3
+        Number of discrete full poses to draw along the trace (visualizes progression).
+    vector : tuple or array-like of ints, default (4, 3)
+        Two keypoint indices (root_index, forward_index) used to orient/normalize heading.
+    centered : bool, default True
+        Whether the plotted windows are centered around `frame`.
+    N_FRAMES : int, default 300
+        Length of the temporal window used when centering/rotating.
+    dpi : int, default 200
+        Resolution when writing the resulting figure.
+    FIG_NAME : str, default "pose_trace.png"
+        Filename component to use when saving.
+    SAVE_ROOT : str, default "./test/pose_vids/"
+        Directory to save the figure to.
+
+    Returns
+    -------
+    None
     """
     frames = [frame]
     figsize = (5, 5)
@@ -733,7 +1097,7 @@ def trace(
         pose, connectivity, np.array(frames, dtype=int), centered, N_FRAMES, SAVE_ROOT
     )
     pose_rot = pose_vis.reshape((len(frames), N_FRAMES, -1, 3))
-    pose_rot[...,:2] -= pose_rot[:, N_FRAMES // 2, vector[0], :2][
+    pose_rot[..., :2] -= pose_rot[:, N_FRAMES // 2, vector[0], :2][
         :, None, None, :
     ]  # Centering based on middle frame
 
@@ -809,22 +1173,14 @@ def trace(
             zorder=3.5,
         )
 
-    # for keypt in keypts:
-    #     ax.plot(
-    #         pose_vis[:, keypt, 0].reshape(len(frames), -1).T,
-    #         pose_vis[:, keypt, 1].reshape(len(frames), -1).T,
-    #         marker="o",
-    #         color=connectivity.keypt_colors[keypt],
-    #         ms=0,
-    #         lw=2.5,
-    #         alpha=0.3,
-    #     )
     ax.set_ylim(bottom=-50, top=120)
     ax.set_xlim(left=-150, right=150)
     ax.set_aspect("equal")
     ax.axis("off")
+    Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
     plt.savefig("{}/vis_{}_{}".format(SAVE_ROOT, vis_plane, FIG_NAME), dpi=dpi)
-    plt.show()
+    if os.environ.get("DISPLAY"):
+        plt.show()
     plt.close()
 
-    return
+    return None

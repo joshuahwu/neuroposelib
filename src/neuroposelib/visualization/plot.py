@@ -964,7 +964,7 @@ def _ax_bubble_map(
 
 
 def bubble_map(
-    embed_vals: npt.NDArray[np.float64_],
+    embed_vals: npt.NDArray[np.float_],
     watershed: Watershed,
     clusters: npt.ArrayLike,
     annotations: Optional[npt.ArrayLike] = None,
