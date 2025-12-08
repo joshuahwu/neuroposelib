@@ -200,7 +200,7 @@ def _features_mat(
 
 def pose_mat(
     path: str, connectivity: Connectivity, dtype: Optional[npt.DTypeLike] = np.float32
-) -> npt.NDArray[np.float_]:
+) -> npt.NDArray[np.float64, np.float32]:
     """Read pose array from a MATLAB `.mat` predictions file.
 
     Supports both HDF5-backed v7+ MATLAB files (accessed via :mod:`h5py`) and
@@ -337,7 +337,7 @@ def connectivity_config(path: str) -> Connectivity:
     return connectivity_obj
 
 
-def features_h5(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> Tuple[npt.NDArray[np.float_], List[str]]:
+def features_h5(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> Tuple[npt.NDArray[np.float64, np.float32], List[str]]:
     """Read features and labels from an HDF5 file.
 
     Parameters
@@ -362,7 +362,7 @@ def features_h5(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> Tuple
     return features, labels
 
 
-def pose_h5(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> Tuple[npt.NDArray[np.float_], Optional[npt.NDArray[np.int_]]]:
+def pose_h5(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> Tuple[npt.NDArray[np.float64, np.float32], Optional[npt.NDArray[np.int_]]]:
     """Read poses (and optional ids) from an HDF5 file.
 
     Parameters
@@ -397,7 +397,7 @@ def pose_h5(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> Tuple[npt
 
 def _features_extended_h5(
     path: str, meta_dtype: Optional[Type] = str, dtype: Optional[npt.DTypeLike] = np.float32
-) -> Tuple[npt.NDArray[np.float_], List[str], npt.NDArray[np.int_], List, npt.NDArray[np.int_]]:
+) -> Tuple[npt.NDArray[np.float64, np.float32], List[str], npt.NDArray[np.int_], List, npt.NDArray[np.int_]]:
     """Read extended features and metadata from an HDF5 file.
 
     This helper returns features, labels, ids, meta and cluster assignments.
@@ -453,7 +453,7 @@ def pose_from_meta(
     key: Optional[str] = "ClusterDirectory",
     file_type: Optional[str] = "dannce",
     dtype: Optional[npt.DTypeLike] = np.float32,
-) -> Tuple[npt.NDArray[np.float_], npt.NDArray[np.int_], pd.DataFrame, pd.DataFrame]:
+) -> Tuple[npt.NDArray[np.float64, np.float32], npt.NDArray[np.int_], pd.DataFrame, pd.DataFrame]:
     """Construct a merged pose array from metadata listing individual pose files.
 
     The function reads a metadata CSV where one column points to individual
@@ -502,7 +502,7 @@ def pose_from_meta(
     return merged_pose, ids, meta, meta_by_frame
 
 
-def dannce_mat(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> npt.NDArray[np.float_]:
+def dannce_mat(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> npt.NDArray[np.float64, np.float32]:
     """Read pose from DANNCE MATLAB output.
 
     DANNCE stores predicted poses in a ``pred`` variable. This helper uses

@@ -46,7 +46,7 @@ def format_three_digits(val: float) -> str:
         return f"{val_rounded:.2f}"
 
 
-def by_id(func: Callable[..., npt.NDArray[np.float_]]) -> Callable[..., npt.NDArray[np.float_]]:
+def by_id(func: Callable[..., npt.NDArray[np.float64, np.float32]]) -> Callable[..., npt.NDArray[np.float64, np.float32]]:
     """Decorator that applies a function to each id-group in a pose array.
 
     The wrapped function is called once per unique id value found in ``ids``.
@@ -91,7 +91,7 @@ def by_id(func: Callable[..., npt.NDArray[np.float_]]) -> Callable[..., npt.NDAr
     >>> out = my_cleaner(pose, ids, threshold=6)
     """
     @functools.wraps(func)
-    def wrapper(pose: npt.NDArray[np.float_], ids: ArrayLikeInt, **kwargs: Any) -> npt.NDArray[np.float_]:
+    def wrapper(pose: npt.NDArray[np.float64, np.float32], ids: ArrayLikeInt, **kwargs: Any) -> npt.NDArray[np.float64, np.float32]:
         for _, i in enumerate(tqdm(np.unique(ids))):
             pose_exp = pose[ids == i, :, :]
             pose[ids == i, :, :] = func(pose_exp, **kwargs)
@@ -100,7 +100,7 @@ def by_id(func: Callable[..., npt.NDArray[np.float_]]) -> Callable[..., npt.NDAr
     return wrapper
 
 
-def rolling_window(data: npt.NDArray[np.float_], window: int) -> npt.NDArray[np.float_]:
+def rolling_window(data: npt.NDArray[np.float64, np.float32], window: int) -> npt.NDArray[np.float64, np.float32]:
     """Return a rolling-window view of a 2D array, padding edges with edge values.
 
     The function creates a view shaped ``(n_frames, window, n_channels)`` (or
@@ -153,7 +153,7 @@ def rolling_window(data: npt.NDArray[np.float_], window: int) -> npt.NDArray[np.
     )
 
 
-def get_frame_diff(x: npt.NDArray[np.float_], time: int, idx_center: bool = True) -> npt.NDArray[np.float_]:
+def get_frame_diff(x: npt.NDArray[np.float64, np.float32], time: int, idx_center: bool = True) -> npt.NDArray[np.float64, np.float32]:
     """Compute temporal differences for each frame using a symmetric window.
 
     For each frame this function computes a difference vector using values
@@ -229,10 +229,10 @@ def remove_edge_ids(id: npt.ArrayLike[np.int_], size: int) -> npt.NDArray[np.int
 
 
 def standard_scale(
-    features: npt.NDArray[np.float_],
+    features: npt.NDArray[np.float64, np.float32],
     labels: List[str],
     clip: Optional[float] = None,
-) -> Tuple[npt.NDArray[np.float_], List[str]]:
+) -> Tuple[npt.NDArray[np.float64, np.float32], List[str]]:
     """Standardize feature columns and optionally clip extreme values.
 
     The function subtracts the per-feature mean and divides by the per-feature
