@@ -156,6 +156,7 @@ def watershed(
         cmap = DEFAULT_VIRIDIS
     f = plt.figure()
     ax = f.add_subplot(111)
+    ws_map[ws_map==0] = -1
     ax.imshow(ws_map, cmap=cmap)
     ax.set_aspect(0.9)
     if ws_borders is not None:
