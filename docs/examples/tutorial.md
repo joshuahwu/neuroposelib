@@ -391,7 +391,7 @@ plt.show()
 
 
     
-![png](tutorial_files/tutorial_35_1.png)
+![png](./tutorial_files/tutorial_35_1.png)
     
 
 
@@ -544,7 +544,7 @@ vis.plot.density(
 
 
     
-![png](tutorial_files/tutorial_45_1.png)
+![./png](tutorial_files/tutorial_45_1.png)
     
 
 
@@ -573,7 +573,7 @@ vis.plot.density_cat(
 
 
     
-![png](tutorial_files/tutorial_47_2.png)
+![./png](tutorial_files/tutorial_47_2.png)
     
 
 
@@ -1233,6 +1233,6 @@ vis.pose.sample_arena3D(
 
 
     
-![png](tutorial_files/tutorial_50_115.png)
+![png](./tutorial_files/tutorial_50_115.png)
     
 
