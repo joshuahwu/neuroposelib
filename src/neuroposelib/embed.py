@@ -923,27 +923,3 @@ class Watershed(GaussDensity):
         self.fit(data, sav_threshold=sav_threshold)
         cluster_labels = self.predict(data)
         return cluster_labels
-
-    # def plot_watershed(
-    #     self, filepath: str = "./plot_folder/watershed.png", borders: bool = True
-    # ):
-    #     f = plt.figure()
-    #     ax = f.add_subplot(111)
-    #     ax.imshow(self.watershed_map)
-    #     ax.set_aspect("auto")
-    #     if borders:
-    #         ax.plot(self.borders[:, 0], self.borders[:, 1], ".r", markersize=0.05)
-    #     plt.savefig("".join([filepath, "_watershed.png"]), dpi=400)
-    #     plt.close()
-
-    # def plot_density(
-    #     self, filepath: str = "./plot_folder/density.png", watershed: bool = True
-    # ):
-    #     f = plt.figure()
-    #     ax = f.add_subplot(111)
-    #     if watershed:
-    #         ax.plot(self.borders[:, 0], self.borders[:, 1], ".r", markersize=0.1)
-    #     ax.imshow(self.density)
-    #     ax.set_aspect("auto")
-    #     plt.savefig(filepath, dpi=400)
-    #     plt.close()

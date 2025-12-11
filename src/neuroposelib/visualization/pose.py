@@ -73,6 +73,7 @@ def sample(func):
         N_FRAMES: int = 100,
         watershed: Optional[Watershed] = None,
         embed_vals: Optional[npt.NDArray[Any]] = None,
+        verbose: Optional[bool] = True,
         **kwargs: Any,
     ) -> None:
         """
@@ -98,6 +99,8 @@ def sample(func):
             Optional watershed used to create per-label maps.
         embed_vals : ndarray or None
             Optional embedding values aligned to `labels`.
+        verbose : bool
+            Optionally print all sampled cluster information.
         **kwargs : dict
             Passed through to the decorated function.
         """
@@ -139,7 +142,8 @@ def sample(func):
                     labels[(np.array(sampled_points) / downsample).astype(int)] == cat
                 )
 
-                print(sampled_points)
+                if verbose:
+                    print(sampled_points)
 
                 sampled_slice = np.add.outer(
                     sampled_points, np.arange(N_FRAMES)
@@ -168,6 +172,7 @@ def sample(func):
                     watershed=cat_watershed,
                     n_samples=num_points,
                     N_FRAMES=N_FRAMES,
+                    verbose=verbose,
                     **kwargs,
                 )
 
@@ -360,6 +365,7 @@ def arena3D_map(
     N_FRAMES: int = 300,
     fps: int = 90,
     dpi: int = 200,
+    verbose: bool = True,
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
 ) -> None:
@@ -386,6 +392,9 @@ def arena3D_map(
         Frames per second for output video.
     dpi : int
         Resolution when writing the video.
+    verbose : bool, optional
+        If True, a tqdm progress bar is shown while writing frames; if False, no
+        progress bar is displayed.
     VID_NAME : str
         Output filename for the created video.
     SAVE_ROOT : str
@@ -410,7 +419,8 @@ def arena3D_map(
 
     Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
-        for curr_frame in tqdm.tqdm(range(N_FRAMES)):
+        iterator = tqdm.tqdm(range(N_FRAMES)) if verbose else range(N_FRAMES)
+        for curr_frame in iterator:
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
             ax_3d = _pose3D_arena(
                 ax_3d, pose_3d, COLORS, links, curr_frames, limits, figsize
@@ -437,6 +447,7 @@ def grid3D_map(
     fps: int = 90,
     dpi: int = 100,
     figsize: Optional[Tuple[int]] = None,
+    verbose: bool = True,
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
 ) -> None:
@@ -470,6 +481,9 @@ def grid3D_map(
         Resolution used when saving the video (default 100).
     figsize : tuple or None, optional
         Figure size passed to matplotlib. If None, computed from number of frames.
+    verbose : bool, optional
+        If True, a tqdm progress bar is shown while writing frames; if False, no
+        progress bar is displayed.
     VID_NAME : str, optional
         Output filename for the created video (default "0.mp4").
     SAVE_ROOT : str, optional
@@ -502,7 +516,8 @@ def grid3D_map(
 
     Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
-        for curr_frame in tqdm.tqdm(range(N_FRAMES)):
+        iterator = tqdm.tqdm(range(N_FRAMES)) if verbose else range(N_FRAMES)
+        for curr_frame in iterator:
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
 
             # ax_dens = fig.add_subplot(rows, cols, 1)
@@ -746,19 +761,54 @@ def arena3D(
     N_FRAMES: int = 300,
     fps: int = 90,
     dpi: int = 200,
+    verbose: bool = True,
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
 ) -> None:
     """
-    Create a 3D arena video (single 3D axes) for the given frames.
+    Create a 3D arena-style video with a single 3D axes panel showing concatenated
+    skeletons for temporally adjacent windows.
+
+    This function constructs temporally concatenated pose windows for the supplied
+    `frames` and writes a video (MP4) where each frame of the video shows the
+    skeletons from a sliding window across the concatenated blocks.
 
     Parameters
     ----------
-    pose : ndarray (n_frames, n_keypts, 3)
+    pose : ndarray, shape (n_frames, n_keypts, 3)
+        Full 3D pose array. Each row is a frame and each entry contains (x,y,z)
+        for each keypoint.
     connectivity : ds.Connectivity
-    frames : list or int
-        Frames used to generate windows for the video.
-    centered, N_FRAMES, fps, dpi, VID_NAME, SAVE_ROOT : various
+        Connectivity object containing `.links` (n_links x 2) and `.colors`
+        (n_links x 4) used to draw skeleton segments and keypoints.
+    frames : list of int or int, optional
+        Reference frame indices used to create windows. If an int is supplied it
+        will be converted into a single-element list.
+    centered : bool, optional
+        If True, each window is centered on the reference frame (i.e. the start
+        index is `frame - N_FRAMES//2`). If False, windows start at the `frame`.
+    N_FRAMES : int, optional
+        Number of frames in each temporal window that gets concatenated and
+        animated (the loop length).
+    fps : int, optional
+        Frames per second for the output video.
+    dpi : int, optional
+        Resolution (dots per inch) used when writing the video.
+    verbose : bool, optional
+        If True, a tqdm progress bar is shown while writing frames; if False, no
+        progress bar is displayed.
+    VID_NAME : str, optional
+        Output filename for the created video (e.g. "0.mp4"). The final file will
+        be written as `os.path.join(SAVE_ROOT, "vis_" + VID_NAME)`.
+    SAVE_ROOT : str, optional
+        Directory where the video will be saved. The directory will be created
+        if it does not exist.
+
+    Returns
+    -------
+    None
+        The function writes a video file to disk and returns None. Side effects:
+        creates `SAVE_ROOT` (if missing) and writes `vis_<VID_NAME>` inside it.
     """
     if isinstance(frames, int):
         frames = [frames]
@@ -775,7 +825,8 @@ def arena3D(
     ax_3d = fig.add_subplot(1, 1, 1, projection="3d")
     Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
-        for curr_frame in tqdm.tqdm(range(N_FRAMES)):
+        iterator = tqdm.tqdm(range(N_FRAMES)) if verbose else range(N_FRAMES)
+        for curr_frame in iterator:
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
             ax_3d = _pose3D_arena(
                 ax_3d, pose_3d, COLORS, links, curr_frames, limits, figsize
@@ -855,6 +906,7 @@ def grid3D(
     fps: int = 90,
     dpi: int = 100,
     figsize: Optional[Tuple[int]] = None,
+    verbose: bool = True,
     VID_NAME: str = "0.mp4",
     SAVE_ROOT: str = "./test/pose_vids/",
 ) -> None:
@@ -883,6 +935,9 @@ def grid3D(
         DPI used when saving the file (default 100).
     figsize : tuple or None, optional
         Figure size to use. If None, computed from grid dimensions.
+    verbose : bool, optional
+        If True, a tqdm progress bar is shown while writing frames; if False, no
+        progress bar is displayed.
     VID_NAME : str, optional
         Output filename (default "0.mp4").
     SAVE_ROOT : str, optional
@@ -909,7 +964,8 @@ def grid3D(
 
     Path(SAVE_ROOT).mkdir(parents=True, exist_ok=True)
     with writer.saving(fig, os.path.join(SAVE_ROOT, "vis_" + VID_NAME), dpi=dpi):
-        for curr_frame in tqdm.tqdm(range(N_FRAMES)):
+        iterator = tqdm.tqdm(range(N_FRAMES)) if verbose else range(N_FRAMES)
+        for curr_frame in iterator:
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
             fig = _pose3D_grid(
                 fig,
