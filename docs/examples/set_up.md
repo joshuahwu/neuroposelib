@@ -1,12 +1,3 @@
-## Setting Up `neuroposelib` For You
-Joshua Wu
-
-Duke University Biomedical Engineering
-
-[Timothy Dunn Lab](https://www.tdunnlab.org/)
-
-11 June, 2024
-
 To follow this notebook, please download the contents of the [demo dataset](https://duke.box.com/v/demo-mouse-poses) into the `/neuroposelib/tutorials/demo_mouse/` directory.
 
 General information regarding your `neuroposelib` analysis (e.g. file paths and hyperparameters) is contained in a `config.yaml` file.
