@@ -1,12 +1,3 @@
-## Unsupervised Behavioral Phenotyping with 3D Skeletal Pose
-Joshua Wu
-
-Duke University Biomedical Engineering
-
-[Timothy Dunn Lab](https://www.tdunnlab.org/)
-
-11 June, 2024
-
 Neurodegenerative diseases (like Parkinson's) are characterized by a wide variety of behavioral defects or movement deficits. However, behavior and movement have historically been difficult to quantify and measure. Recent developments in hardware and machine learning have enabled more objective behavioral metrics by providing continuous 3D measurements of naturalistic animal behavior through multi-view videos. These new modalities of data offer a means by which we can comprehensively characterize behavioral phenotypes of neural (dys)-function. We present `neuroposelib` to establish an open-source API with easy access to machine learning methods for the analysis of 3D pose sequences.
 
 This notebook implements a Python version of [CAPTURE (Marshall, 2020)](https://www.cell.com/neuron/fulltext/S0896-6273(20)30894-1?_returnURL=https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS0896627320308941%3Fshowall%3Dtrue), which was based on earlier work [MotionMapper (Berman, 2014)](https://royalsocietypublishing.org/doi/full/10.1098/rsif.2014.0672) for the analysis of behavioral data.
@@ -25,16 +16,6 @@ from IPython.display import Video
 from pathlib import Path
 import matplotlib.pyplot as plt
 %matplotlib inline
-```
-
-    /mnt/sw/nix/store/71ksmx7k6xy3v9ksfkv5mp5kxxp64pd6-python-3.10.13-view/lib/python3.10/site-packages/numpy/core/getlimits.py:549: UserWarning: The value of the smallest subnormal for <class 'numpy.float64'> type is zero.
-      setattr(self, word, getattr(machar, word).flat[0])
-    /mnt/sw/nix/store/71ksmx7k6xy3v9ksfkv5mp5kxxp64pd6-python-3.10.13-view/lib/python3.10/site-packages/numpy/core/getlimits.py:89: UserWarning: The value of the smallest subnormal for <class 'numpy.float64'> type is zero.
-      return self._float_to_str(self.smallest_subnormal)
-    /mnt/sw/nix/store/71ksmx7k6xy3v9ksfkv5mp5kxxp64pd6-python-3.10.13-view/lib/python3.10/site-packages/numpy/core/getlimits.py:549: UserWarning: The value of the smallest subnormal for <class 'numpy.float32'> type is zero.
-      setattr(self, word, getattr(machar, word).flat[0])
-    /mnt/sw/nix/store/71ksmx7k6xy3v9ksfkv5mp5kxxp64pd6-python-3.10.13-view/lib/python3.10/site-packages/numpy/core/getlimits.py:89: UserWarning: The value of the smallest subnormal for <class 'numpy.float32'> type is zero.
-      return self._float_to_str(self.smallest_subnormal)
 
 
 Load pose predictions, keypoint connectivity information, and metadata.
@@ -311,7 +292,7 @@ plt.show()
 
 
     
-![png](tutorial_files/tutorial_31_0.png)
+![png](./tutorial_files/tutorial_31_0.png)
     
 
 
