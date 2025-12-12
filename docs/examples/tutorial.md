@@ -145,9 +145,9 @@ Video(config["out_path"] + "vis_raw.mp4", width=600, height=600)
 
 
 
-<video src="./results/tutorial/vis_raw.mp4" controls  width="600"  height="600">
+<!-- <video src="./results/tutorial/vis_raw.mp4" controls  width="600"  height="600">
       Your browser does not support the <code>video</code> element.
-    </video>
+    </video> -->
 
 
 
@@ -189,9 +189,9 @@ Video(config["out_path"] + "vis_aligned.mp4", width=600, height=600)
 
 
 
-<video src="./results/tutorial/vis_aligned.mp4" controls  width="600"  height="600">
+<!-- <video src="./results/tutorial/vis_aligned.mp4" controls  width="600"  height="600">
       Your browser does not support the <code>video</code> element.
-    </video>
+    </video> -->
 
 
 
@@ -236,9 +236,9 @@ Video(config["out_path"] + "vis_centered.mp4", width=600, height=600)
 
 
 
-<video src="./results/tutorial/vis_centered.mp4" controls  width="600"  height="600">
+<!-- <video src="./results/tutorial/vis_centered.mp4" controls  width="600"  height="600">
       Your browser does not support the <code>video</code> element.
-    </video>
+    </video> -->
 
 
 
