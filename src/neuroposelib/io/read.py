@@ -242,6 +242,9 @@ def pose_mat(
             print("Could not find ", key, " in preds")
             continue
         pose = np.append(pose, joint_preds, axis=1)
+
+    if mat_v7:
+        f.close()
     return pose
 
 

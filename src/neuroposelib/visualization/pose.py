@@ -170,7 +170,7 @@ def sample(func):
                     VID_NAME=VID_NAME + str(cat),
                     embed_vals=cat_embed_vals,
                     watershed=cat_watershed,
-                    n_samples=num_points,
+                    n_samples=len(sampled_points),
                     N_FRAMES=N_FRAMES,
                     verbose=verbose,
                     **kwargs,
@@ -422,9 +422,12 @@ def arena3D_map(
         iterator = tqdm.tqdm(range(N_FRAMES)) if verbose else range(N_FRAMES)
         for curr_frame in iterator:
             curr_frames = curr_frame + np.arange(len(frames)) * N_FRAMES
-            ax_3d = _pose3D_arena(
-                ax_3d, pose_3d, COLORS, links, curr_frames, limits, figsize
-            )
+            try:
+                ax_3d = _pose3D_arena(
+                    ax_3d, pose_3d, COLORS, links, curr_frames, limits, figsize
+                )
+            except:
+                import pdb; pdb.set_trace()
 
             # grab frame and write to vid
             writer.grab_frame()
@@ -722,13 +725,7 @@ def _pose3D_arena(
         Optional title to display on the axes.
     """
     (rows, cols) = size
-    try:
-        kpts_3d = np.reshape(data[frames, :, :], (len(frames) * data.shape[-2], 3))
-    except Exception:
-        import pdb
-
-        pdb.set_trace()
-
+    kpts_3d = np.reshape(data[frames, :, :], (len(frames) * data.shape[-2], 3))
     ax_3d = _pose3D_frame(
         ax_3d, kpts_3d, COLORS, links, limits  # , figsize=(cols * 5, rows * 5)
     )

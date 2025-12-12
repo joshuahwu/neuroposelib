@@ -49,6 +49,7 @@ nav:
     - API References: reference/
     - Examples:
       - Tutorial: examples/tutorial.md
+      - Set-Up: examples/set_up.md
     # - Workflow: notes/00-workflow.md
     # - Structure: notes/01-structure.md
     # - Packaging: notes/02-packaging.md
