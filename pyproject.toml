@@ -19,7 +19,6 @@ dependencies = [
     "Pywavelets",
     "scikit-learn",
     "scikit-image",
-    "fbpca",
     "numba",
     "matplotlib",
     "seaborn",
