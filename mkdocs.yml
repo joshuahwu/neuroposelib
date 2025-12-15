@@ -48,8 +48,8 @@ nav:
     - Home: index.md
     - API References: reference/
     - Examples:
-      - Quick start: examples/tutorial.md
       - Setting-up neuroposelib: examples/set_up.md
+      - Unsupervised behavioral phenotyping with 3D pose: examples/tutorial.md
     # - Workflow: notes/00-workflow.md
     # - Structure: notes/01-structure.md
     # - Packaging: notes/02-packaging.md
