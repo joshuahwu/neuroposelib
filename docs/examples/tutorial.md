@@ -1,5 +1,7 @@
 ## Unsupervised Behavioral Phenotyping with 3D Pose
 
+### Introduction
+
 Neurodegenerative diseases (like Parkinson's) are characterized by a wide variety of behavioral defects or movement deficits. However, behavior and movement have historically been difficult to quantify and measure. Recent developments in hardware and machine learning have enabled more objective behavioral metrics by providing continuous 3D measurements of naturalistic animal behavior through multi-view videos. These new modalities of data offer a means by which we can comprehensively characterize behavioral phenotypes of neural (dys)-function. We present `neuroposelib` to establish an open-source API with easy access to machine learning methods for the analysis of 3D pose sequences.
 
 This notebook implements a Python version of [CAPTURE (Marshall, 2020)](https://www.cell.com/neuron/fulltext/S0896-6273(20)30894-1?_returnURL=https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS0896627320308941%3Fshowall%3Dtrue), which was based on earlier work [MotionMapper (Berman, 2014)](https://royalsocietypublishing.org/doi/full/10.1098/rsif.2014.0672) for the analysis of behavioral data.
@@ -20,7 +22,7 @@ import matplotlib.pyplot as plt
 %matplotlib inline
 ```
 
-Load pose predictions, keypoint connectivity information, and metadata.
+### Load pose predictions, keypoint connectivity information, and metadata.
 
 
 ```python
@@ -134,6 +136,7 @@ Video(config["out_path"] + "vis_aligned.mp4", width=600, height=600)
 
 Skeletons across sessions may not be aligned worldviews. The following code will estimate the floor plane for each session, and rotate to the x-y plane.
 
+### Preprocessing and aligning poses
 
 ```python
 from neuroposelib import preprocess
@@ -224,6 +227,8 @@ Video(config["out_path"] + "vis_centered.mp4", width=600, height=600)
 
 
 In this package, we provide functionality for easily calculating features of interest. 
+
+### Extracting features via PCA and wavelet analyses
 
 We will just rearrange egocentric x, y, z coordinates of each keypoint into its own set of features. This code does not calculate anything - it just reshapes the pose and generates labels for each feature.
 
@@ -342,6 +347,8 @@ write.features_h5(
 )
 ```
 
+### Embedding and clustering via t-SNE and watershed segmentation
+
 We encapsulate all relevant data to store in a data object.
 
 
@@ -447,6 +454,7 @@ vis.plot.density(
 ![png](tutorial_files/tutorial_41_1.png)
     
 
+### Visualizing your results
 
 Within the embedding, we can visualize the density of each animal separately.
 
