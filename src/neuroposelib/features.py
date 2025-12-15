@@ -6,6 +6,9 @@ from neuroposelib.utils import by_id, rolling_window, get_frame_diff
 import pywt
 import numpy.typing as npt
 from sklearn.preprocessing import StandardScaler
+import random
+from scipy.sparse import issparse
+from scipy.linalg import cholesky, eigh, lu, qr, svd, norm, solve
 
 def get_lengths(pose: npt.NDArray, links: npt.ArrayLike) -> npt.NDArray:
     """Get lengths of all defined segments.
@@ -454,6 +457,7 @@ def pca(
     n_pcs: int = 10,
     max_frames: int = 2e7,
     method: str = "fbpca",
+    random_seed: Optional[float] = None,
 ) -> tuple[npt.NDArray, List[str]]:
     """Transforms feature array into principal component scores.
 
@@ -471,6 +475,8 @@ def pca(
         Maximum number of frames on which to calculate PCs. Will evenly downsample feature array when exceeded.
     method : str, optional
         Method to use in calculating PCs.
+    random_seed : float, optional
+        Set the random seed for the random number generator
 
     Returns
     -------
@@ -491,8 +497,8 @@ def pca(
         from sklearn.decomposition import IncrementalPCA
 
         pca = IncrementalPCA(n_components=n_pcs, batch_size=None)
-    elif method.startswith("fbpca"):
-        import fbpca
+    # elif method.startswith("fbpca"):
+    #     import fbpca
 
     num_cols = 0
     for i, cat in enumerate(tqdm(categories)):  # Iterate through each feature category
@@ -513,8 +519,8 @@ def pca(
         elif method == "fbpca":
             downsample = int(np.ceil(len(features) / max_frames))
             assert downsample > 0
-            (_, _, V) = fbpca.pca(
-                features[::downsample, cols_idx].astype(np.float64), k=n_pcs
+            (_, _, V) = _fbpca(
+                features[::downsample, cols_idx].astype(np.float64), k=n_pcs, random_seed=random_seed
             )
             pca_feats[:, i * n_pcs : (i + 1) * n_pcs] = np.matmul(
                 features[:, cols_idx], V.astype(features.dtype).T
@@ -525,3 +531,411 @@ def pca(
     ]
 
     return pca_feats, pc_labels
+
+
+def _mult(A, B):
+    """
+    default matrix multiplication.
+
+    Multiplies A and B together via the "dot" method.
+
+    Parameters
+    ----------
+    A : array_like
+        first matrix in the product A*B being calculated
+    B : array_like
+        second matrix in the product A*B being calculated
+
+    Returns
+    -------
+    array_like
+        product of the inputs A and B
+
+    Examples
+    --------
+    >>> from fbpca import mult
+    >>> from numpy import array
+    >>> from numpy.linalg import norm
+    >>>
+    >>> A = array([[1., 2.], [3., 4.]])
+    >>> B = array([[5., 6.], [7., 8.]])
+    >>> norm(mult(A, B) - A.dot(B))
+
+    This example multiplies two matrices two ways -- once with mult,
+    and once with the usual "dot" method -- and then calculates the
+    (Frobenius) norm of the difference (which should be near 0).
+    """
+
+    if issparse(B) and not issparse(A):
+        # dense.dot(sparse) is not available in scipy.
+        return B.T.dot(A.T).T
+    else:
+        return A.dot(B)
+
+def _fbpca(A, k=6, raw=False, n_iter=2, l=None, random_seed=None):
+    """
+    Facebook implementation for fast-randomized principal component analysis.
+
+    Updated with numpy.random.Generator to set random seeds.
+
+    Constructs a nearly optimal rank-k approximation U diag(s) Va to A,
+    centering the columns of A first when raw is False, using n_iter
+    normalized power iterations, with block size l, started with a
+    min(m,n) x l random matrix, when A is m x n; the reference PCA_
+    below explains "nearly optimal." k must be a positive integer <=
+    the smaller dimension of A, n_iter must be a nonnegative integer,
+    and l must be a positive integer >= k.
+
+    The rank-k approximation U diag(s) Va comes in the form of a
+    singular value decomposition (SVD) -- the columns of U are
+    orthonormal, as are the rows of Va, and the entries of s are all
+    nonnegative and nonincreasing. U is m x k, Va is k x n, and
+    len(s)=k, when A is m x n.
+
+    Increasing n_iter or l improves the accuracy of the approximation
+    U diag(s) Va; the reference PCA_ below describes how the accuracy
+    depends on n_iter and l. Please note that even n_iter=1 guarantees
+    superb accuracy, whether or not there is any gap in the singular
+    values of the matrix A being approximated, at least when measuring
+    accuracy as the spectral norm || A - U diag(s) Va || of the matrix
+    A - U diag(s) Va (relative to the spectral norm ||A|| of A, and
+    accounting for centering when raw is False).
+
+    The user may ascertain the accuracy of the approximation
+    U diag(s) Va to A by invoking diffsnorm(A, U, s, Va), when raw is
+    True. The user may ascertain the accuracy of the approximation
+    U diag(s) Va to C(A), where C(A) refers to A after centering its
+    columns, by invoking diffsnormc(A, U, s, Va), when raw is False.
+
+    Parameters
+    ----------
+    A : array_like, shape (m, n)
+        matrix being approximated
+    k : int, optional
+        rank of the approximation being constructed;
+        k must be a positive integer <= the smaller dimension of A,
+        and defaults to 6
+    raw : bool, optional
+        centers A when raw is False but does not when raw is True;
+        raw must be a Boolean and defaults to False
+    n_iter : int, optional
+        number of normalized power iterations to conduct;
+        n_iter must be a nonnegative integer, and defaults to 2
+    l : int, optional
+        block size of the normalized power iterations;
+        l must be a positive integer >= k, and defaults to k+2
+
+    Returns
+    -------
+    U : ndarray, shape (m, k)
+        m x k matrix in the rank-k approximation U diag(s) Va to A or
+        C(A), where A is m x n, and C(A) refers to A after centering
+        its columns; the columns of U are orthonormal
+    s : ndarray, shape (k,)
+        vector of length k in the rank-k approximation U diag(s) Va to
+        A or C(A), where A is m x n, and C(A) refers to A after
+        centering its columns; the entries of s are all nonnegative and
+        nonincreasing
+    Va : ndarray, shape (k, n)
+        k x n matrix in the rank-k approximation U diag(s) Va to A or
+        C(A), where A is m x n, and C(A) refers to A after centering
+        its columns; the rows of Va are orthonormal
+
+    Examples
+    --------
+    >>> from fbpca import diffsnorm, pca
+    >>> from numpy.random import uniform
+    >>> from scipy.linalg import svd
+    >>>
+    >>> A = uniform(low=-1.0, high=1.0, size=(100, 2))
+    >>> A = A.dot(uniform(low=-1.0, high=1.0, size=(2, 100)))
+    >>> (U, s, Va) = svd(A, full_matrices=False)
+    >>> A = A / s[0]
+    >>>
+    >>> (U, s, Va) = pca(A, 2, True)
+    >>> err = diffsnorm(A, U, s, Va)
+    >>> print(err)
+
+    This example produces a rank-2 approximation U diag(s) Va to A such
+    that the columns of U are orthonormal, as are the rows of Va, and
+    the entries of s are all nonnegative and are nonincreasing.
+    diffsnorm(A, U, s, Va) outputs an estimate of the spectral norm of
+    A - U diag(s) Va, which should be close to the machine precision.
+
+    References
+    ----------
+    .. [PCA] Nathan Halko, Per-Gunnar Martinsson, and Joel Tropp,
+             Finding structure with randomness: probabilistic
+             algorithms for constructing approximate matrix
+             decompositions, arXiv:0909.4061 [math.NA; math.PR], 2009
+             (available at `arXiv <http://arxiv.org/abs/0909.4061>`_).
+
+    See also
+    --------
+    diffsnorm, diffsnormc, eigens, eigenn
+    """
+
+    rng = np.random.default_rng(random_seed)
+    if l is None:
+        l = k + 2
+
+    (m, n) = A.shape
+
+    assert k > 0
+    assert k <= min(m, n)
+    assert n_iter >= 0
+    assert l >= k
+
+    if np.isrealobj(A):
+        isreal = True
+    else:
+        isreal = False
+
+    if raw:
+
+        #
+        # SVD A directly if l >= m/1.25 or l >= n/1.25.
+        #
+        if l >= m / 1.25 or l >= n / 1.25:
+            (U, s, Va) = svd(A.todense() if issparse(A) else A,
+                full_matrices=False)
+            #
+            # Retain only the leftmost k columns of U, the uppermost
+            # k rows of Va, and the first k entries of s.
+            #
+            return U[:, :k], s[:k], Va[:k, :]
+
+        if m >= n:
+
+            #
+            # Apply A to a random matrix, obtaining Q.
+            #
+            if isreal:
+                Q = _mult(A, rng.uniform(low=-1.0, high=1.0, size=(n, l)))
+            if not isreal:
+                Q = _mult(A, rng.uniform(low=-1.0, high=1.0, size=(n, l))
+                    + 1j * rng.uniform(low=-1.0, high=1.0, size=(n, l)))
+
+            #
+            # Form a matrix Q whose columns constitute a
+            # well-conditioned basis for the columns of the earlier Q.
+            #
+            if n_iter == 0:
+                (Q, _) = qr(Q, mode='economic')
+            if n_iter > 0:
+                (Q, _) = lu(Q, permute_l=True)
+
+            #
+            # Conduct normalized power iterations.
+            #
+            for it in range(n_iter):
+
+                Q = _mult(Q.conj().T, A).conj().T
+
+                (Q, _) = lu(Q, permute_l=True)
+
+                Q = _mult(A, Q)
+
+                if it + 1 < n_iter:
+                    (Q, _) = lu(Q, permute_l=True)
+                else:
+                    (Q, _) = qr(Q, mode='economic')
+
+            #
+            # SVD Q'*A to obtain approximations to the singular values
+            # and right singular vectors of A; adjust the left singular
+            # vectors of Q'*A to approximate the left singular vectors
+            # of A.
+            #
+            QA = _mult(Q.conj().T, A)
+            (R, s, Va) = svd(QA, full_matrices=False)
+            U = Q.dot(R)
+
+            #
+            # Retain only the leftmost k columns of U, the uppermost
+            # k rows of Va, and the first k entries of s.
+            #
+            return U[:, :k], s[:k], Va[:k, :]
+
+        if m < n:
+
+            #
+            # Apply A' to a random matrix, obtaining Q.
+            #
+            if isreal:
+                R = rng.uniform(low=-1.0, high=1.0, size=(l, m))
+            if not isreal:
+                R = rng.uniform(low=-1.0, high=1.0, size=(l, m)) \
+                    + 1j * rng.uniform(low=-1.0, high=1.0, size=(l, m))
+
+            Q = _mult(R, A).conj().T
+
+            #
+            # Form a matrix Q whose columns constitute a
+            # well-conditioned basis for the columns of the earlier Q.
+            #
+            if n_iter == 0:
+                (Q, _) = qr(Q, mode='economic')
+            if n_iter > 0:
+                (Q, _) = lu(Q, permute_l=True)
+
+            #
+            # Conduct normalized power iterations.
+            #
+            for it in range(n_iter):
+
+                Q = _mult(A, Q)
+                (Q, _) = lu(Q, permute_l=True)
+
+                Q = _mult(Q.conj().T, A).conj().T
+
+                if it + 1 < n_iter:
+                    (Q, _) = lu(Q, permute_l=True)
+                else:
+                    (Q, _) = qr(Q, mode='economic')
+
+            #
+            # SVD A*Q to obtain approximations to the singular values
+            # and left singular vectors of A; adjust the right singular
+            # vectors of A*Q to approximate the right singular vectors
+            # of A.
+            #
+            (U, s, Ra) = svd(_mult(A, Q), full_matrices=False)
+            Va = Ra.dot(Q.conj().T)
+
+            #
+            # Retain only the leftmost k columns of U, the uppermost
+            # k rows of Va, and the first k entries of s.
+            #
+            return U[:, :k], s[:k], Va[:k, :]
+
+    if not raw:
+
+        #
+        # Calculate the average of the entries in every column.
+        #
+        c = A.sum(axis=0) / m
+        c = c.reshape((1, n))
+
+        #
+        # SVD the centered A directly if l >= m/1.25 or l >= n/1.25.
+        #
+        if l >= m / 1.25 or l >= n / 1.25:
+            (U, s, Va) = svd((A.todense() if issparse(A)
+                else A) - np.ones((m, 1)).dot(c), full_matrices=False)
+            #
+            # Retain only the leftmost k columns of U, the uppermost
+            # k rows of Va, and the first k entries of s.
+            #
+            return U[:, :k], s[:k], Va[:k, :]
+
+        if m >= n:
+
+            #
+            # Apply the centered A to a random matrix, obtaining Q.
+            #
+            if isreal:
+                R = rng.uniform(low=-1.0, high=1.0, size=(n, l))
+            if not isreal:
+                R = rng.uniform(low=-1.0, high=1.0, size=(n, l)) \
+                    + 1j * rng.uniform(low=-1.0, high=1.0, size=(n, l))
+
+            Q = _mult(A, R) - np.ones((m, 1)).dot(c.dot(R))
+
+            #
+            # Form a matrix Q whose columns constitute a
+            # well-conditioned basis for the columns of the earlier Q.
+            #
+            if n_iter == 0:
+                (Q, _) = qr(Q, mode='economic')
+            if n_iter > 0:
+                (Q, _) = lu(Q, permute_l=True)
+
+            #
+            # Conduct normalized power iterations.
+            #
+            for it in range(n_iter):
+
+                Q = (_mult(Q.conj().T, A)
+                    - (Q.conj().T.dot(np.ones((m, 1)))).dot(c)).conj().T
+                (Q, _) = lu(Q, permute_l=True)
+
+                Q = _mult(A, Q) - np.ones((m, 1)).dot(c.dot(Q))
+
+                if it + 1 < n_iter:
+                    (Q, _) = lu(Q, permute_l=True)
+                else:
+                    (Q, _) = qr(Q, mode='economic')
+
+            #
+            # SVD Q' applied to the centered A to obtain
+            # approximations to the singular values and right singular
+            # vectors of the centered A; adjust the left singular
+            # vectors to approximate the left singular vectors of the
+            # centered A.
+            #
+            QA = _mult(Q.conj().T, A) \
+                - (Q.conj().T.dot(np.ones((m, 1)))).dot(c)
+            (R, s, Va) = svd(QA, full_matrices=False)
+            U = Q.dot(R)
+
+            #
+            # Retain only the leftmost k columns of U, the uppermost
+            # k rows of Va, and the first k entries of s.
+            #
+            return U[:, :k], s[:k], Va[:k, :]
+
+        if m < n:
+
+            #
+            # Apply the adjoint of the centered A to a random matrix,
+            # obtaining Q.
+            #
+            if isreal:
+                R = rng.uniform(low=-1.0, high=1.0, size=(l, m))
+            if not isreal:
+                R = rng.uniform(low=-1.0, high=1.0, size=(l, m)) \
+                    + 1j * rng.uniform(low=-1.0, high=1.0, size=(l, m))
+
+            Q = (_mult(R, A) - (R.dot(np.ones((m, 1)))).dot(c)).conj().T
+
+            #
+            # Form a matrix Q whose columns constitute a
+            # well-conditioned basis for the columns of the earlier Q.
+            #
+            if n_iter == 0:
+                (Q, _) = qr(Q, mode='economic')
+            if n_iter > 0:
+                (Q, _) = lu(Q, permute_l=True)
+
+            #
+            # Conduct normalized power iterations.
+            #
+            for it in range(n_iter):
+
+                Q = _mult(A, Q) - np.ones((m, 1)).dot(c.dot(Q))
+                (Q, _) = lu(Q, permute_l=True)
+
+                Q = (_mult(Q.conj().T, A)
+                    - (Q.conj().T.dot(np.ones((m, 1)))).dot(c)).conj().T
+
+                if it + 1 < n_iter:
+                    (Q, _) = lu(Q, permute_l=True)
+                else:
+                    (Q, _) = qr(Q, mode='economic')
+
+            #
+            # SVD the centered A applied to Q to obtain approximations
+            # to the singular values and left singular vectors of the
+            # centered A; adjust the right singular vectors to
+            # approximate the right singular vectors of the centered A.
+            #
+            (U, s, Ra) = svd(_mult(A, Q) - np.ones((m, 1)).dot(c.dot(Q)),
+                full_matrices=False)
+            Va = Ra.dot(Q.conj().T)
+
+            #
+            # Retain only the leftmost k columns of U, the uppermost
+            # k rows of Va, and the first k entries of s.
+            #
+            return U[:, :k], s[:k], Va[:k, :]

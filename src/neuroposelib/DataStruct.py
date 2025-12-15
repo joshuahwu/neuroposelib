@@ -109,6 +109,7 @@ class DataStruct:
         pose: Optional[npt.NDArray[Any]] = None,
         connectivity: Optional[Connectivity] = None,
         frame: Optional[Union[List[int], npt.NDArray[Any]]] = None,
+        features: Optional[Union[List[int], npt.NDArray[Any]]] = None,
         feature_labels: Optional[List[str]] = None,
     ) -> None:
         """
@@ -147,6 +148,9 @@ class DataStruct:
         elif "frame" not in self.data.columns:
             # default frame indices 0..n-1
             self.frame = np.arange(0, self.data.shape[0])
+
+        if len(data) == 0:
+            self.features: npt.NDArray[Any] = features
 
         # populate meta columns into data if provided
         self.meta_by_frame = meta_by_frame.copy()
@@ -261,7 +265,7 @@ class DataStruct:
             # nothing to set
             return
         # assign columns by name preserving column order
-        self.data.loc[:, list(meta_by_frame.columns.values)] = meta_by_frame.values
+        self.data[list(meta_by_frame.columns.values)] = meta_by_frame.values
 
     def meta_unique(self, column_id: str) -> List[Any]:
         """

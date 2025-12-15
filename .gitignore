@@ -25,7 +25,8 @@ $RECYCLE.BIN/
 *.mp4
 *.yaml
 *.png
-!/docs/examples/tutorial_files/
+!/docs/examples/tutorial_files/*.png
+!/docs/examples/tutorial_files/*.mp4
 *.pyc
 */__pycache__/
 /.vscode/

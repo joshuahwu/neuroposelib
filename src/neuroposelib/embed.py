@@ -35,6 +35,8 @@ class Embed:
         Learning rate for t-SNE. Accepts "auto" or a float.
     k : int
         Default k for KNN-based transforms.
+    random_seed: float
+        Optionally set the random seed for the embedding algorithms.
     n_trees : int
         Default number of trees for ensemble regressors (e.g. random forest).
     embedder : object or None
@@ -57,6 +59,7 @@ class Embed:
         lr: Union[str, float] = "auto",
         k: int = 5,
         n_trees: int = 100,
+        random_seed: Optional[float] = None,
         embedder: Any = None,
         template: Optional[npt.ArrayLike] = None,
         temp_embedding: Optional[npt.ArrayLike] = None,
@@ -79,6 +82,7 @@ class Embed:
         self.temp_embedding = temp_embedding
 
         self.embedder = embedder
+        self.random_seed = random_seed
 
     def embed(
         self,
@@ -156,6 +160,8 @@ class Embed:
                 n_jobs=-1,
                 exaggeration=1.5,
                 verbose=True,
+                random_state=self.random_seed,
+                
             )
             if perplexity == "auto":
                 tsne = partial_tsne()
@@ -745,6 +751,8 @@ class Watershed(GaussDensity):
         Padding fraction when computing histogram ranges.
     density_thresh : float
         Threshold used to define mask for watershed (before internal normalization).
+    sav_threshold : float, optional
+        If >0, run `merge_clusters` step using this threshold when fitting the watershed.
     """
 
     def __init__(
@@ -755,6 +763,7 @@ class Watershed(GaussDensity):
         log_out: bool = False,
         pad_factor: float = 0.025,
         density_thresh: float = 17,
+        sav_threshold: float = 0,
     ) -> None:
         super().__init__(
             sigma=sigma,
@@ -770,7 +779,7 @@ class Watershed(GaussDensity):
 
         self.density = None  # TODO: Consider more when this saves and doesn't
 
-    def fit(self, data: npt.ArrayLike, sav_threshold: Optional[float] = 0) -> "Watershed":
+    def fit(self, data: npt.ArrayLike) -> "Watershed":
         """
         Run watershed segmentation on the smoothed density map computed from `data`.
 
@@ -778,8 +787,6 @@ class Watershed(GaussDensity):
         ----------
         data : array-like, shape (n_points, 2)
             2D points to compute watershed over.
-        sav_threshold : float, optional
-            If >0, run `merge_clusters` step using this threshold.
 
         Returns
         -------
@@ -801,8 +808,8 @@ class Watershed(GaussDensity):
             contours = measure.find_contours(self.watershed_map.T == i, 0.5)
             self.borders[i] = contours[0] if len(contours) > 0 else np.empty((0, 2))
 
-        if sav_threshold > 0:
-            self.merge_clusters(sav_threshold=sav_threshold)
+        if self.sav_threshold > 0:
+            self.merge_clusters(sav_threshold=self.sav_threshold)
 
         return self
 
@@ -902,8 +909,7 @@ class Watershed(GaussDensity):
 
     def fit_predict(
         self,
-        data: Optional[Union[ds.DataStruct, npt.ArrayLike]] = None,
-        sav_threshold: Optional[float] = 0,
+        data: Optional[Union[ds.DataStruct, npt.ArrayLike]] = None
     ) -> npt.NDArray[np.int_]:
         """
         Fit watershed on `data` then predict cluster labels for the same `data`.
@@ -912,14 +918,12 @@ class Watershed(GaussDensity):
         ----------
         data : array-like, shape (n_points, 2)
             2D points to cluster.
-        sav_threshold : float, optional
-            SAV threshold used in merging step.
 
         Returns
         -------
         cluster_labels : ndarray of int, shape (n_points,)
             Integer cluster labels for each input point.
         """
-        self.fit(data, sav_threshold=sav_threshold)
+        self.fit(data)
         cluster_labels = self.predict(data)
         return cluster_labels
