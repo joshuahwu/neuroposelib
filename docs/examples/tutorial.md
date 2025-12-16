@@ -1,4 +1,4 @@
-## Unsupervised behavioral phenotyping with 3D pose
+### Introduction
 
 Neurodegenerative diseases (like Parkinson's) are characterized by a wide variety of behavioral defects or movement deficits. However, behavior and movement have historically been difficult to quantify and measure. Recent developments in hardware and machine learning have enabled more objective behavioral metrics by providing continuous 3D measurements of naturalistic animal behavior through multi-view videos. These new modalities of data offer a means by which we can comprehensively characterize behavioral phenotypes of neural (dys)-function. We present `neuroposelib` to establish an open-source API with easy access to machine learning methods for the analysis of 3D pose sequences.
 
@@ -19,6 +19,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 %matplotlib inline
 ```
+
+### Loading data
 
 Load pose predictions, keypoint connectivity information, and metadata.
 
@@ -120,7 +122,7 @@ Video(config["out_path"] + "vis_raw.mp4", width=600, height=600)
 
       0%|          | 0/150 [00:00<?, ?it/s]
 
-    100%|██████████| 150/150 [00:11<00:00, 13.02it/s]
+    100%|██████████| 150/150 [00:12<00:00, 12.47it/s]
 
 
 
@@ -131,6 +133,8 @@ Video(config["out_path"] + "vis_raw.mp4", width=600, height=600)
     </video>
 
 
+
+### Preprocessing and alignment
 
 Skeletons across sessions may not be aligned worldviews. The following code will estimate the floor plane for each session, and rotate to the x-y plane.
 
@@ -158,13 +162,13 @@ Video(config["out_path"] + "vis_aligned.mp4", width=600, height=600)
     Fitting and rotating the floor for each video to alignment ...
 
 
-     50%|█████     | 1/2 [00:00<00:00,  4.37it/s]
+     50%|█████     | 1/2 [00:00<00:00,  4.48it/s]
 
     Fitting and rotating the floor for each video to alignment ...
 
 
-    100%|██████████| 2/2 [00:00<00:00,  4.41it/s]
-    100%|██████████| 150/150 [00:11<00:00, 13.45it/s]
+    100%|██████████| 2/2 [00:00<00:00,  4.49it/s]
+    100%|██████████| 150/150 [00:10<00:00, 13.64it/s]
 
 
 
@@ -211,7 +215,7 @@ Video(config["out_path"] + "vis_centered.mp4", width=600, height=600)
     Rotating spine to xz plane ...
 
 
-    100%|██████████| 150/150 [00:07<00:00, 19.21it/s]
+    100%|██████████| 150/150 [00:07<00:00, 19.59it/s]
 
 
 
@@ -222,6 +226,8 @@ Video(config["out_path"] + "vis_centered.mp4", width=600, height=600)
     </video>
 
 
+
+### Obtaining behavioral features with PCA and wavelets
 
 In this package, we provide functionality for easily calculating features of interest. 
 
@@ -267,10 +273,10 @@ print("PCA time: " + str(time.time() - t))
     Calculating principal components ... 
 
 
-    100%|██████████| 1/1 [00:00<00:00,  1.17it/s]
+    100%|██████████| 1/1 [00:00<00:00,  1.13it/s]
 
     [ 5.516014   1.0620689  3.9123766 -1.7435495 -2.459202 ]
-    PCA time: 1.2231154441833496
+    PCA time: 1.2581567764282227
 
 
     
@@ -295,7 +301,7 @@ plt.show()
 
 
     
-![png](tutorial_files/tutorial_31_0.png)
+![png](tutorial_files/tutorial_34_0.png)
     
 
 
@@ -332,7 +338,7 @@ pc_labels += pc_wlet_labels
     Calculating principal components ... 
 
 
-    100%|██████████| 1/1 [00:01<00:00,  1.94s/it]
+    100%|██████████| 1/1 [00:01<00:00,  1.97s/it]
 
 
 
@@ -363,6 +369,8 @@ data_obj = ds.DataStruct(
 data_obj = data_obj[:: config["downsample"], :]
 ```
 
+### Embedding and clustering via t-SNE and watershed segmentation
+
 Using t-SNE, frames are projected onto a 2D embedding for clustering and visualization.
 
 
@@ -385,30 +393,30 @@ data_obj.embed_vals = embedder.embed(data_obj.features, save_self=True)
          random_state=0, verbose=True)
     --------------------------------------------------------------------------------
     ===> Finding 150 nearest neighbors using Annoy approximate search using euclidean distance...
-       --> Time elapsed: 8.01 seconds
+       --> Time elapsed: 7.91 seconds
     ===> Calculating affinity matrix...
-       --> Time elapsed: 3.43 seconds
+       --> Time elapsed: 3.42 seconds
     ===> Calculating PCA-based initialization...
        --> Time elapsed: 0.01 seconds
     ===> Running optimization with exaggeration=12.00, lr=5400.00 for 250 iterations...
-    Iteration   50, KL divergence 5.7138, 50 iterations in 1.6667 sec
-    Iteration  100, KL divergence 5.8244, 50 iterations in 1.7061 sec
-    Iteration  150, KL divergence 5.8251, 50 iterations in 1.7063 sec
-    Iteration  200, KL divergence 5.8251, 50 iterations in 1.7209 sec
-    Iteration  250, KL divergence 5.8251, 50 iterations in 1.7180 sec
-       --> Time elapsed: 8.52 seconds
+    Iteration   50, KL divergence 5.7138, 50 iterations in 1.6672 sec
+    Iteration  100, KL divergence 5.8244, 50 iterations in 1.7095 sec
+    Iteration  150, KL divergence 5.8251, 50 iterations in 1.7127 sec
+    Iteration  200, KL divergence 5.8251, 50 iterations in 1.7089 sec
+    Iteration  250, KL divergence 5.8251, 50 iterations in 1.7137 sec
+       --> Time elapsed: 8.51 seconds
     ===> Running optimization with exaggeration=1.50, lr=43200.00 for 500 iterations...
-    Iteration   50, KL divergence 3.8416, 50 iterations in 1.6498 sec
-    Iteration  100, KL divergence 3.6496, 50 iterations in 1.6557 sec
-    Iteration  150, KL divergence 3.5577, 50 iterations in 1.7929 sec
-    Iteration  200, KL divergence 3.5010, 50 iterations in 1.9383 sec
-    Iteration  250, KL divergence 3.4624, 50 iterations in 2.0705 sec
-    Iteration  300, KL divergence 3.4340, 50 iterations in 2.1461 sec
-    Iteration  350, KL divergence 3.4123, 50 iterations in 2.3222 sec
-    Iteration  400, KL divergence 3.3954, 50 iterations in 2.2918 sec
-    Iteration  450, KL divergence 3.3814, 50 iterations in 2.4345 sec
-    Iteration  500, KL divergence 3.3694, 50 iterations in 2.5077 sec
-       --> Time elapsed: 20.81 seconds
+    Iteration   50, KL divergence 3.8416, 50 iterations in 1.6768 sec
+    Iteration  100, KL divergence 3.6496, 50 iterations in 1.6575 sec
+    Iteration  150, KL divergence 3.5577, 50 iterations in 1.8121 sec
+    Iteration  200, KL divergence 3.5010, 50 iterations in 1.9494 sec
+    Iteration  250, KL divergence 3.4624, 50 iterations in 2.0735 sec
+    Iteration  300, KL divergence 3.4340, 50 iterations in 2.1543 sec
+    Iteration  350, KL divergence 3.4123, 50 iterations in 2.3600 sec
+    Iteration  400, KL divergence 3.3954, 50 iterations in 2.2941 sec
+    Iteration  450, KL divergence 3.3814, 50 iterations in 2.4627 sec
+    Iteration  500, KL divergence 3.3694, 50 iterations in 2.5309 sec
+       --> Time elapsed: 20.97 seconds
 
 
 The histogram of the 2D embedding is smoothed with a Gaussian, and segmented by the watershed algorithm to determine cluster assignments.
@@ -426,17 +434,11 @@ data_obj.ws = Watershed(
     sav_threshold=5,
 )
 data_obj.data["Cluster"] = data_obj.ws.fit_predict(data=data_obj.embed_vals)
-
-# Plot density
-vis.plot.density(
-    data_obj.ws.density,
-    data_obj.ws.borders,
-    filepath=config["out_path"] + "/density.png",
-    show=True,
-)
 ```
 
     Calculating new histogram ranges
+
+
     Calculating watershed
     Merging thin clusters ...
     88 clusters detected
@@ -447,9 +449,22 @@ vis.plot.density(
      73 74 75 76 77 78 79 80 81 82 83 84 85 86 87]
 
 
+### Visualizing your results
+
+
+```python
+# Plot density
+vis.plot.density(
+    data_obj.ws.density,
+    data_obj.ws.borders,
+    filepath=config["out_path"] + "/density.png",
+    show=True,
+)
+```
+
 
     
-![png](tutorial_files/tutorial_41_1.png)
+![png](tutorial_files/tutorial_47_0.png)
     
 
 
@@ -465,7 +480,7 @@ vis.plot.watershed(
 
 
     
-![png](tutorial_files/tutorial_42_0.png)
+![png](tutorial_files/tutorial_48_0.png)
     
 
 
@@ -484,26 +499,6 @@ vis.plot.density_cat(
 
 
     
-![png](tutorial_files/tutorial_44_0.png)
+![png](tutorial_files/tutorial_50_0.png)
     
 
-
-We can also randomly sample some actions from each cluster. Videos will save in `neuroposelib/tutorials/results/tutorial/skeleton_vids/`
-
-
-```python
-vis.pose.sample_arena3D(
-    pose_aligned,
-    connectivity,
-    labels=data_obj.data["Cluster"],
-    n_samples=9,
-    centered=True,
-    VID_NAME="cluster",
-    N_FRAMES=100,
-    fps=90,
-    watershed=data_obj.ws,
-    embed_vals=data_obj.embed_vals,
-    verbose=False,
-    filepath=config["out_path"],
-)
-```
