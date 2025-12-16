@@ -1,6 +1,6 @@
-## Setting Up `neuroposelib` For You
+### Reading in `pose.h5` and `config.yaml` files
 
-To follow this notebook, please download the contents of the [demo dataset](https://duke.box.com/v/demo-mouse-poses) into the `/neuroposelib/tutorials/demo_mouse/` directory.
+To follow this notebook, please download the contents of the [demo dataset](https://duke.box.com/v/demo-mouse-poses) into the `/neuroposelib/tutorials/demo_mouse/` directory. Download the full `.ipynb` file [here](https://github.com/joshuahwu/neuroposelib/blob/main/tutorials/set_up.ipynb).
 
 General information regarding your `neuroposelib` analysis (e.g. file paths and hyperparameters) is contained in a `config.yaml` file.
 
@@ -35,7 +35,7 @@ print(ids)
     [0 0 0 ... 1 1 1]
 
 
-#### Creating a metadata file
+### Creating a metadata file
 
 The first thing to set up is your `meta.csv` (called `demo_meta.csv` in this tutorial).
 
@@ -65,7 +65,7 @@ print(meta_by_frame.shape[0] == pose.shape[0])
     True
 
 
-#### Setting up your pose connectivity
+### Setting up your pose connectivity
 
 Finally, it is crucial to set up the connectivity of your keypoint representation. The `Connectivity` class in `neuroposelib` contains attributes for joint names and links between joints (i.e. segments). It also allows you to assign colors to the keypoints and segments for later plotting.
 
@@ -127,7 +127,7 @@ print(connectivity.angles)
      [ 4  5 16]]
 
 
-#### Using `neuroposelib` with [DANNCE](https://github.com/spoonsso/dannce)
+### Using `neuroposelib` with [DANNCE](https://github.com/spoonsso/dannce)
 
 If you're generating your 3D poses from DANNCE, loading into `neuroposelib` is straightforward.
 
