@@ -778,6 +778,7 @@ class Watershed(GaussDensity):
         self.borders: Optional[dict] = None
 
         self.density = None  # TODO: Consider more when this saves and doesn't
+        self.sav_threshold = sav_threshold
 
     def fit(self, data: npt.ArrayLike) -> "Watershed":
         """

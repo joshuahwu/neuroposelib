@@ -132,6 +132,7 @@ def watershed(
     ws_map: npt.NDArray[Any],
     ws_borders: Optional[Dict[int, npt.NDArray[Any]]] = None,
     cmap: Optional[str] = None,
+    show: bool = False,
     filepath: str = "./results/watershed.png",
 ) -> None:
     """
@@ -145,6 +146,8 @@ def watershed(
         Mapping from cluster id to border coordinates array (Ncoords x 2).
     cmap : str, optional
         Colormap name for imshow.
+    show : bool, default False
+        Show figure interactively before closing.
     filepath : str, default "./results/watershed.png"
         File path to save the figure.
 
@@ -175,7 +178,12 @@ def watershed(
     ax.axis("off")
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(filepath, dpi=200)
+    
+    if show:
+        plt.show()
     plt.close()
+    
+    return None
 
 
 def scatter_on_watershed(
@@ -356,7 +364,7 @@ def density(
     f = plt.figure()
     ax = f.add_subplot(111)
     if cmap is None:
-        cmap = DEFAULT_VIRIDIS
+        cmap = "viridis"
     if ws_borders is not None:
         for k, v in ws_borders.items():
             ax.plot(v[:, 0], v[:, 1], "k", markersize=0, lw=0.25)
@@ -444,7 +452,7 @@ def density_cat(
             _mask_density(density, watershed.watershed_map, EPS * 1.01),
             vmin=EPS,
             vmax=vmax,
-            cmap=DEFAULT_VIRIDIS,
+            cmap="viridis",
         )
 
         if watershed is not None:
@@ -507,7 +515,7 @@ def density_grid(
     # Loop over unique labels
     for i, label1 in enumerate(np.unique(labels1)):
         for j, label2 in enumerate(np.unique(labels2)):
-            cmap = DEFAULT_VIRIDIS if not col_cmaps else col_cmaps[j]
+            cmap = "viridis" if not col_cmaps else col_cmaps[j]
             # Indexing latent embedding by label
             embed_vals = data.embed_vals[
                 (data.data[cat1] == label1) & (data.data[cat2] == label2)

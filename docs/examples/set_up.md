@@ -32,6 +32,7 @@ print(ids)
     (648000, 18, 3)
     [0 0 0 ... 1 1 1]
 
+#### Creating a metadata file
 
 The first thing to set up is your `meta.csv` (called `demo_meta.csv` in this tutorial).
 
@@ -41,7 +42,7 @@ Here the `meta` variable exactly recapitulates your `meta.csv` file in a `pandas
 
 
 ```python
-meta, meta_by_frame = read.meta(config["data_path"] + "demo_meta.csv", id=ids)
+meta, meta_by_frame = read.meta(config["data_path"] + "demo_meta.csv", ids=ids)
 
 print(meta)
 ```
@@ -60,6 +61,7 @@ print(meta_by_frame.shape[0] == pose.shape[0])
 
     True
 
+#### Setting up your pose connectivity
 
 Finally, it is crucial to set up the connectivity of your keypoint representation. The `Connectivity` class in `neuroposelib` contains attributes for joint names and links between joints (i.e. segments). It also allows you to assign colors to the keypoints and segments for later plotting.
 
