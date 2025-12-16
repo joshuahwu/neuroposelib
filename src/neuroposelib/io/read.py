@@ -8,6 +8,8 @@ from neuroposelib.DataStruct import Connectivity
 from tqdm import tqdm
 from scipy.io import loadmat as scipyloadmat
 import numpy.typing as npt
+import warnings
+
 
 def cluster_annotations(filepath: str) -> pd.DataFrame:
     """Load sparse cluster→annotation CSV and return per-cluster annotation names.
@@ -20,7 +22,7 @@ def cluster_annotations(filepath: str) -> pd.DataFrame:
       the annotation applies to that cluster. Unmarked entries are empty/NaN.
 
     The function returns a tidy DataFrame listing, for each cluster,
-    the **single** annotation that applies.  
+    the **single** annotation that applies.
     If any row has **more than one** marked annotation, an error is raised.
 
     Parameters
@@ -49,7 +51,7 @@ def cluster_annotations(filepath: str) -> pd.DataFrame:
     --------
     >>> # CSV example:
     >>> # Cluster, grooming, rearing, walking
-    >>> # 0, 1, , 
+    >>> # 0, 1, ,
     >>> # 1, , x,
     >>> df = cluster_annotations("annotations.csv")
     >>> df
@@ -129,82 +131,12 @@ def meta(path: str, ids: List[Union[str, int]]) -> Tuple[pd.DataFrame, pd.DataFr
     return meta, meta_by_frame
 
 
-def _features_mat(
-    analysis_path: Optional[str] = None,
-    pose_path: Optional[str] = None,
-    exp_key: Optional[str] = None,
-    downsample: int = 20,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Load features and ids from MATLAB analysis and predictions.
-
-    DEPRECATION NOTE
-    --------------
-    This helper was written to load outputs from the CAPTURE analysis
-    pipeline and the associated MATLAB prediction files.
-
-    Behavior
-    --------
-    - Loads ``jt_features`` and ``frames_with_good_tracking`` from an analysis
-      MATLAB struct (via [`hdf5storage`](https://pypi.org/project/hdf5storage/)).
-    - Loads experiment ids (``exp_key``) from the predictions MATLAB file.
-    - Optionally downsamples frames and features by ``downsample``.
-
-    Parameters
-    ----------
-    analysis_path : str, optional
-        Path to MATLAB analysis struct (must contain ``jt_features``).
-    pose_path : str, optional
-        Path to predictions `.mat` file (contains experiment ids).
-    exp_key : str, optional
-        Key to load experiment ids from the pose `.mat`.
-    downsample : int, optional
-        Factor by which to downsample frames/features (default: 20).
-
-    Returns
-    -------
-    features : ndarray (float32)
-        Feature matrix of shape ``(n_frames, n_features)`` (may be downsampled).
-    ids : ndarray (int)
-        Per-frame experiment ids (may be downsampled).
-    frames_with_good_tracking : ndarray (int)
-        Indices of (original) frames considered to have good tracking.
-    """
-    analysisstruct = hdf5storage.loadmat(
-        analysis_path, variable_names=["jt_features", "frames_with_good_tracking", "tsnegranularity"]
-    )
-    features = analysisstruct["jt_features"].astype(np.float32)
-    try:
-        frames_with_good_tracking = (
-            np.squeeze(analysisstruct["frames_with_good_tracking"][0][0].astype(int)) - 1
-        )
-    except Exception:
-        frames_with_good_tracking = (
-            np.squeeze(analysisstruct["frames_with_good_tracking"][0][1].astype(int)) - 1
-        )
-
-    ids_full = np.squeeze(hdf5storage.loadmat(pose_path, variable_names=[exp_key])[exp_key].astype(int))
-    if np.min(ids_full) != 0:
-        ids_full -= np.min(ids_full)
-    ids = ids_full[frames_with_good_tracking]
-
-    # Indexing out batch IDs
-    print("Size of dataset: ", np.shape(features))
-
-    # downsample
-    frames_with_good_tracking = frames_with_good_tracking[::downsample]
-    features = features[::downsample]
-    ids = ids[::downsample]
-    downsample = downsample * int(analysisstruct["tsnegranularity"])
-    return features, ids, frames_with_good_tracking
-
-
 def pose_mat(
     path: str, connectivity: Connectivity, dtype: Optional[npt.DTypeLike] = np.float32
 ) -> npt.NDArray[Any]:
     """Read pose array from a MATLAB `.mat` predictions file.
 
-    Supports both HDF5-backed v7+ MATLAB files (accessed via [`h5py`](https://pypi.org/project/h5py/)) and
-    older formats read through [`hdf5storage`](https://pypi.org/project/hdf5storage/).
+    Supports both HDF5-backed v7+ MATLAB files (accessed via [`h5py`](https://pypi.org/project/h5py/)).
 
     Parameters
     ----------
@@ -224,49 +156,57 @@ def pose_mat(
         f = h5py.File(path)["predictions"]
         mat_v7 = True
         total_frames = max(np.shape(f[list(f.keys())[0]]))
+        pose = np.empty((total_frames, 0, 3), dtype=dtype)
+        for key in connectivity.joint_names:
+            print(key)
+            try:
+                if mat_v7:
+                    joint_preds = np.expand_dims(
+                        np.array(f[key], dtype=dtype).T, axis=1
+                    )
+                else:
+                    joint_preds = np.expand_dims(f[key][0][0].astype(dtype), axis=1)
+            except Exception:
+                print("Could not find ", key, " in preds")
+                continue
+            pose = np.append(pose, joint_preds, axis=1)
+
+        f.close()
     except Exception:
         print("Detected older version of '.mat' file")
-        f = hdf5storage.loadmat(path, variable_names=["predictions"])["predictions"]
-        mat_v7 = False
-        total_frames = max(np.shape(f[0][0][0]))
+        mat_file = scipyloadmat(path, variable_names="pred")
+        pose = np.moveaxis(mat_file["pred"], -1, -2).astype(dtype)
 
-    pose = np.empty((total_frames, 0, 3), dtype=dtype)
-    for key in connectivity.joint_names:
-        print(key)
-        try:
-            if mat_v7:
-                joint_preds = np.expand_dims(np.array(f[key], dtype=dtype).T, axis=1)
-            else:
-                joint_preds = np.expand_dims(f[key][0][0].astype(dtype), axis=1)
-        except Exception:
-            print("Could not find ", key, " in preds")
-            continue
-        pose = np.append(pose, joint_preds, axis=1)
-
-    if mat_v7:
-        f.close()
+        if pose.shape[1] != len(connectivity.joint_names):
+            warnings.warn(
+                "Number of keypoints in .mat file does not match connectivity joint names."
+            )
+        # f = hdf5storage.loadmat(path, variable_names=["predictions"])["predictions"]
+        # mat_v7 = False
+        # total_frames = max(np.shape(f[0][0][0]))
     return pose
 
 
-def ids(path: str, key: str) -> npt.NDArray[np.int_]:
-    """Read per-frame ids from `.mat` files.
+# def ids(path: str, key: str) -> npt.NDArray[np.int_]:
+#     """Read per-frame ids from `.mat` files.
 
-    Parameters
-    ----------
-    path : str
-        Path to `.mat` file.
-    key : str
-        Variable name inside the `.mat` file that stores ids.
+#     Parameters
+#     ----------
+#     path : str
+#         Path to `.mat` file.
+#     key : str
+#         Variable name inside the `.mat` file that stores ids.
 
-    Returns
-    -------
-    ids : ndarray (int)
-        Array of per-frame ids (zero-indexed).
-    """
-    ids = np.squeeze(hdf5storage.loadmat(path, variable_names=[key])[key].astype(int))
-    if np.min(ids) != 0:
-        ids -= np.min(ids)
-    return ids
+#     Returns
+#     -------
+#     ids : ndarray (int)
+#         Array of per-frame ids (zero-indexed).
+#     """
+#     ids = np.squeeze(hdf5storage.loadmat(path, variable_names=[key])[key].astype(int))
+#     if np.min(ids) != 0:
+#         ids -= np.min(ids)
+#     return ids
+
 
 def _connectivity(path: str, skeleton_name: str) -> Connectivity:
     """(DEPRECATED) Load a Connectivity object from a Python skeleton definition.
@@ -340,7 +280,9 @@ def connectivity_config(path: str) -> Connectivity:
     return connectivity_obj
 
 
-def features_h5(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> Tuple[npt.NDArray[Any], List[str]]:
+def features_h5(
+    path: str, dtype: Optional[npt.DTypeLike] = np.float32
+) -> Tuple[npt.NDArray[Any], List[str]]:
     """Read features and labels from an HDF5 file.
 
     Parameters
@@ -365,7 +307,9 @@ def features_h5(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> Tuple
     return features, labels
 
 
-def pose_h5(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> Tuple[npt.NDArray[Any], Optional[npt.NDArray[np.int_]]]:
+def pose_h5(
+    path: str, dtype: Optional[npt.DTypeLike] = np.float32
+) -> Tuple[npt.NDArray[Any], Optional[npt.NDArray[np.int_]]]:
     """Read poses (and optional ids) from an HDF5 file.
 
     Parameters
@@ -399,8 +343,12 @@ def pose_h5(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> Tuple[npt
 
 
 def _features_extended_h5(
-    path: str, meta_dtype: Optional[Type] = str, dtype: Optional[npt.DTypeLike] = np.float32
-) -> Tuple[npt.NDArray[Any], List[str], npt.NDArray[np.int_], List, npt.NDArray[np.int_]]:
+    path: str,
+    meta_dtype: Optional[Type] = str,
+    dtype: Optional[npt.DTypeLike] = np.float32,
+) -> Tuple[
+    npt.NDArray[Any], List[str], npt.NDArray[np.int_], List, npt.NDArray[np.int_]
+]:
     """Read extended features and metadata from an HDF5 file.
 
     This helper returns features, labels, ids, meta and cluster assignments.
@@ -457,11 +405,13 @@ def pose_from_meta(
     file_type: Optional[str] = "dannce",
     dtype: Optional[npt.DTypeLike] = np.float32,
 ) -> Tuple[npt.NDArray[Any], npt.NDArray[np.int_], pd.DataFrame, pd.DataFrame]:
-    """Construct a merged pose array from metadata listing individual pose files.
+    """Construct a merged pose array from metadata listing individual pose `.mat` or
+    `.h5` files. Assumes each individual file corresponds to one session/row in
+    the metadata.
 
     The function reads a metadata CSV where one column points to individual
     pose files (``key``). For each row it reads the pose file (using
-    :func:`dannce_mat` or :func:`pose_mat` depending on ``file_type``)
+    [`pose_mat`][neuroposelib.io.read.pose_mat])
     and concatenates results into a single large pose array, returning also
     a per-frame ``ids`` vector and both ``meta`` tables.
 
@@ -473,8 +423,6 @@ def pose_from_meta(
         Connectivity object used for reading individual pose files.
     key : str, optional
         Column label in the metadata pointing to pose file paths.
-    file_type : str, optional
-        Origin file type; ``'dannce'`` will use :func:`dannce_mat`.
     dtype : numpy dtype-like, optional
         Desired dtype for the merged poses.
 
@@ -495,9 +443,13 @@ def pose_from_meta(
     for i, row in tqdm(meta.iterrows()):
         pose_path = row[key]
         if file_type == "dannce":
-            meta_pose = dannce_mat(pose_path, dtype=dtype)
-        else:
             meta_pose = pose_mat(pose_path, connectivity, dtype=dtype)
+        else:
+            meta_pose = pose_h5(pose_path, dtype=dtype)[0]
+            if meta_pose.shape[1] != len(connectivity.joint_names):
+                warnings.warn(
+                    "Number of keypoints in .h5 file does not match connectivity joint names."
+                )
         merged_pose = np.append(merged_pose, meta_pose, axis=0)
         ids = np.append(ids, i * np.ones((meta_pose.shape[0])))
     meta_by_frame = meta.iloc[ids].reset_index().rename(columns={"index": "ids"})
@@ -505,25 +457,25 @@ def pose_from_meta(
     return merged_pose, ids, meta, meta_by_frame
 
 
-def dannce_mat(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> npt.NDArray[Any]:
-    """Read pose from DANNCE MATLAB output.
+# def dannce_mat(path: str, dtype: Optional[npt.DTypeLike] = np.float32) -> npt.NDArray[Any]:
+#     """Read pose from DANNCE MATLAB output.
 
-    DANNCE stores predicted poses in a ``pred`` variable. This helper uses
-    :func:`scipy.io.loadmat` (imported as ``scipyloadmat``) and reshapes the
-    axis order to match the other loaders.
+#     DANNCE stores predicted poses in a ``pred`` variable. This helper uses
+#     [`scipy.io.loadmat`]() (imported as ``scipyloadmat``) and reshapes the
+#     axis order to match the other loaders.
 
-    Parameters
-    ----------
-    path : str
-        Path to DANNCE `.mat` file.
-    dtype : numpy dtype-like, optional
-        Desired dtype of returned pose (default ``np.float32``).
+#     Parameters
+#     ----------
+#     path : str
+#         Path to DANNCE `.mat` file.
+#     dtype : numpy dtype-like, optional
+#         Desired dtype of returned pose (default ``np.float32``).
 
-    Returns
-    -------
-    pose : ndarray
-        Pose array shaped ``(n_frames, n_keypoints, 3)``.
-    """
-    mat_file = scipyloadmat(path, variable_names="pred")
-    pose = np.moveaxis(mat_file["pred"], -1, -2).astype(dtype)
-    return pose
+#     Returns
+#     -------
+#     pose : ndarray
+#         Pose array shaped ``(n_frames, n_keypoints, 3)``.
+#     """
+#     mat_file = scipyloadmat(path, variable_names="pred")
+#     pose = np.moveaxis(mat_file["pred"], -1, -2).astype(dtype)
+#     return pose

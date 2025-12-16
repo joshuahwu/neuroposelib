@@ -23,7 +23,7 @@ dependencies = [
     "numba",
     "matplotlib",
     "seaborn",
-    "hdf5storage",
+    "h5py",
     "pandas",
     "ffmpeg",
     "opentsne",

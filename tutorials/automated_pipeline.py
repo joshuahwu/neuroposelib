@@ -23,7 +23,6 @@ def standard_features(
     else:
         # Reshape pose to get egocentric pose features
         ego_pose, ego_pose_labels = get_ego_pose(pose, connectivity.joint_names)
-        ego_pose, ego_pose_labels = standard_scale(ego_pose, ego_pose_labels)
 
         # Calculating joint angles
         angles, angle_labels = get_angles(pose, connectivity.angles)
