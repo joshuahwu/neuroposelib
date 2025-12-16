@@ -1,8 +1,8 @@
-### Introduction
+## Unsupervised behavioral phenotyping with 3D pose
 
 Neurodegenerative diseases (like Parkinson's) are characterized by a wide variety of behavioral defects or movement deficits. However, behavior and movement have historically been difficult to quantify and measure. Recent developments in hardware and machine learning have enabled more objective behavioral metrics by providing continuous 3D measurements of naturalistic animal behavior through multi-view videos. These new modalities of data offer a means by which we can comprehensively characterize behavioral phenotypes of neural (dys)-function. We present `neuroposelib` to establish an open-source API with easy access to machine learning methods for the analysis of 3D pose sequences.
 
-This notebook implements a Python version of [CAPTURE (Marshall, 2020)](https://www.cell.com/neuron/fulltext/S0896-6273(20)30894-1?_returnURL=https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS0896627320308941%3Fshowall%3Dtrue), which was based on earlier work [MotionMapper (Berman, 2014)](https://royalsocietypublishing.org/doi/full/10.1098/rsif.2014.0672) for the analysis of behavioral data.
+This tutorial implements a Python version of [CAPTURE (Marshall, 2020)](https://www.cell.com/neuron/fulltext/S0896-6273(20)30894-1?_returnURL=https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS0896627320308941%3Fshowall%3Dtrue), which was based on earlier work [MotionMapper (Berman, 2014)](https://royalsocietypublishing.org/doi/full/10.1098/rsif.2014.0672) for the analysis of behavioral data.
 
 To follow this notebook, please download the contents of the [demo dataset](https://duke.box.com/v/demo-mouse-poses) into the `/neuroposelib/tutorials/demo_mouse/` directory.
 
@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 %matplotlib inline
 ```
 
-### Load pose predictions, keypoint connectivity information, and metadata.
+Load pose predictions, keypoint connectivity information, and metadata.
 
 
 ```python
@@ -29,9 +29,7 @@ config = read.config("../configs/" + analysis_key + ".yaml")
 
 pose, ids = read.pose_h5(config["data_path"] + "demo_mouse.h5")
 
-connectivity = read.connectivity_config(
-    path=config["skeleton_path"]
-)
+connectivity = read.connectivity_config(path=config["skeleton_path"])
 
 meta, meta_by_frame = read.meta(config["data_path"] + "demo_meta.csv", ids=ids)
 
@@ -117,16 +115,18 @@ vis.pose.arena3D(
     SAVE_ROOT=config["out_path"],
 )
 
-Video(config["out_path"] + "vis_aligned.mp4", width=600, height=600)
+Video(config["out_path"] + "vis_raw.mp4", width=600, height=600)
 ```
 
-    100%|██████████| 150/150 [00:13<00:00, 11.10it/s]
+      0%|          | 0/150 [00:00<?, ?it/s]
+
+    100%|██████████| 150/150 [00:11<00:00, 13.02it/s]
 
 
 
 
 
-<video src="../tutorial_files/vis_aligned.mp4" controls  width="600"  height="600">
+<video src="../tutorial_files/vis_raw.mp4" controls  width="600"  height="600">
       Your browser does not support the <code>video</code> element.
     </video>
 
@@ -134,7 +134,6 @@ Video(config["out_path"] + "vis_aligned.mp4", width=600, height=600)
 
 Skeletons across sessions may not be aligned worldviews. The following code will estimate the floor plane for each session, and rotate to the x-y plane.
 
-### Preprocessing and aligning poses
 
 ```python
 from neuroposelib import preprocess
@@ -159,13 +158,13 @@ Video(config["out_path"] + "vis_aligned.mp4", width=600, height=600)
     Fitting and rotating the floor for each video to alignment ...
 
 
-     50%|█████     | 1/2 [00:00<00:00,  4.12it/s]
+     50%|█████     | 1/2 [00:00<00:00,  4.37it/s]
 
     Fitting and rotating the floor for each video to alignment ...
 
 
-    100%|██████████| 2/2 [00:00<00:00,  4.30it/s]
-    100%|██████████| 150/150 [00:12<00:00, 12.48it/s]
+    100%|██████████| 2/2 [00:00<00:00,  4.41it/s]
+    100%|██████████| 150/150 [00:11<00:00, 13.45it/s]
 
 
 
@@ -181,8 +180,6 @@ You can use the following code to save the new aligned poses for easy access lat
 
 
 ```python
-from neuroposelib import write
-
 write.pose_h5(pose_aligned, ids, config["data_path"] + "pose_aligned.h5")
 ```
 
@@ -193,7 +190,9 @@ Here, we center the mid-spine to $(0,0,0)$, and rotate the front-spine to the $x
 
 ```python
 # Provide the mid-spine and the mid-spine -> front-spine indices.
-pose = preprocess.rotate_spine(preprocess.center_spine(pose_aligned, keypt_idx=4), vector=(4, 3))
+pose = preprocess.rotate_spine(
+    preprocess.center_spine(pose_aligned, keypt_idx=4), vector=(4, 3)
+)
 
 vis.pose.arena3D(
     pose,
@@ -212,7 +211,7 @@ Video(config["out_path"] + "vis_centered.mp4", width=600, height=600)
     Rotating spine to xz plane ...
 
 
-    100%|██████████| 150/150 [00:08<00:00, 16.95it/s]
+    100%|██████████| 150/150 [00:07<00:00, 19.21it/s]
 
 
 
@@ -226,13 +225,12 @@ Video(config["out_path"] + "vis_centered.mp4", width=600, height=600)
 
 In this package, we provide functionality for easily calculating features of interest. 
 
-### Extracting features via PCA and wavelet analyses
-
 We will just rearrange egocentric x, y, z coordinates of each keypoint into its own set of features. This code does not calculate anything - it just reshapes the pose and generates labels for each feature.
 
 
 ```python
 from neuroposelib import features
+
 # Reshape pose to get egocentric pose features
 ego_pose, labels = features.get_ego_pose(pose, connectivity.joint_names)
 ```
@@ -251,7 +249,7 @@ write.features_h5(ego_pose, labels, path=config["out_path"] + "postural_feats.h5
 ego_pose, labels = read.features_h5(path=config["out_path"] + "postural_feats.h5")
 ```
 
-    Features loaded at path ./tutorial_files/postural_feats.h5
+    Features loaded at path ./results/tutorial/postural_feats.h5
 
 
 It's now time for principal component analysis (PCA). PCA is a dimensionality reduction technique which generates orthogonal axes of high variance upon which to project our data. There are many implementations of PCA, but we will use Facebook's Fast Randomized PCA package (`fbpca`), which is significantly faster than most other implementations.
@@ -262,17 +260,17 @@ t = time.time()
 pc_feats, pc_labels = features.pca(
     ego_pose, labels, categories=["ego_euc"], n_pcs=5, method="fbpca", random_seed=0
 )
-print(pc_feats[0,:])
+print(pc_feats[0, :])
 print("PCA time: " + str(time.time() - t))
 ```
 
     Calculating principal components ... 
 
 
-    100%|██████████| 1/1 [00:00<00:00,  1.16it/s]
+    100%|██████████| 1/1 [00:00<00:00,  1.17it/s]
 
     [ 5.516014   1.0620689  3.9123766 -1.7435495 -2.459202 ]
-    PCA time: 1.2266192436218262
+    PCA time: 1.2231154441833496
 
 
     
@@ -334,7 +332,7 @@ pc_labels += pc_wlet_labels
     Calculating principal components ... 
 
 
-    100%|██████████| 1/1 [00:01<00:00,  1.92s/it]
+    100%|██████████| 1/1 [00:01<00:00,  1.94s/it]
 
 
 
@@ -344,8 +342,6 @@ write.features_h5(
     pc_feats, pc_labels, path="".join([config["out_path"], "pca_feats.h5"])
 )
 ```
-
-### Embedding and clustering via t-SNE and watershed segmentation
 
 We encapsulate all relevant data to store in a data object.
 
@@ -359,10 +355,10 @@ data_obj = ds.DataStruct(
     meta=meta,
     meta_by_frame=meta_by_frame,
     connectivity=connectivity,
-    features = pc_feats,
+    features=pc_feats,
 )
 
-# When using high framerate data, downsampling may be necessary in order to 
+# When using high framerate data, downsampling may be necessary in order to
 # prevent oversmoothing
 data_obj = data_obj[:: config["downsample"], :]
 ```
@@ -389,30 +385,30 @@ data_obj.embed_vals = embedder.embed(data_obj.features, save_self=True)
          random_state=0, verbose=True)
     --------------------------------------------------------------------------------
     ===> Finding 150 nearest neighbors using Annoy approximate search using euclidean distance...
-       --> Time elapsed: 7.94 seconds
+       --> Time elapsed: 8.01 seconds
     ===> Calculating affinity matrix...
-       --> Time elapsed: 3.45 seconds
+       --> Time elapsed: 3.43 seconds
     ===> Calculating PCA-based initialization...
        --> Time elapsed: 0.01 seconds
     ===> Running optimization with exaggeration=12.00, lr=5400.00 for 250 iterations...
-    Iteration   50, KL divergence 5.7138, 50 iterations in 1.6675 sec
-    Iteration  100, KL divergence 5.8244, 50 iterations in 1.6998 sec
-    Iteration  150, KL divergence 5.8251, 50 iterations in 1.7235 sec
-    Iteration  200, KL divergence 5.8251, 50 iterations in 1.7065 sec
-    Iteration  250, KL divergence 5.8251, 50 iterations in 1.7089 sec
-       --> Time elapsed: 8.51 seconds
+    Iteration   50, KL divergence 5.7138, 50 iterations in 1.6667 sec
+    Iteration  100, KL divergence 5.8244, 50 iterations in 1.7061 sec
+    Iteration  150, KL divergence 5.8251, 50 iterations in 1.7063 sec
+    Iteration  200, KL divergence 5.8251, 50 iterations in 1.7209 sec
+    Iteration  250, KL divergence 5.8251, 50 iterations in 1.7180 sec
+       --> Time elapsed: 8.52 seconds
     ===> Running optimization with exaggeration=1.50, lr=43200.00 for 500 iterations...
-    Iteration   50, KL divergence 3.8416, 50 iterations in 1.6657 sec
-    Iteration  100, KL divergence 3.6496, 50 iterations in 1.6967 sec
-    Iteration  150, KL divergence 3.5577, 50 iterations in 1.8094 sec
-    Iteration  200, KL divergence 3.5010, 50 iterations in 1.9653 sec
-    Iteration  250, KL divergence 3.4624, 50 iterations in 2.0866 sec
-    Iteration  300, KL divergence 3.4340, 50 iterations in 2.1751 sec
-    Iteration  350, KL divergence 3.4123, 50 iterations in 2.3354 sec
-    Iteration  400, KL divergence 3.3954, 50 iterations in 2.3043 sec
-    Iteration  450, KL divergence 3.3814, 50 iterations in 2.4645 sec
-    Iteration  500, KL divergence 3.3694, 50 iterations in 2.5370 sec
-       --> Time elapsed: 21.04 seconds
+    Iteration   50, KL divergence 3.8416, 50 iterations in 1.6498 sec
+    Iteration  100, KL divergence 3.6496, 50 iterations in 1.6557 sec
+    Iteration  150, KL divergence 3.5577, 50 iterations in 1.7929 sec
+    Iteration  200, KL divergence 3.5010, 50 iterations in 1.9383 sec
+    Iteration  250, KL divergence 3.4624, 50 iterations in 2.0705 sec
+    Iteration  300, KL divergence 3.4340, 50 iterations in 2.1461 sec
+    Iteration  350, KL divergence 3.4123, 50 iterations in 2.3222 sec
+    Iteration  400, KL divergence 3.3954, 50 iterations in 2.2918 sec
+    Iteration  450, KL divergence 3.3814, 50 iterations in 2.4345 sec
+    Iteration  500, KL divergence 3.3694, 50 iterations in 2.5077 sec
+       --> Time elapsed: 20.81 seconds
 
 
 The histogram of the 2D embedding is smoothed with a Gaussian, and segmented by the watershed algorithm to determine cluster assignments.
@@ -420,9 +416,14 @@ The histogram of the 2D embedding is smoothed with a Gaussian, and segmented by 
 
 ```python
 from neuroposelib.embed import Watershed
+
 # Watershed clustering
 data_obj.ws = Watershed(
-    sigma=config["single_embed"]["sigma"], max_clip=1, log_out=True, pad_factor=0.05
+    sigma=config["single_embed"]["sigma"],
+    max_clip=1,
+    log_out=True,
+    pad_factor=0.05,
+    sav_threshold=5,
 )
 data_obj.data["Cluster"] = data_obj.ws.fit_predict(data=data_obj.embed_vals)
 
@@ -437,14 +438,13 @@ vis.plot.density(
 
     Calculating new histogram ranges
     Calculating watershed
-    106 clusters detected
-    (104,) unique clusters detected
-    [  1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18
-      19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36
-      37  38  39  40  41  42  43  44  45  46  47  48  49  50  51  52  53  54
-      55  56  57  58  59  60  61  62  63  64  66  67  68  69  70  71  72  73
-      74  75  76  77  78  79  80  81  82  83  84  85  86  87  88  89  90  91
-      92  93  94  95  96  97  98  99 100 101 102 103 104 105]
+    Merging thin clusters ...
+    88 clusters detected
+    (87,) unique clusters detected
+    [ 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+     25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48
+     49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72
+     73 74 75 76 77 78 79 80 81 82 83 84 85 86 87]
 
 
 
@@ -452,7 +452,22 @@ vis.plot.density(
 ![png](tutorial_files/tutorial_41_1.png)
     
 
-### Visualizing your results
+
+
+```python
+vis.plot.watershed(
+    ws_map=data_obj.ws.watershed_map,
+    ws_borders=data_obj.ws.borders,
+    filepath=config["out_path"] + "/watershed.png",
+    show=True,
+)
+```
+
+
+    
+![png](tutorial_files/tutorial_42_0.png)
+    
+
 
 Within the embedding, we can visualize the density of each animal separately.
 
@@ -469,7 +484,7 @@ vis.plot.density_cat(
 
 
     
-![png](tutorial_files/tutorial_43_0.png)
+![png](tutorial_files/tutorial_44_0.png)
     
 
 
@@ -483,7 +498,7 @@ vis.pose.sample_arena3D(
     labels=data_obj.data["Cluster"],
     n_samples=9,
     centered=True,
-    VID_NAME = "cluster",
+    VID_NAME="cluster",
     N_FRAMES=100,
     fps=90,
     watershed=data_obj.ws,
@@ -492,12 +507,3 @@ vis.pose.sample_arena3D(
     filepath=config["out_path"],
 )
 ```
-
-    Detected labels not the same shape as pose...
-    Assuming labels downsampled by 10
-
-
-      0%|          | 0/104 [00:00<?, ?it/s]
-
-    100%|██████████| 104/104 [2:40:12<00:00, 92.43s/it] 
-

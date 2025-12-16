@@ -1,3 +1,5 @@
+## Setting Up `neuroposelib` For You
+
 To follow this notebook, please download the contents of the [demo dataset](https://duke.box.com/v/demo-mouse-poses) into the `/neuroposelib/tutorials/demo_mouse/` directory.
 
 General information regarding your `neuroposelib` analysis (e.g. file paths and hyperparameters) is contained in a `config.yaml` file.
@@ -32,6 +34,7 @@ print(ids)
     (648000, 18, 3)
     [0 0 0 ... 1 1 1]
 
+
 #### Creating a metadata file
 
 The first thing to set up is your `meta.csv` (called `demo_meta.csv` in this tutorial).
@@ -60,6 +63,7 @@ print(meta_by_frame.shape[0] == pose.shape[0])
 ```
 
     True
+
 
 #### Setting up your pose connectivity
 
