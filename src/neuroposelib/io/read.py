@@ -203,8 +203,8 @@ def pose_mat(
 ) -> npt.NDArray[Any]:
     """Read pose array from a MATLAB `.mat` predictions file.
 
-    Supports both HDF5-backed v7+ MATLAB files (accessed via :mod:`h5py`) and
-    older formats read through :mod:`hdf5storage`.
+    Supports both HDF5-backed v7+ MATLAB files (accessed via [`h5py`](https://pypi.org/project/h5py/)) and
+    older formats read through [`hdf5storage`](https://pypi.org/project/hdf5storage/).
 
     Parameters
     ----------
@@ -268,14 +268,14 @@ def ids(path: str, key: str) -> npt.NDArray[np.int_]:
         ids -= np.min(ids)
     return ids
 
-
-def connectivity(path: str, skeleton_name: str) -> Connectivity:
+def _connectivity(path: str, skeleton_name: str) -> Connectivity:
     """(DEPRECATED) Load a Connectivity object from a Python skeleton definition.
 
     The function expects a Python file at ``path`` providing constants such as
     ``JOINT_NAME_DICT``, ``COLOR_DICT``, ``CONNECTIVITY_DICT`` and
     ``JOINT_ANGLES_DICT`` keyed by ``skeleton_name``. It imports the file as a
-    module and constructs a :class:`Connectivity`.
+    module and constructs a [`Connectivity`][neuroposelib.DataStruct.Connectivity]
+    object.
 
     Parameters
     ----------

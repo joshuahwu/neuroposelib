@@ -14,6 +14,7 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3.10",
 ]
+
 dependencies = [
     "numpy",
     "Pywavelets",
@@ -23,7 +24,6 @@ dependencies = [
     "matplotlib",
     "seaborn",
     "hdf5storage",
-    "umap-learn",
     "pandas",
     "ffmpeg",
     "opentsne",
@@ -50,6 +50,8 @@ docs = [
     "mkdocs-gallery",
     "mkdocs-macros-plugin"
 ]
+
+umap = ["umap-learn"]
 
 [tool.setuptools_scm]
 write_to = "src/neuroposelib/version.py"
