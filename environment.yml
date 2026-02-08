@@ -5,6 +5,7 @@ channels:
 dependencies:
   - python=3.10
   - numpy #=1.23
+  - scipy=1.14.1
   # - faiss-cpu=1.6.5
   - matplotlib
   - seaborn

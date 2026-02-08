@@ -762,7 +762,8 @@ def trace(
     #     plane_idx = np.argsort(dim_std, axis=-1)[:, :-1]
     #     # plane_idx = np.zeros(pose_rot.shape,dtype=int)[...,:-1] + plane_idx[:, None, None, :]
     # else:
-    plane_idx = [vis.constants._PLANE[k] for k in vis_plane]
+    # plane_idx = [vis.constants._PLANE[k] for k in vis_plane]
+    plane_idx = [_PLANE[k] for k in vis_plane]
 
     pose_vis = pose_rot.reshape(-1, n_keypts, 3)
     pose_vis = pose_vis[..., plane_idx]

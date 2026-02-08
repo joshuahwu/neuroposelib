@@ -13,7 +13,6 @@ from scipy.spatial.transform import Rotation as R
 @by_id
 def align_floor_by_id(
     pose: npt.NDArray,
-    pose: npt.NDArray,
     foot_id: Optional[int] = 12,
     head_id: Optional[int] = 0,
     dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
@@ -50,7 +49,7 @@ def align_floor(
     foot_id: Optional[int] = 12,
     head_id: Optional[int] = 0,
     dtype: Optional[Type[Union[np.float32, np.float64]]] = np.float32,
-    is_whole_body: Optional[bool] = True,
+    is_whole_body_: Optional[bool] = False,
 ):
     """
     Due to the camera calibration, predictions may be rotated to different world coordinates.
@@ -111,7 +110,8 @@ def align_floor(
     )
 
     ## Checking to make sure snout is on average above the feet
-    if is_whole_body:
+    if is_whole_body_:
+        print(f"Whole body? = {is_whole_body_}")
         assert np.mean(pose_rot[:, head_id, 2]) > np.mean(
             pose_rot[:, foot_id, 2]
         )  # checking head is above foot
@@ -357,3 +357,181 @@ def rotate_spine(
     )
 
     return pose_rot
+
+def rotate_arbitrary_spine(
+    pose: npt.NDArray,
+    vector: Union[Tuple, npt.ArrayLike] = (4, 3),
+    lock_to_x: bool = False,
+):
+    """Centers mid spine to (0,0,0) and aligns spine_m -> spine_f to x-z plane
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates). Assumes centered poses.
+    vector : Union[Tuple, npt.ArrayLike], optional
+        Either a tuple of the indices for (root, forward) keypoints,
+        or a precalculated vector per frame, by default (4, 3)
+    lock_to_x : bool, optional
+        If true, rotate completely to the x-axis (yaw and pitch), by default False
+
+    Returns
+    -------
+    pose : npt.NDArray
+        Rotated array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    """
+
+    num_joints = pose.shape[1]
+    if len(vector) == 2:
+        yaw = -np.arctan2(
+            pose[:, vector[1], 1] - pose[:, vector[0], 1], 
+            pose[:, vector[1], 0] - pose[:, vector[0], 0]
+        )  # Find angle to rotate to axis
+    else:
+        yaw = -np.arctan2(vector[:, 1], vector[:, 0])
+        # Find angle to rotate to axis
+
+    if lock_to_x:
+        print("Rotating spine to x axis ... ")
+        if len(vector) == 2:
+            pitch = np.arctan2(pose[:, vector[1], 2] - pose[:, vector[0], 2], 
+                                pose[:, vector[1], 0] - pose[:, vector[0], 0])
+        else:
+            pitch = np.arctan2(vector[:, 2], vector[:, 0])
+    else:
+        print("Rotating spine to xz plane ... ")
+        pitch = np.zeros(yaw.shape, dtype=pose.dtype)
+
+    # Rotation matrix for pitch and yaw
+    rot_mat = np.array(
+        [
+            [np.cos(yaw) * np.cos(pitch), -np.sin(yaw), np.cos(yaw) * np.sin(pitch)],
+            [np.sin(yaw) * np.cos(pitch), np.cos(yaw), np.sin(yaw) * np.sin(pitch)],
+            [-np.sin(pitch), np.zeros(len(yaw), dtype=pose.dtype), np.cos(pitch)],
+        ]
+    ).repeat(num_joints, axis=2)
+    pose_rot = np.einsum("jki,ik->ij", rot_mat, np.reshape(pose, (-1, 3))).reshape(
+        pose.shape
+    )
+
+    return pose_rot
+
+
+def rotation_matrices_align_to_v2(v_from, v_to=[1.0, 0, 0]):
+    """
+    
+    2025-11-06: API added by AS. GenAI generated module. Used ChatGPT
+    Vectorized computation of rotation matrices aligning v_from to v_to.
+    
+    """
+    # Normalize
+    v = v_from.astype(float)
+    v /= np.linalg.norm(v, axis=1, keepdims=True)
+
+    # Cross and dot products with x̂
+    cross = np.cross(v, np.array(v_to))
+    dot = v @ np.array(v_to)
+    s = np.linalg.norm(cross, axis=1, keepdims=True)
+
+    # Handle already‑aligned vectors (cross≈0)
+    n = np.divide(cross, s, where=s > 1e-12)
+    n[np.isnan(n)] = 0.0  # avoid NaNs for aligned rows
+
+    # Skew‑symmetric [n]_× matrices, shape (n, 3, 3)
+    K = np.zeros((len(v), 3, 3))
+    K[:, 0, 1] = -n[:, 2]
+    K[:, 0, 2] =  n[:, 1]
+    K[:, 1, 0] =  n[:, 2]
+    K[:, 1, 2] = -n[:, 0]
+    K[:, 2, 0] = -n[:, 1]
+    K[:, 2, 1] =  n[:, 0]
+
+    sin_theta = s.squeeze()                         # shape (n,)
+    cos_theta = dot                                  # shape (n,)
+    sin_theta = sin_theta[:, None, None]
+    cos_theta = cos_theta[:, None, None]
+
+    I = np.eye(3)[None, :, :]                   # (1, 3, 3) for broadcasting
+
+    # Rodrigues’ rotation formula, vectorized over n
+    R = I + K * sin_theta + (K @ K) * (1.0 - cos_theta)
+
+    return R
+
+
+def do_head_fix(
+    pose: npt.NDArray,
+    keypt_vector1: Union[Tuple, npt.ArrayLike] = (12, 14),
+    vector1_align_ax: Union[List, npt.ArrayLike] = [-1.0, 0., 0.],
+    keypt_vector2: Union[Tuple, npt.ArrayLike] = (16, 0),
+    vector2_align_ax: Union[List, npt.ArrayLike] = [0., -1.0, 0.],
+    ):
+    """
+    2025-11-06: API added by AS
+
+    Does a 2-step rotation to achieve an artificial head-fixed effect
+    Aligns EarL - EarR along -x axis
+    Alight Head_COM - Snout along -y axis
+
+    Parameters
+    ----------
+    pose : npt.NDArray
+        Array of 3D pose values of shape (# frames, # keypoints, 3 coordinates). Assumes centered poses.
+    keypt_vector1 : Union[Tuple, npt.ArrayLike], optional
+        Either a tuple of the indices for (root, forward) keypoints,
+        or a precalculated vector per frame, by default (12, 14)
+    keypt_vector2 : Union[Tuple, npt.ArrayLike], optional
+        Either a tuple of the indices for (root, forward) keypoints,
+        or a precalculated vector per frame, by default (16, 0)
+    vector1_align_ax : Union[Tuple, npt.ArrayLike], optional
+        If provided, rotate keypoint_vector1 completely to the specified vector (yaw and pitch), by default [1, 0, 0]
+    vector2_align_ax : Union[Tuple, npt.ArrayLike], optional
+        If provided, rotate keypoint_vector2 completely to the specified vector (yaw and pitch), by default [0, 1, 0]
+
+    Returns
+    -------
+    pose : npt.NDArray
+        Rotated array of 3D pose values of shape (# frames, # keypoints, 3 coordinates).
+    """
+
+    num_joints = pose.shape[1]
+
+    # If vectors are just keypoints provided, then compute actual full vectors 
+    # that are needed to compute rotation matrices
+    if len(keypt_vector1) == 2:
+        vector1 = pose[:, keypt_vector1[1], :] - pose[:, keypt_vector1[0], :]
+
+    else:
+        vector1 = keypt_vector1
+    
+    # Do the first rotation
+    if vector1_align_ax is not None:
+        rot_mat_1 = rotation_matrices_align_to_v2(vector1, vector1_align_ax)
+        rot_mat1 = rot_mat_1[:,:,:,np.newaxis].repeat(num_joints, 
+                                    axis=3 #2
+                                    )
+        pose_rot1 = np.einsum("ijkl,ilk->ilj", rot_mat1, pose).reshape(
+            pose.shape
+        )
+    else:
+        pose_rot1 = pose
+    
+    
+    if len(keypt_vector2) == 2:
+        vector2 = pose_rot1[:, keypt_vector2[1], :] - pose_rot1[:, keypt_vector2[0], :]
+    else:
+        vector2 = keypt_vector2
+
+    # Do the second rotation
+    if vector2_align_ax is not None:
+        rot_mat_2 = rotation_matrices_align_to_v2(vector2, vector2_align_ax)
+        rot_mat2 = rot_mat_2[:,:,:,np.newaxis].repeat(num_joints, 
+                                    axis=3 #2
+                                    )
+        pose_rot2 = np.einsum("ijkl,ilk->ilj", rot_mat2, pose_rot1).reshape(
+            pose_rot1.shape
+        )
+    else:
+        pose_rot2 = pose_rot1
+
+    return pose_rot2

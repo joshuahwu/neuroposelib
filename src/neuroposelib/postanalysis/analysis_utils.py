@@ -84,7 +84,14 @@ def get_data_obj_from_file(
     group_id_col = 'Timepoint',
     ):
     with open(''.join([config['out_path'], f"/{file_name}"]), "rb") as dobj:
-        data_obj = pickle.load(dobj)
+        try:
+            data_obj = pickle.load(dobj)
+        except Exception as e:
+            if 'dappy' in str(e):
+                unpickler = RenamingUnpickler(dobj)
+                dobj_1 = unpickler.load()
+            else:
+                raise e
     return process_data_obj(config, data_obj, col_renames, group_id_col), data_obj
 
     

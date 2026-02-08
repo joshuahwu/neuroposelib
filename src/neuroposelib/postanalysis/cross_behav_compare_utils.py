@@ -9,6 +9,7 @@ from neuroposelib.embed import Embed
 from neuroposelib.embed import Watershed
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 
 def get_data_obj(
@@ -79,7 +80,7 @@ def populate_new_data_obj(data_obj, config,
     Populate a new data object by performing clustering and embedding again on the features extracted from
     the provided data object
     '''
-    from dappy import DataStruct as dsnew
+    from neuroposelib import DataStruct as dsnew
 
     if pose is None and ids is None and meta is None and meta_by_frame is None and connectivity is None:
         new_data_obj = copy.deepcopy(data_obj)
@@ -191,5 +192,31 @@ def get_clust_frame(ego_pose=None, labels=None, config=None, pose=None, ids=None
     
     return get_clust_frame_groupings(dobj), dobj.data
 
+def get_nth_parent(file_path_str, n):
+    """
+    Gets the nth parent directory of a file path using pathlib.
+
+    Args:
+        file_path_str (str): The file path string.
+        n (int): The index of the parent to retrieve (0 for immediate parent,
+                 1 for grandparent, 2 for great-grandparent, etc.).
+
+    Returns:
+        str or None: The nth parent directory path as a string, or None if
+                     the path doesn't have that many parents or if an error occurs.
+    """
+    try:
+        # print (file_path_str)
+        filepath = Path(file_path_str)
+        # print('Filepath = ', filepath)
+        if len(filepath.parents) > n:
+            return str(filepath.parents[n])
+        else:
+            print(f'Length of parents = {len(filepath.parents)}, while n = {n}')
+            return None  # Or handle cases with fewer than n+1 levels differently
+    except Exception as UE:
+        print ("Got unexpected exception ", UE)
+        raise UE
+        # return None  # Handle potential errors with path conversion
 
 
