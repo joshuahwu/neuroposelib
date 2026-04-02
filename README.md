@@ -11,7 +11,7 @@ The following steps will clone this repository, set up your conda environment, a
 ```
 git clone https://github.com/joshuahwu/neuroposelib.git
 cd neuroposelib
-conda env create -n neuroposelib python=3.11
+conda create -n neuroposelib python=3.11
 conda activate neuroposelib
 conda install -c conda-forge opentsne ffmpeg
 pip install -e .
