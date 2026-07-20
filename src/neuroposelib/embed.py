@@ -1,7 +1,7 @@
 import functools
 import numpy as np
 import time
-from neuroposelib import DataStruct as ds
+from neuroposelib import datastruct as ds
 from typing import Optional, Union, List, Tuple, Any
 import numpy.typing as npt
 import tqdm

@@ -4,18 +4,26 @@ Module for analysis of 3D animal pose sequences. Based on work by [Berman et al.
 
 ## Installation
 
-Install the latest version of [Miniconda](https://docs.conda.io/en/latest/miniconda.html) on your machine.
+If you just want to use neuroposelib as a library, install it directly from GitHub:
 
-The following steps will clone this repository, set up your conda environment, and install neuroposelib.
+```
+pip install git+https://github.com/joshuahwu/neuroposelib.git
+```
 
-Use `environment.yml` if you're on a Linux machine, and `environment_osx.yml` for Mac.
+If you'd like UMAP support for behavioral embeddings, install the `umap` extra instead:
+
+```
+pip install "neuroposelib[umap] @ git+https://github.com/joshuahwu/neuroposelib.git"
+```
+
+If you want to run the tutorials or work on the source, clone the repository and install it in editable mode instead. Install the latest version of [Miniconda](https://docs.conda.io/en/latest/miniconda.html) on your machine, then:
 
 ```
 git clone https://github.com/joshuahwu/neuroposelib.git
 cd neuroposelib
-conda env create -n neuroposelib -f environment.yml
+conda env create -n neuroposelib python=3.11
 conda activate neuroposelib
-conda install -c conda-forge opentsne
+conda install -c conda-forge opentsne ffmpeg
 pip install -e .
 ```
 

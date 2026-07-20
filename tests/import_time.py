@@ -22,4 +22,4 @@ print("\nEmbed")
 print(timeit.timeit("from neuroposelib import embed"))
 
 print("\nDatastruct")
-print(timeit.timeit("from neuroposelib import DataStruct as ds"))
+print(timeit.timeit("from neuroposelib import datastruct as ds"))

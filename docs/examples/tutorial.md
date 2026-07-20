@@ -353,7 +353,7 @@ We encapsulate all relevant data to store in a data object.
 
 
 ```python
-from neuroposelib import DataStruct as ds
+from neuroposelib import datastruct as ds
 
 data_obj = ds.DataStruct(
     pose=pose,

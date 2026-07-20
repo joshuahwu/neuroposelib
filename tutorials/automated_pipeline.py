@@ -1,5 +1,5 @@
 from neuroposelib.features import *
-from neuroposelib import DataStruct as ds
+from neuroposelib import datastruct as ds
 import numpy as np
 from neuroposelib import read, write, utils
 from neuroposelib.embed import Watershed, Embed

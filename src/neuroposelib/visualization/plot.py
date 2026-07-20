@@ -1,3 +1,4 @@
+from matplotlib.ticker import FuncFormatter
 import numpy as np
 import tqdm
 
@@ -14,7 +15,7 @@ from typing import Optional, Union, List, Dict, Tuple, Any, Sequence
 from scipy.special import softmax
 from sklearn.preprocessing import MinMaxScaler
 
-from neuroposelib import DataStruct as ds
+from neuroposelib import datastruct as ds
 from neuroposelib.embed import Watershed, GaussDensity
 from neuroposelib.analysis import hist_cluster_by_cat
 from neuroposelib.visualization.constants import (
@@ -23,6 +24,8 @@ from neuroposelib.visualization.constants import (
     DEFAULT_VIRIDIS,
     CUSTOM_CMAPS,
 )
+import matplotlib.colors as mcolors
+import matplotlib.cm as cm
 import numpy.typing as npt
 import copy
 from matplotlib.patches import Patch
@@ -414,6 +417,7 @@ def density_cat(
     data: ds.DataStruct,
     column: str,
     watershed: Watershed,
+    cmap: List[str] = ["viridis"],
     filepath: str = "./results/density_by_label.png",
     show: bool = False,
     vmax: Optional[float] = None,
@@ -439,9 +443,11 @@ def density_cat(
     n_cols = int(np.ceil(n_ulabels / n_rows))
     f, ax_arr = plt.subplots(n_rows, n_cols, figsize=(n_cols * 4, n_rows * 4))
 
+    if len(cmap) == 1:
+        cmap *= len(np.unique(labels))
     # Loop over unique labels
-    for i, (label, ax) in enumerate(
-        zip(np.unique(labels), ax_arr.reshape(-1)[:n_ulabels])
+    for i, (label, ax, c) in enumerate(
+        zip(np.unique(labels), ax_arr.reshape(-1)[:n_ulabels], cmap)
     ):
         embed_vals = data.embed_vals[data.data[column] == label]  # Indexing by label
         density = watershed.fit_density(
@@ -452,7 +458,7 @@ def density_cat(
             _mask_density(density, watershed.watershed_map, EPS * 1.01),
             vmin=EPS,
             vmax=vmax,
-            cmap="viridis",
+            cmap=c,
         )
 
         if watershed is not None:
@@ -466,6 +472,15 @@ def density_cat(
         ax.set_yticks([])
         ax.axis("off")
 
+    norm = mcolors.Normalize(EPS, density.max() if vmax is None else vmax)
+    sm = cm.ScalarMappable(norm=norm, cmap=cmap[0])
+    cbar_ax = f.add_axes([0.625, 0.08, 0.1, 0.02])  # You can tweak these values
+    cbar = f.colorbar(sm, cax=cbar_ax, orientation='horizontal')
+
+    cbar.set_label("Density (x1e-6)", labelpad=5)
+
+    # Format tick labels in units of 1e-4
+    cbar.ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{x * 1e4:.1f}"))
     f.tight_layout()
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(filepath, dpi=200)

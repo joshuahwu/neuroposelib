@@ -1,6 +1,6 @@
 [project]
 name = "neuroposelib"
-version = "0.2_dev"
+dynamic = ["version"]
 authors = [
   { name="Joshua H. Wu", email="joshua.wu@duke.edu" },
 ]

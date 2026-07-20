@@ -27,7 +27,7 @@ vis.pose.sample_grid3D(
     filepath=config["out_path"],
 )
 
-vis.plt.density(
+vis.plot.density(
     data_obj.ws.density,
     data_obj.ws.borders,
     filepath="".join([config["out_path"], "/density.png"]),
@@ -40,14 +40,14 @@ vis.plot.scatter(
 )
 
 for cat in ["id", "Sex", "Cluster"]:
-    vis.plt.density_cat(
+    vis.plot.density_cat(
         data=data_obj,
         column=cat,
         watershed=data_obj.ws,
         filepath="".join([config["out_path"], "/density_", cat, ".png"]),
     )
 
-vis.plt.density_grid(
+vis.plot.density_grid(
     data=data_obj,
     cat1="Condition",
     cat2="id",

@@ -3,7 +3,7 @@ import h5py
 from typing import Optional, Union, List, Tuple, Type, Dict, Any
 import pandas as pd
 import numpy as np
-from neuroposelib.DataStruct import Connectivity
+from neuroposelib.datastruct import Connectivity
 from tqdm import tqdm
 from scipy.io import loadmat as scipyloadmat
 import numpy.typing as npt
@@ -63,7 +63,7 @@ def cluster_annotations(filepath: str) -> pd.DataFrame:
 
     # Count non-empty markers per row
     # Anything that is not NaN or empty string counts as a marker
-    marker_mask = annotations.notna() & (annotations.astype(str).str.strip() != "")
+    marker_mask = annotations.notna() & (annotations.astype(str).map(lambda x: x.strip()) != "")
     marker_counts = marker_mask.sum(axis=1)
 
     # Raise if any row has > 1 marked annotation
@@ -213,7 +213,7 @@ def _connectivity(path: str, skeleton_name: str) -> Connectivity:
     The function expects a Python file at ``path`` providing constants such as
     ``JOINT_NAME_DICT``, ``COLOR_DICT``, ``CONNECTIVITY_DICT`` and
     ``JOINT_ANGLES_DICT`` keyed by ``skeleton_name``. It imports the file as a
-    module and constructs a [`Connectivity`][neuroposelib.DataStruct.Connectivity]
+    module and constructs a [`Connectivity`][neuroposelib.datastruct.Connectivity]
     object.
 
     Parameters
