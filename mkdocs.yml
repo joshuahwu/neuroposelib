@@ -24,7 +24,7 @@ plugins:
         scripts:
             - docs/gen_ref_pages.py     # script for generating reference pages
     - literate-nav:
-          nav_file: docs/SUMMARY.md     # navigation file for literate navigation
+          nav_file: SUMMARY.md         # navigation file for literate navigation
     - autorefs
     # - macros:
     #     include_yaml: 

@@ -277,8 +277,10 @@ class BatchEmbed(Embed):
         Gaussian smoothing sigma used when computing density maps.
     batch_method : str
         Embedding method used to embed each batch (e.g. "fitsne", "umap").
-    Other parameters
-        Inherited from [`Embed`](neuroposelib.embed.Embed).
+
+    Notes
+    -----
+    All other parameters are inherited from [`Embed`][neuroposelib.embed.Embed].
     """
 
     def __init__(
