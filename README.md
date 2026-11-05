@@ -8,15 +8,19 @@ Install the latest version of [Miniconda](https://docs.conda.io/en/latest/minico
 
 The following steps will clone this repository, set up your conda environment, and install neuroposelib.
 
-Use `environment.yml` if you're on a Linux machine, and `environment_osx.yml` for Mac.
-
 ```
 git clone https://github.com/joshuahwu/neuroposelib.git
 cd neuroposelib
-conda env create -n neuroposelib -f environment.yml
+conda create -n neuroposelib python=3.11
 conda activate neuroposelib
-conda install -c conda-forge opentsne
+conda install -c conda-forge opentsne ffmpeg
 pip install -e .
+```
+
+If you would like to use UMAP for your behavioral embeddings. Install neuroposelib instead with:
+
+```
+pip install -e .[umap]
 ```
 
 Note that `pip` and `setuptools` must be updated to the most recent versions.

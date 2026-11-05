@@ -30,7 +30,11 @@ PALETTE = [
     (0.6, 0, 0.3),
 ]
 
-DEFAULT_VIRIDIS = matplotlib.cm.get_cmap("viridis")
+vir = matplotlib.cm.get_cmap("viridis", 256)
+colors = vir(np.linspace(0, 1, 256))
+colors[0] = [1,1,1,1]  # white RGBA
+
+DEFAULT_VIRIDIS = matplotlib.colors.ListedColormap(colors)
 DEFAULT_VIRIDIS.set_under("white")
 EPS = 0.99e-6
 

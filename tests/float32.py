@@ -1,7 +1,7 @@
 from neuroposelib import read, write, features, analysis, preprocess
 import neuroposelib.visualization as vis
 from neuroposelib.embed import Watershed, Embed
-import neuroposelib.DataStruct as ds
+import neuroposelib.datastruct as ds
 import numpy as np
 
 analysis_key = "ensemble_healthy"

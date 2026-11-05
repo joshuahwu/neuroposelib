@@ -1,6 +1,6 @@
 [project]
 name = "neuroposelib"
-version = "0.2_dev"
+dynamic = ["version"]
 authors = [
   { name="Joshua H. Wu", email="joshua.wu@duke.edu" },
 ]
@@ -14,6 +14,7 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3.10",
 ]
+
 dependencies = [
     "numpy",
     "Pywavelets",
@@ -22,8 +23,7 @@ dependencies = [
     "numba",
     "matplotlib",
     "seaborn",
-    "hdf5storage",
-    "umap-learn",
+    "h5py",
     "pandas",
     "ffmpeg",
     "opentsne",
@@ -50,6 +50,8 @@ docs = [
     "mkdocs-gallery",
     "mkdocs-macros-plugin"
 ]
+
+umap = ["umap-learn"]
 
 [tool.setuptools_scm]
 write_to = "src/neuroposelib/version.py"

@@ -1,4 +1,6 @@
-To follow this notebook, please download the contents of the [demo dataset](https://duke.box.com/v/demo-mouse-poses) into the `/neuroposelib/tutorials/demo_mouse/` directory.
+### Reading in `pose.h5` and `config.yaml` files
+
+To follow this notebook, please download the contents of the [demo dataset](https://duke.box.com/v/demo-mouse-poses) into the `/neuroposelib/tutorials/demo_mouse/` directory. Download the full `.ipynb` file [here](https://github.com/joshuahwu/neuroposelib/blob/main/tutorials/set_up.ipynb).
 
 General information regarding your `neuroposelib` analysis (e.g. file paths and hyperparameters) is contained in a `config.yaml` file.
 
@@ -33,6 +35,8 @@ print(ids)
     [0 0 0 ... 1 1 1]
 
 
+### Creating a metadata file
+
 The first thing to set up is your `meta.csv` (called `demo_meta.csv` in this tutorial).
 
 Each row of `demo_meta.csv` contains categorial information for a recording session (e.g. animal identity, sex, strain, experimental condition, etc.) and a session id. The specific categories are fully-determined by you, and depends on the behavioral comparisons you'd like to make.
@@ -41,7 +45,7 @@ Here the `meta` variable exactly recapitulates your `meta.csv` file in a `pandas
 
 
 ```python
-meta, meta_by_frame = read.meta(config["data_path"] + "demo_meta.csv", id=ids)
+meta, meta_by_frame = read.meta(config["data_path"] + "demo_meta.csv", ids=ids)
 
 print(meta)
 ```
@@ -60,6 +64,8 @@ print(meta_by_frame.shape[0] == pose.shape[0])
 
     True
 
+
+### Setting up your pose connectivity
 
 Finally, it is crucial to set up the connectivity of your keypoint representation. The `Connectivity` class in `neuroposelib` contains attributes for joint names and links between joints (i.e. segments). It also allows you to assign colors to the keypoints and segments for later plotting.
 
@@ -121,7 +127,7 @@ print(connectivity.angles)
      [ 4  5 16]]
 
 
-#### Using `neuroposelib` with [DANNCE](https://github.com/spoonsso/dannce)
+### Using `neuroposelib` with [DANNCE](https://github.com/spoonsso/dannce)
 
 If you're generating your 3D poses from DANNCE, loading into `neuroposelib` is straightforward.
 

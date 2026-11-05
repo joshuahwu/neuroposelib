@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 from typing import Optional, Union, List, Tuple, Any, Dict
 from neuroposelib.embed import Watershed
-from neuroposelib import DataStruct as ds
+from neuroposelib import datastruct as ds
 from neuroposelib.visualization.constants import PALETTE, EPS, DEFAULT_BONE, _PLANE
 from neuroposelib.visualization.plot import _mask_density
 import copy

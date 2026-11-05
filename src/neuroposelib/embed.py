@@ -1,7 +1,7 @@
 import functools
 import numpy as np
 import time
-from neuroposelib import DataStruct as ds
+from neuroposelib import datastruct as ds
 from typing import Optional, Union, List, Tuple, Any
 import numpy.typing as npt
 import tqdm
@@ -277,8 +277,10 @@ class BatchEmbed(Embed):
         Gaussian smoothing sigma used when computing density maps.
     batch_method : str
         Embedding method used to embed each batch (e.g. "fitsne", "umap").
-    Other parameters
-        Inherited from [`Embed`](neuroposelib.embed.Embed).
+
+    Notes
+    -----
+    All other parameters are inherited from [`Embed`][neuroposelib.embed.Embed].
     """
 
     def __init__(
@@ -778,6 +780,7 @@ class Watershed(GaussDensity):
         self.borders: Optional[dict] = None
 
         self.density = None  # TODO: Consider more when this saves and doesn't
+        self.sav_threshold = sav_threshold
 
     def fit(self, data: npt.ArrayLike) -> "Watershed":
         """
